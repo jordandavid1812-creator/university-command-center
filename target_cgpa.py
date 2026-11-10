@@ -1,7 +1,7 @@
 import math
 from decimal import Decimal
 
-from academic_overview import get_valid_semester_courses
+from academic_logic import academic_summary, target_plan
 from gpa import GRADE_POINTS
 
 
@@ -31,14 +31,11 @@ def plan_target_cgpa(courses):
         print("Course data must be a list. No plan is available.\n")
         return
 
-    current_points = Decimal(0)
-    current_units = Decimal(0)
-    for semester_courses in get_valid_semester_courses(courses).values():
-        for code, units, grade in semester_courses:
-            if grade is not None and grade != "":
-                units = Decimal(str(units))
-                current_points += GRADE_POINTS[grade] * units
-                current_units += units
+    summary = academic_summary(courses)
+    for warning in summary["warnings"]:
+        print(warning)
+    current_points = summary["points"]
+    current_units = summary["units"]
 
     print(f"Completed attempted credits (saved grades, including F): {current_units:g}")
     print(f"Current quality points: {current_points:g}")
@@ -63,8 +60,13 @@ def plan_target_cgpa(courses):
     # Decimal arithmetic avoids float errors at the exact 0 and 5 boundaries.
     target = Decimal(str(target))
     remaining = Decimal(str(remaining))
-    graduation_units = current_units + remaining
-    required_average = (target * graduation_units - current_points) / remaining
+    try:
+        plan = target_plan(courses, target, remaining)
+    except ValueError as error:
+        print(str(error))
+        return
+    graduation_units = plan["total"]
+    required_average = plan["required"]
     if not graduation_units.is_finite() or not required_average.is_finite():
         print("These credit values are too large or too small to calculate safely.\n")
         return
