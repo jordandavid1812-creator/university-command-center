@@ -23,7 +23,18 @@ def calculate_gpa(courses):
     print("D = 2, E = 1, F = 0")
     print()
 
-    for course in courses:
+    for number, course in enumerate(courses, start=1):
+
+        course_name = course.get("name") or course.get("code") or f"Course {number}"
+
+        if not str(course.get("code") or "").strip():
+            print(f"Skipping {course_name}: the course code is missing.\n")
+            continue
+
+        credit_units = course.get("credit_units")
+        if isinstance(credit_units, bool) or not isinstance(credit_units, (int, float)):
+            print(f"Skipping {course_name}: credit units must be a number.\n")
+            continue
 
         while True:
             grade = input(
