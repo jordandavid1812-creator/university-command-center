@@ -28,8 +28,12 @@ def calculate_gpa(courses):
         while True:
             grade = input(
                 f"Grade for {course['code']} "
-                f"({course['credit_units']} units): "
+                f"({course['credit_units']} units, or Q to cancel): "
             ).strip().upper()
+
+            if grade == "Q":
+                print("\nGPA calculation cancelled.\n")
+                return
 
             if grade in grade_points:
                 break
