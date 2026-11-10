@@ -21,6 +21,14 @@ Follow the numbered menu. In the GPA calculator, press Enter to keep a saved gra
 
 Choose option 11 for the GPA Predictor. Enter a hypothetical grade for each course to see the predicted GPA, total credit units, and predicted grade points. Enter R to change grades and recalculate, then press Enter to keep a previous prediction or type a replacement grade. Q returns to the menu. Predictions are not saved.
 
+## Academic Performance Overview
+
+Choose option 12 to see each semester's GPA, a cumulative GPA, and a simple text bar comparison using actual saved grades. It never asks for grades or changes your data, and GPA Predictor grades are excluded.
+
+GPA is total grade points (grade value times credit units) divided by graded credit units, using the existing 5-point scale. Completed courses means courses with valid saved grades, including F; it does not mean courses passed. Attempted credit units include only these graded courses. Courses without grades are listed separately and excluded from GPA. A semester with no grades shows N/A, not zero.
+
+Older courses without semesters appear under Unassigned. Missing or invalid records are skipped with messages. Course codes are unique across the app; the first valid record per code is used, and duplicates are skipped, even across semesters. Semester names are free text, so the overview keeps their order in the records rather than guessing chronological order.
+
 ## Run the tests
 
 From the project folder, run:
