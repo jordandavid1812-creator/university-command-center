@@ -1,6 +1,4 @@
 University Command Center is a Python app for managing university life. It tracks courses, assignments and GPA.
-@’
-University Command Center is a Python app for managing university life. It tracks courses, assignments and GPA.
 
 Files:
 main.py runs the app.
