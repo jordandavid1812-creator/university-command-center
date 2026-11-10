@@ -19,6 +19,7 @@ def calculate_gpa(courses):
     total_points = 0
     total_units = 0
     entered_grades = []
+    semester_totals = {}
 
     print("\n================================")
     print("          GPA CALCULATOR")
@@ -72,6 +73,11 @@ def calculate_gpa(courses):
         total_points += points * course["credit_units"]
         total_units += course["credit_units"]
 
+        semester = course.get("semester") or "Unassigned"
+        totals = semester_totals.setdefault(semester, {"points": 0, "units": 0})
+        totals["points"] += points * credit_units
+        totals["units"] += credit_units
+
     if total_units == 0:
         print("\nCannot calculate GPA because total credit units are zero.\n")
         return
@@ -85,7 +91,14 @@ def calculate_gpa(courses):
     print("\n================================")
     print("          GPA RESULT")
     print("================================")
+    for semester, totals in semester_totals.items():
+        if totals["units"] == 0:
+            print(f"{semester}: cannot calculate GPA because credit units are zero.")
+        else:
+            semester_gpa = totals["points"] / totals["units"]
+            print(f"{semester} GPA: {semester_gpa:.2f}")
+    print()
     print(f"Total credit units: {total_units}")
     print(f"Total grade points: {total_points}")
-    print(f"GPA: {gpa:.2f}")
+    print(f"Cumulative GPA: {gpa:.2f}")
     print("================================\n")

@@ -63,6 +63,57 @@ class TestGPA(unittest.TestCase):
         self.assertEqual(prompt_count, 0)
         self.assertNotIn("GPA RESULT", output)
 
+    def test_two_semesters_use_credit_weights(self):
+        courses = [
+            {"code": "COS101", "credit_units": 3, "semester": "100L First"},
+            {"code": "MAT101", "credit_units": 2, "semester": "100L First"},
+            {"code": "COS102", "credit_units": 6, "semester": "100L Second"},
+        ]
+
+        output, _ = self.run_calculator(courses, ["A", "C", "E"])
+
+        self.assertIn("100L First GPA: 4.20\n", output)
+        self.assertIn("100L Second GPA: 1.00\n", output)
+        # All course points / all units = (21 + 6) / (5 + 6).
+        self.assertIn("Cumulative GPA: 2.45\n", output)
+        self.assertLess(output.index("100L Second GPA:"),
+                        output.index("Cumulative GPA:"))
+
+    def test_courses_without_semesters_are_unassigned(self):
+        output, _ = self.run_calculator(self.courses, ["A", "C"])
+
+        self.assertIn("Unassigned GPA: 4.20\n", output)
+        self.assertIn("Cumulative GPA: 4.20\n", output)
+
+    def test_invalid_courses_do_not_affect_semester_totals(self):
+        courses = [
+            {"name": "Missing Code", "credit_units": 6, "semester": "Bad"},
+            {"code": "BAD101", "credit_units": "3", "semester": "Bad"},
+            {"code": "COS101", "credit_units": 3, "semester": "100L First"},
+        ]
+
+        output, prompt_count = self.run_calculator(courses, ["B"])
+
+        self.assertEqual(prompt_count, 1)
+        self.assertIn("Skipping Missing Code:", output)
+        self.assertIn("Skipping BAD101:", output)
+        self.assertNotIn("Bad GPA:", output)
+        self.assertIn("100L First GPA: 4.00\n", output)
+        self.assertIn("Total credit units: 3\n", output)
+        self.assertIn("Cumulative GPA: 4.00\n", output)
+
+    def test_zero_unit_semester_does_not_crash(self):
+        courses = [
+            {"code": "ZERO", "credit_units": 0, "semester": "Empty"},
+            {"code": "COS101", "credit_units": 3, "semester": "100L First"},
+        ]
+
+        output, _ = self.run_calculator(courses, ["A", "B"])
+
+        self.assertIn("Empty: cannot calculate GPA because credit units are zero.", output)
+        self.assertIn("100L First GPA: 4.00\n", output)
+        self.assertIn("Cumulative GPA: 4.00\n", output)
+
 
 class TestSavedGrades(unittest.TestCase):
     def setUp(self):
