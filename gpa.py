@@ -1,3 +1,6 @@
+from storage import save_data
+
+
 def calculate_gpa(courses):
 
     if len(courses) == 0:
@@ -15,6 +18,7 @@ def calculate_gpa(courses):
 
     total_points = 0
     total_units = 0
+    entered_grades = []
 
     print("\n================================")
     print("          GPA CALCULATOR")
@@ -36,15 +40,23 @@ def calculate_gpa(courses):
             print(f"Skipping {course_name}: credit units must be a number.\n")
             continue
 
+        saved_grade = str(course.get("grade", "")).strip().upper()
+        saved_hint = ""
+        if saved_grade in grade_points:
+            saved_hint = f"saved grade: {saved_grade}, Enter to keep, "
+
         while True:
             grade = input(
                 f"Grade for {course['code']} "
-                f"({course['credit_units']} units, or Q to cancel): "
+                f"({course['credit_units']} units, {saved_hint}or Q to cancel): "
             ).strip().upper()
 
             if grade == "Q":
                 print("\nGPA calculation cancelled.\n")
                 return
+
+            if grade == "" and saved_grade in grade_points:
+                grade = saved_grade
 
             if grade in grade_points:
                 break
@@ -55,6 +67,7 @@ def calculate_gpa(courses):
             )
 
         points = grade_points[grade]
+        entered_grades.append((course, grade))
 
         total_points += points * course["credit_units"]
         total_units += course["credit_units"]
@@ -64,6 +77,10 @@ def calculate_gpa(courses):
         return
 
     gpa = total_points / total_units
+
+    for course, grade in entered_grades:
+        course["grade"] = grade
+    save_data("courses.json", courses)
 
     print("\n================================")
     print("          GPA RESULT")
