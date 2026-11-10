@@ -6,7 +6,6 @@ courses.py handles courses.
 assignments.py handles assignments.
 gpa.py calculates GPA.
 storage.py saves and loads data in JSON files.
-dashboard.py shows the summary.
 
 Goal: finish the GPA calculator so it works fully.
 

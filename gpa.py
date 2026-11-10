@@ -44,6 +44,10 @@ def calculate_gpa(courses):
         total_points += points * course["credit_units"]
         total_units += course["credit_units"]
 
+    if total_units == 0:
+        print("\nCannot calculate GPA because total credit units are zero.\n")
+        return
+
     gpa = total_points / total_units
 
     print("\n================================")
