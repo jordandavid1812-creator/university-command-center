@@ -16,6 +16,7 @@ from assignments import (
 
 from gpa import calculate_gpa
 from gpa_predictor import predict_gpa
+from academic_overview import show_academic_overview
 
 
 COURSES_FILE = "courses.json"
@@ -45,6 +46,7 @@ def show_menu():
     print("ACADEMIC")
     print("9. Calculate GPA")
     print("11. GPA Predictor")
+    print("12. Academic Performance Overview")
     print("----------------------------------------")
     print("10. Exit")
     print("========================================")
@@ -90,8 +92,11 @@ while True:
     elif choice == "11":
         predict_gpa(courses)
 
+    elif choice == "12":
+        show_academic_overview(courses)
+
     else:
         print(
             "\nInvalid choice. "
-            "Please choose a number from 1 to 11.\n"
+            "Please choose a number from 1 to 12.\n"
         )
