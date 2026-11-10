@@ -128,6 +128,10 @@ def edit_course(courses):
     new_name = input("Enter new course name: ").strip()
     new_code = input("Enter new course code: ").strip().upper()
     new_credit_units = input("Enter new credit units: ").strip()
+    current_semester = course.get("semester") or "Unassigned"
+    new_semester = input(
+        f"Enter new semester (Enter to keep {current_semester}): "
+    ).strip()
 
     if new_name == "":
         print("Course name cannot be empty.\n")
@@ -155,6 +159,7 @@ def edit_course(courses):
     course["name"] = new_name
     course["code"] = new_code
     course["credit_units"] = new_credit_units
+    course["semester"] = new_semester or current_semester
 
     save_data(COURSES_FILE, courses)
 

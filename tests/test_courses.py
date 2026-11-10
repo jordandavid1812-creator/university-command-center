@@ -63,13 +63,47 @@ class TestCourseSemesters(unittest.TestCase):
                          ["COS101", "MAT102", "OLD101"])
 
     def test_edit_uses_number_shown_and_preserves_semester(self):
-        with patch("builtins.input", side_effect=["3", "New Physics", "PHY101", "4"]):
+        with patch("builtins.input", side_effect=["3", "New Physics", "PHY101", "4", ""]):
             with redirect_stdout(StringIO()):
                 edit_course(self.courses)
 
         self.assertEqual(self.courses[2]["name"], "New Physics")
         self.assertEqual(self.courses[2]["semester"], "100L First")
         self.assertEqual(self.courses[1]["name"], "Math")
+
+    def test_edit_changes_and_saves_semester(self):
+        self.courses[0]["grade"] = "A"
+        with patch("builtins.input", side_effect=["1", "Computing", "COS101", "3", " 200L First "]):
+            with redirect_stdout(StringIO()):
+                edit_course(self.courses)
+
+        self.assertEqual(self.courses[0]["semester"], "200L First")
+        self.assertEqual(self.courses[0]["grade"], "A")
+        self.save_mock.assert_called_once_with("courses.json", self.courses)
+
+    def test_edit_assigns_semester_to_old_course(self):
+        with patch("builtins.input", side_effect=["4", "Old Course", "OLD101", "2", "100L Second"]):
+            with redirect_stdout(StringIO()):
+                edit_course(self.courses)
+
+        self.assertEqual(self.courses[3]["semester"], "100L Second")
+        self.save_mock.assert_called_once_with("courses.json", self.courses)
+
+    def test_edit_old_course_keeps_unassigned_on_enter(self):
+        with patch("builtins.input", side_effect=["4", "Old Course", "OLD101", "2", " "]) as prompts:
+            with redirect_stdout(StringIO()):
+                edit_course(self.courses)
+
+        self.assertEqual(self.courses[3]["semester"], "Unassigned")
+        self.assertIn("Enter to keep Unassigned", prompts.call_args.args[0])
+
+    def test_invalid_edit_does_not_change_semester(self):
+        with patch("builtins.input", side_effect=["1", "Computing", "COS101", "0", "200L First"]):
+            with redirect_stdout(StringIO()):
+                edit_course(self.courses)
+
+        self.assertEqual(self.courses[0]["semester"], "100L First")
+        self.save_mock.assert_not_called()
 
     def test_empty_course_list(self):
         output = StringIO()
