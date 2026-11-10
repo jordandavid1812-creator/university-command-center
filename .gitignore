@@ -1,3 +1,4 @@
-__pycache__/
-*.pyccourses.json
+pycache/
+*.pyc
+courses.json
 assignments.json
