@@ -8,6 +8,7 @@ def add_course(courses):
     course_name = input("Enter course name: ").strip()
     course_code = input("Enter course code: ").strip().upper()
     credit_units = input("Enter credit units: ").strip()
+    semester = input("Enter semester name (for example, 100L First): ").strip()
 
     if course_name == "":
         print("Course name cannot be empty.\n")
@@ -35,7 +36,8 @@ def add_course(courses):
     course = {
         "name": course_name,
         "code": course_code,
-        "credit_units": credit_units
+        "credit_units": credit_units,
+        "semester": semester or "Unassigned"
     }
 
     courses.append(course)
@@ -52,13 +54,20 @@ def list_courses(courses):
 
     print("\nYour courses:")
 
+    semesters = {}
     for number, course in enumerate(courses, start=1):
-        print(
-            f"{number}. "
-            f"{course['name']} "
-            f"({course['code']}) - "
-            f"{course['credit_units']} credit units"
-        )
+        semester = course.get("semester") or "Unassigned"
+        semesters.setdefault(semester, []).append((number, course))
+
+    for semester, semester_courses in semesters.items():
+        print(f"\n{semester}:")
+        for number, course in semester_courses:
+            print(
+                f"{number}. "
+                f"{course['name']} "
+                f"({course['code']}) - "
+                f"{course['credit_units']} credit units"
+            )
 
     print(f"\nTotal courses: {len(courses)}\n")
 
