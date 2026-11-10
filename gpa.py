@@ -1,7 +1,5 @@
 from storage import save_data
-
-
-GRADE_POINTS = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "F": 0}
+from academic_logic import GRADE_POINTS
 
 
 def calculate_gpa(courses):

@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 courses.json
 assignments.json
+courses.json.bak*
+assignments.json.bak*
+.ucc-*
+.venv/
