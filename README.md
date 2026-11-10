@@ -29,6 +29,18 @@ GPA is total grade points (grade value times credit units) divided by graded cre
 
 Older courses without semesters appear under Unassigned. Missing or invalid records are skipped with messages. Course codes are unique across the app; the first valid record per code is used, and duplicates are skipped, even across semesters. Semester names are free text, so the overview keeps their order in the records rather than guessing chronological order.
 
+## Target CGPA Planner
+
+Choose option 13 to enter a target CGPA from 0.00 to 5.00 and a positive number of remaining credit units. Q cancels either prompt. The planner shows your current CGPA, current quality points, and the average grade point needed to finish at or above the target.
+
+Required average = ((target CGPA × (completed attempted credits + remaining credits)) − current quality points) / remaining credits.
+
+Only valid actual saved grades count toward current points and attempted credits, including F grades. Ungraded courses and predictor grades do not count. Validation and duplicate handling match the overview: the first valid record per normalized course code is retained, even if it has no grade. With no graded courses, current CGPA is N/A and the calculation starts with zero credits and points.
+
+Enter all remaining credits yourself, including ungraded courses. The planner assumes current grades stay fixed and all remaining credits are completed on the 0–5 scale. An average above 5 means the target is impossible under these assumptions; an average at or below zero means at least the target is guaranteed even with zero points on all remaining credits. Other results indicate the needed credit-weighted average; individual course weights and letter-grade choices may prevent an exact match.
+
+This is a mathematical estimate, not a check of university graduation requirements. It does not apply repeated-course replacement rules or infer excluded credits. Review which courses are included and supply the appropriate remaining credits yourself. Nothing is saved or changed.
+
 ## Run the tests
 
 From the project folder, run:

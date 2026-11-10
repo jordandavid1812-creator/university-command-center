@@ -17,6 +17,7 @@ from assignments import (
 from gpa import calculate_gpa
 from gpa_predictor import predict_gpa
 from academic_overview import show_academic_overview
+from target_cgpa import plan_target_cgpa
 
 
 COURSES_FILE = "courses.json"
@@ -47,6 +48,7 @@ def show_menu():
     print("9. Calculate GPA")
     print("11. GPA Predictor")
     print("12. Academic Performance Overview")
+    print("13. Target CGPA Planner")
     print("----------------------------------------")
     print("10. Exit")
     print("========================================")
@@ -95,8 +97,11 @@ while True:
     elif choice == "12":
         show_academic_overview(courses)
 
+    elif choice == "13":
+        plan_target_cgpa(courses)
+
     else:
         print(
             "\nInvalid choice. "
-            "Please choose a number from 1 to 12.\n"
+            "Please choose a number from 1 to 13.\n"
         )
