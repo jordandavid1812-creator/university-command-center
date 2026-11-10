@@ -1,7 +1,4 @@
-import math
-from decimal import Decimal
-
-from academic_logic import academic_summary, target_plan
+from academic_logic import academic_summary, target_plan, checked_target, checked_credits
 from gpa import GRADE_POINTS
 
 
@@ -11,18 +8,9 @@ def read_planner_number(prompt, minimum, maximum=None):
         if answer.upper() == "Q":
             return None
         try:
-            value = float(answer)
-        except ValueError:
-            print("Please enter a valid number, or Q to cancel.")
-            continue
-        if not math.isfinite(value):
-            print("Please enter a finite number.")
-        elif maximum is not None and not minimum <= value <= maximum:
-            print(f"Please enter a number from {minimum:.2f} to {maximum:.2f}.")
-        elif maximum is None and value <= minimum:
-            print("Remaining credit units must be greater than zero.")
-        else:
-            return value
+            return checked_target(answer) if maximum is not None else checked_credits(answer)
+        except ValueError as error:
+            print(str(error))
 
 
 def plan_target_cgpa(courses):
@@ -40,7 +28,7 @@ def plan_target_cgpa(courses):
     print(f"Completed attempted credits (saved grades, including F): {current_units:g}")
     print(f"Current quality points: {current_points:g}")
     if current_units:
-        print(f"Current CGPA: {current_points / current_units:.2f}")
+        print(f"Current CGPA: {summary['gpa']:.2f}")
     else:
         print("Current CGPA: N/A (no valid saved grades; starting with zero credits)")
     print("This plan uses actual saved grades only; ungraded courses are excluded.")
@@ -57,9 +45,6 @@ def plan_target_cgpa(courses):
         print("CGPA planning cancelled.\n")
         return
 
-    # Decimal arithmetic avoids float errors at the exact 0 and 5 boundaries.
-    target = Decimal(str(target))
-    remaining = Decimal(str(remaining))
     try:
         plan = target_plan(courses, target, remaining)
     except ValueError as error:

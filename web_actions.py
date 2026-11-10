@@ -2,7 +2,7 @@
 from copy import deepcopy
 from datetime import date
 
-from academic_logic import GRADE_POINTS
+from academic_logic import checked_grade
 
 
 def course_change(courses, index, name, code, units, semester, grade):
@@ -11,8 +11,7 @@ def course_change(courses, index, name, code, units, semester, grade):
     code = code.strip().upper()
     if isinstance(units, bool) or not isinstance(units, (int, float)) or units not in range(1, 7):
         raise ValueError("Credit units must be a whole number from 1 to 6.")
-    if grade and grade not in GRADE_POINTS:
-        raise ValueError("Choose a grade from A to F, or leave it ungraded.")
+    grade = checked_grade(grade)
     for number, course in enumerate(courses):
         if isinstance(course, dict) and number != index and str(course.get("code", "")).strip().upper() == code:
             raise ValueError("This course code already exists.")
@@ -45,7 +44,8 @@ def add_assignment_record(assignments, courses, title, code, due):
     if not any(isinstance(course, dict) and course.get("code") == code for course in courses):
         raise ValueError("Select an existing course.")
     try:
-        date.fromisoformat(due)
+        if not isinstance(due, str) or date.fromisoformat(due).isoformat() != due:
+            raise ValueError("Invalid date format")
     except (ValueError, TypeError):
         raise ValueError("Enter a valid due date in YYYY-MM-DD format.")
     return deepcopy(assignments) + [{"title": title.strip(), "course_code": code,

@@ -1,11 +1,75 @@
 """Read-only academic rules shared by the CLI and web interface."""
-import math
-from decimal import Decimal, InvalidOperation
+from datetime import date
+from decimal import Decimal, InvalidOperation, localcontext
 
 GRADE_POINTS = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "F": 0}
+MIN_CREDITS = Decimal("0.0001")
+MAX_CREDITS = Decimal("1000000")
+DECIMAL_STEP = Decimal("0.0001")
 
 
-def validate_courses(courses):
+def decimal_input(value):
+    """Parse a bounded numeric input without converting it through float."""
+    if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
+        raise ValueError("Please enter a valid number.")
+    text = str(value).strip()
+    if not text or len(text) > 128:
+        raise ValueError("Please enter a valid number of at most 128 characters.")
+    try:
+        number = Decimal(text)
+    except InvalidOperation:
+        raise ValueError("Please enter a valid number.")
+    if not number.is_finite():
+        raise ValueError("Please enter a finite number.")
+    return number
+
+
+def checked_credits(value, allow_zero=False):
+    number = decimal_input(value)
+    if allow_zero and number == 0:
+        return number
+    if not MIN_CREDITS <= number <= MAX_CREDITS:
+        raise ValueError("Credit units must be greater than zero, from 0.0001 to 1000000.")
+    with localcontext() as context:
+        context.prec = 50
+        if number != number.quantize(DECIMAL_STEP):
+            raise ValueError("Credit units can have at most four decimal places.")
+    return number
+
+
+def checked_target(value):
+    number = decimal_input(value)
+    if not 0 <= number <= 5:
+        raise ValueError("Please enter a number from 0.00 to 5.00.")
+    with localcontext() as context:
+        context.prec = 50
+        if number != number.quantize(DECIMAL_STEP):
+            raise ValueError("Target CGPA can have at most four decimal places.")
+    return number
+
+
+def checked_grade(value, allow_ungraded=True):
+    if value is None and allow_ungraded:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Grades must be letters A to F.")
+    grade = value.strip().upper()
+    if grade == "" and allow_ungraded:
+        return None
+    if grade not in GRADE_POINTS:
+        raise ValueError("Grades must be letters A to F.")
+    return grade
+
+
+def weighted_gpa(points, units):
+    if not units:
+        return None
+    with localcontext() as context:
+        context.prec = 28
+        return points / units
+
+
+def validate_courses(courses, check_saved_grades=True):
     """Return normalized course details without changing the saved records."""
     if not isinstance(courses, list):
         raise ValueError("Course data must be a list.")
@@ -19,28 +83,27 @@ def validate_courses(courses):
 
         code = course.get("code")
         if not isinstance(code, str) or not code.strip():
-            warnings.append(f"Skipping Course {number}: missing or invalid course code.")
+            name = course.get("name") or f"Course {number}"
+            warnings.append(f"Skipping {name}: missing or invalid course code.")
             continue
         code = code.strip().upper()
         units = course.get("credit_units")
-        if (isinstance(units, bool) or not isinstance(units, (int, float))
-                or units <= 0):
+        if isinstance(units, bool) or not isinstance(units, (int, float)):
             warnings.append(f"Skipping {code}: credit units must be a positive number.")
             continue
         try:
-            finite_units = math.isfinite(units)
-        except OverflowError:
-            finite_units = False
-        if not finite_units:
-            warnings.append(f"Skipping {code}: credit units are too large or not finite.")
+            checked_credits(units)
+        except ValueError as error:
+            warnings.append(f"Skipping {code}: {error}")
             continue
 
-        saved_grade = course.get("grade")
-        grade = saved_grade.strip().upper() if isinstance(saved_grade, str) else saved_grade
-        if grade is not None and grade != "":
-            if not isinstance(grade, str) or grade not in GRADE_POINTS:
+        try:
+            grade = checked_grade(course.get("grade"))
+        except ValueError:
+            if check_saved_grades:
                 warnings.append(f"Skipping {code}: invalid saved grade.")
                 continue
+            grade = None
         if code in seen_codes:
             warnings.append(f"Skipping duplicate course {code}: already included.")
             continue
@@ -55,35 +118,40 @@ def validate_courses(courses):
 
 
 def academic_summary(courses):
-    semesters, warnings = validate_courses(courses)
-    result = {"points": Decimal(0), "units": Decimal(0), "graded": 0,
-              "ungraded": 0, "semesters": [], "warnings": warnings}
-    for semester, records in semesters.items():
-        row = {"semester": semester, "points": Decimal(0), "units": Decimal(0),
-               "graded": 0, "ungraded": 0}
-        for code, units, grade in records:
-            if not grade:
-                row["ungraded"] += 1
-                continue
-            units = Decimal(str(units))
-            row["points"] += GRADE_POINTS[grade] * units
-            row["units"] += units
-            row["graded"] += 1
-        row["gpa"] = row["points"] / row["units"] if row["units"] else None
-        result["semesters"].append(row)
-        for field in ("points", "units", "graded", "ungraded"):
-            result[field] += row[field]
-    result["gpa"] = result["points"] / result["units"] if result["units"] else None
-    return result
+    with localcontext() as context:
+        context.prec = 50
+        semesters, warnings = validate_courses(courses)
+        result = {"points": Decimal(0), "units": Decimal(0), "graded": 0,
+                  "ungraded": 0, "semesters": [], "warnings": warnings}
+        for semester, records in semesters.items():
+            row = {"semester": semester, "points": Decimal(0), "units": Decimal(0),
+                   "graded": 0, "ungraded": 0}
+            for code, units, grade in records:
+                if not grade:
+                    row["ungraded"] += 1
+                    continue
+                units = Decimal(str(units))
+                row["points"] += GRADE_POINTS[grade] * units
+                row["units"] += units
+                row["graded"] += 1
+            row["gpa"] = weighted_gpa(row["points"], row["units"])
+            result["semesters"].append(row)
+            for field in ("points", "units", "graded", "ungraded"):
+                result[field] += row[field]
+        result["gpa"] = weighted_gpa(result["points"], result["units"])
+        return result
 
 
 def predicted_summary(courses, grades):
-    semesters, warnings = validate_courses(courses)
+    if not isinstance(grades, dict):
+        raise ValueError("Predicted grades must be a mapping of course codes to grades.")
+    semesters, warnings = validate_courses(courses, check_saved_grades=False)
     hypothetical = []
     for semester, records in semesters.items():
         for code, units, actual_grade in records:
-            grade = grades.get(code)
-            if not isinstance(grade, str) or grade not in GRADE_POINTS:
+            try:
+                grade = checked_grade(grades.get(code), allow_ungraded=False)
+            except ValueError:
                 raise ValueError(f"Choose a predicted grade for {code}.")
             hypothetical.append({"code": code, "credit_units": units,
                                  "semester": semester, "grade": grade})
@@ -93,21 +161,47 @@ def predicted_summary(courses, grades):
 
 
 def target_plan(courses, target, remaining):
-    try:
-        target = Decimal(str(target))
-        remaining = Decimal(str(remaining))
-    except InvalidOperation:
-        raise ValueError("Enter valid numbers for target CGPA and remaining credits.")
-    if not target.is_finite() or not 0 <= target <= 5:
-        raise ValueError("Target CGPA must be between 0.00 and 5.00.")
-    if not remaining.is_finite() or remaining <= 0:
-        raise ValueError("Remaining credits must be greater than zero and finite.")
-    # Reject extreme input outside ordinary numeric range before arithmetic.
-    if remaining < Decimal("1e-300") or remaining > Decimal("1e300"):
-        raise ValueError("Remaining credits are too large or too small to calculate safely.")
+    target = checked_target(target)
+    remaining = checked_credits(remaining)
     current = academic_summary(courses)
-    total = current["units"] + remaining
-    required = (target * total - current["points"]) / remaining
+    with localcontext() as context:
+        context.prec = 50
+        total = current["units"] + remaining
+        # Equivalent to the original formula, with less subtractive cancellation.
+        required = target + (target * current["units"] - current["points"]) / remaining
     status = "impossible" if required > 5 else "guaranteed" if required <= 0 else "achievable"
     return {"current": current, "total": total, "required": required, "status": status}
+
+
+def validate_assignments(assignments, courses=None):
+    """Return (original index, record) pairs; never repair or rewrite records."""
+    if not isinstance(assignments, list):
+        raise ValueError("Assignment data must be a list.")
+    codes = None
+    if courses is not None:
+        codes = {course["code"].strip().upper() for course in courses
+                 if isinstance(course, dict) and isinstance(course.get("code"), str) and course["code"].strip()}
+    valid = []
+    warnings = []
+    for index, record in enumerate(assignments):
+        message = f"Assignment {index + 1} needs attention and was excluded from pending counts."
+        if not isinstance(record, dict):
+            warnings.append(message)
+            continue
+        title, code, due = (record.get(key) for key in ("title", "course_code", "due_date"))
+        if (not isinstance(title, str) or not title.strip() or not isinstance(code, str)
+                or not code.strip() or type(record.get("completed")) is not bool):
+            warnings.append(message)
+            continue
+        try:
+            if not isinstance(due, str) or date.fromisoformat(due).isoformat() != due:
+                raise ValueError("Invalid date")
+        except ValueError:
+            warnings.append(message)
+            continue
+        if codes is not None and code.strip().upper() not in codes:
+            warnings.append(message)
+            continue
+        valid.append((index, record))
+    return valid, warnings
 

@@ -1,29 +1,19 @@
-import math
-
-from gpa import GRADE_POINTS
+from academic_logic import GRADE_POINTS, validate_courses, predicted_summary
 
 
 def predict_gpa(courses):
+    if not isinstance(courses, list):
+        print("\nCourse data must be a list.\n")
+        return
     if not courses:
         print("\nYou have no courses to predict a GPA for.\n")
         return
 
-    valid_courses = []
-    for number, course in enumerate(courses, start=1):
-        if not isinstance(course, dict):
-            print(f"Skipping Course {number}: the course record is invalid.")
-            continue
-
-        name = course.get("name") or course.get("code") or f"Course {number}"
-        units = course.get("credit_units")
-        if not str(course.get("code") or "").strip():
-            print(f"Skipping {name}: the course code is missing.")
-            continue
-        if (isinstance(units, bool) or not isinstance(units, (int, float))
-                or units <= 0 or not math.isfinite(units)):
-            print(f"Skipping {name}: credit units must be a positive, finite number.")
-            continue
-        valid_courses.append(course)
+    semesters, warnings = validate_courses(courses, check_saved_grades=False)
+    for warning in warnings:
+        print(warning)
+    valid_courses = [{"code": code, "credit_units": units}
+                     for records in semesters.values() for code, units, actual in records]
 
     if not valid_courses:
         print("\nNo courses with valid credit units are available for prediction.\n")
@@ -36,8 +26,6 @@ def predict_gpa(courses):
     print("Predictions are temporary and do not change your saved grades.")
 
     while True:
-        total_points = 0
-        total_units = 0
         for number, course in enumerate(valid_courses):
             previous_grade = predicted_grades.get(number)
             hint = f", Enter to keep predicted {previous_grade}" if previous_grade else ""
@@ -56,12 +44,11 @@ def predict_gpa(courses):
                 print("Invalid grade. Please enter A, B, C, D, E, or F.")
 
             predicted_grades[number] = grade
-            total_points += GRADE_POINTS[grade] * course["credit_units"]
-            total_units += course["credit_units"]
-
-        print(f"\nTotal credit units: {total_units}")
-        print(f"Predicted grade points: {total_points}")
-        print(f"Predicted GPA: {total_points / total_units:.2f}\n")
+        grades = {course["code"]: predicted_grades[number] for number, course in enumerate(valid_courses)}
+        result = predicted_summary(valid_courses, grades)
+        print(f"\nTotal credit units: {result['units']:g}")
+        print(f"Predicted grade points: {result['points']:g}")
+        print(f"Predicted GPA: {result['gpa']:.2f}\n")
 
         while True:
             choice = input("R to change predicted grades and recalculate, or Q to return to menu: ").strip().upper()

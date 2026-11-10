@@ -4,6 +4,7 @@ Files:
 main.py runs the app.
 web_app.py runs the local Streamlit interface.
 academic_logic.py contains pure shared grading, validation, summaries, and planning calculations.
+It also validates assignments before they enter dashboard pending counts.
 web_actions.py validates form edits and returns new records without writing files.
 web_data.py safely loads and saves web records, with snapshots, backups, and atomic replacement.
 courses.py handles courses.
@@ -34,3 +35,10 @@ Keep the CLI working without Streamlit installed. Run the full unittest suite wi
 The web app is local and single-user only. Do not deploy it publicly with shared JSON data.
 Never use empty fallback data after a web load error. Preserve original files, extra fields, and backups; reject stale saves.
 Use synthetic data and temporary directories for tests and screenshots. Do not commit student data or backups.
+Milestone 1 uses Python 3.12. Install runtime packages from requirements-lock.txt with --require-hashes.
+Preserve the original 91 tests. Run the complete suite with Streamlit installed and run pip-audit before finishing.
+Credit calculations accept 0.0001–1000000 and at most four decimal places. Targets accept 0–5 with four decimal places. Do not silently round unsupported inputs.
+Use checked_credits, checked_grade, checked_target, and validate_assignments instead of duplicating validation. Keep the documented legacy zero-credit warning compatible.
+Do not count invalid or incomplete assignments as pending work. Warn and preserve their records.
+Run tools/check_repository_safety.py before committing. Never print student records while auditing history.
+Do not rewrite history, delete personal records, merge, deploy, or start Milestone 2 as part of foundation work.
