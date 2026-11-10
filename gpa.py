@@ -1,20 +1,16 @@
 from storage import save_data
 
 
+GRADE_POINTS = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "F": 0}
+
+
 def calculate_gpa(courses):
 
     if len(courses) == 0:
         print("\nYou have no courses.\n")
         return
 
-    grade_points = {
-        "A": 5,
-        "B": 4,
-        "C": 3,
-        "D": 2,
-        "E": 1,
-        "F": 0
-    }
+    grade_points = GRADE_POINTS
 
     total_points = 0
     total_units = 0
