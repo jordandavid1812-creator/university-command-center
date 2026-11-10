@@ -3,15 +3,8 @@ import math
 from gpa import GRADE_POINTS
 
 
-def show_academic_overview(courses):
-    print("\nACADEMIC PERFORMANCE OVERVIEW")
-    if not isinstance(courses, list):
-        print("Course data must be a list. No overview is available.\n")
-        return
-    if not courses:
-        print("You have no courses yet.\n")
-        return
-
+def get_valid_semester_courses(courses):
+    """Return normalized course details without changing the saved records."""
     semesters = {}
     seen_codes = set()
     for number, course in enumerate(courses, start=1):
@@ -52,6 +45,20 @@ def show_academic_overview(courses):
         if not isinstance(semester, str) or not semester.strip():
             semester = "Unassigned"
         semesters.setdefault(semester, []).append((code, units, grade))
+
+    return semesters
+
+
+def show_academic_overview(courses):
+    print("\nACADEMIC PERFORMANCE OVERVIEW")
+    if not isinstance(courses, list):
+        print("Course data must be a list. No overview is available.\n")
+        return
+    if not courses:
+        print("You have no courses yet.\n")
+        return
+
+    semesters = get_valid_semester_courses(courses)
 
     total_points = 0
     total_units = 0
