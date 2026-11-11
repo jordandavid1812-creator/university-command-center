@@ -1,2 +1,2 @@
 {% extends 'accounts/base.html' %}
-{% block content %}<p>{{ message }}</p>{% endblock %}
+{% block content %}<section class="panel"><h1>Check your next step</h1><p role="status">{{ message }}</p><a class="button secondary" href="{% url 'accounts:login' %}">Go to login</a></section>{% endblock %}

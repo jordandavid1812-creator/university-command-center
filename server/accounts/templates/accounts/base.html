@@ -1,6 +1,10 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>University Command Center</title></head>
-<body><main><h1>University Command Center</h1>
-<nav><a href="{% url 'accounts:login' %}">Login</a> · <a href="{% url 'accounts:register' %}">Register</a> · <a href="{% url 'accounts:reset' %}">Reset password</a> · <a href="{% url 'accounts:resend' %}">Resend verification</a> · <a href="{% url 'accounts:academic' %}">Academic records</a></nav>
-{% block content %}{% endblock %}
-</main></body></html>
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}University Command Center{% endblock %}</title>{% if website_enabled %}<link rel="stylesheet" href="{% static 'student_web/site.css' %}"><script defer src="{% static 'student_web/site.js' %}"></script>{% endif %}</head>
+<body><a class="skip-link" href="#main-content">Skip to main content</a>
+{% if workspace_authenticated %}
+<div class="app-shell"><aside class="sidebar"><a class="brand" href="{% url 'student_web:dashboard' %}"><span class="brand-mark" aria-hidden="true">UC</span><span>University<br>Command Center</span></a><p class="nav-caption">STUDENT WORKSPACE</p><nav aria-label="Primary navigation">{% for item in navigation %}<a class="nav-link{% if item.active %} active{% endif %}" href="{{ item.url }}"{% if item.active %} aria-current="page"{% endif %}><span class="nav-mark" aria-hidden="true">{{ item.mark }}</span>{{ item.label }}</a>{% endfor %}</nav><div class="sidebar-footer"><p>Your studies, in one place.</p><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="logout-button" type="submit">Logout</button></form></div></aside>
+<div class="workspace"><header class="topbar"><span class="topbar-label">Your academic workspace</span><span class="user-chip">{{ student_username }}</span></header><details class="mobile-nav"><summary>Navigation</summary><nav aria-label="Mobile navigation">{% for item in navigation %}<a href="{{ item.url }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}<form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Logout</button></form></nav></details>
+{% else %}<div class="public-shell"><a class="brand public-brand" href="{% url 'accounts:login' %}"><span class="brand-mark" aria-hidden="true">UC</span><span>University Command Center</span></a><nav class="public-nav" aria-label="Account navigation"><a href="{% url 'accounts:login' %}">Login</a><a href="{% url 'accounts:register' %}">Register</a><a href="{% url 'accounts:reset' %}">Reset password</a><a href="{% url 'accounts:resend' %}">Resend verification</a></nav>{% endif %}
+<main id="main-content" class="main-content" tabindex="-1">{% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="notice success" role="status">{{ message }}</p>{% endfor %}</div>{% endif %}{% block content %}{% endblock %}</main>
+<footer class="page-footer">University Command Center <span>Plan with confidence. Keep actual results separate from what-if scenarios.</span></footer>
+{% if workspace_authenticated %}</div></div>{% else %}</div>{% endif %}</body></html>

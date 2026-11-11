@@ -1,2 +1,3 @@
 {% extends 'accounts/base.html' %}
-{% block content %}<h2>{{ title }}</h2><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">{{ submit }}</button></form>{% endblock %}
+{% block title %}{{ title }} · University Command Center{% endblock %}
+{% block content %}<section class="panel auth-panel"><p class="eyebrow">Your student account</p><h1>{{ title }}</h1><form method="post" class="stacked-form">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<div class="form-field">{{ field.as_field_group }}</div>{% endfor %}<button class="button" type="submit">{{ submit }}</button></form></section>{% endblock %}

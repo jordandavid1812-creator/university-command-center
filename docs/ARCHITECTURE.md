@@ -54,3 +54,13 @@ owner-scoped services before opening the signed PostgreSQL owner transaction.
 A Student instance or request owner ID alone cannot mint web capabilities. See
 [AUTHENTICATION.md](AUTHENTICATION.md) for routing, privileges, transactions, forms,
 local setup and production limitations. CLI/Streamlit remain local JSON apps.
+
+## Student website (Milestone 4A)
+
+`student_web` provides server-rendered pages and strict forms over the existing
+verified-session and CRUD-service boundaries. `academics.queries` adds bounded
+owner-scoped reads/aggregates; the presentation adapter groups by semester UUID
+and preserves Decimal credits in the unchanged calculation formulas. Templates
+share the account layout, local CSS and optional form-busy feedback. See
+[STUDENT_WEBSITE.md](STUDENT_WEBSITE.md) for page inventory, limits, local settings,
+accessibility and verification. No models, grants or RLS policies are replaced.
