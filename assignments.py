@@ -1,4 +1,5 @@
 from storage import save_data
+from academic_logic import validate_assignments
 
 
 ASSIGNMENTS_FILE = "assignments.json"
@@ -43,6 +44,11 @@ def add_assignment(assignments, courses):
         "completed": False
     }
 
+    valid, warnings = validate_assignments([assignment], courses)
+    if not valid:
+        print("Please enter a real due date in YYYY-MM-DD format.\n")
+        return
+
     assignments.append(assignment)
 
     save_data(ASSIGNMENTS_FILE, assignments)
@@ -51,13 +57,20 @@ def add_assignment(assignments, courses):
 
 
 def list_assignments(assignments):
+    if not isinstance(assignments, list):
+        print("\nAssignment data must be a list.\n")
+        return
     if len(assignments) == 0:
         print("\nYou have no assignments.\n")
         return
 
     print("\nYour assignments:")
 
-    for number, assignment in enumerate(assignments, start=1):
+    valid, warnings = validate_assignments(assignments)
+    for warning in warnings:
+        print(warning)
+    for index, assignment in valid:
+        number = index + 1
 
         if assignment["completed"]:
             status = "Completed"
@@ -72,10 +85,13 @@ def list_assignments(assignments):
             f"{status}"
         )
 
-    print(f"\nTotal assignments: {len(assignments)}\n")
+    print(f"\nTotal assignments: {len(valid)}\n")
 
 
 def mark_assignment_complete(assignments):
+    if not isinstance(assignments, list):
+        print("\nAssignment data must be a list.\n")
+        return
     if len(assignments) == 0:
         print("\nYou have no assignments.\n")
         return
@@ -97,6 +113,10 @@ def mark_assignment_complete(assignments):
         return
 
     assignment = assignments[assignment_number - 1]
+    valid, warnings = validate_assignments(assignments)
+    if assignment_number - 1 not in {index for index, record in valid}:
+        print("This assignment needs attention before it can be marked complete.\n")
+        return
 
     assignment["completed"] = True
 
@@ -106,6 +126,9 @@ def mark_assignment_complete(assignments):
 
 
 def remove_assignment(assignments):
+    if not isinstance(assignments, list):
+        print("\nAssignment data must be a list.\n")
+        return
     if len(assignments) == 0:
         print("\nYou have no assignments to remove.\n")
         return
@@ -130,7 +153,8 @@ def remove_assignment(assignments):
 
     save_data(ASSIGNMENTS_FILE, assignments)
 
+    title = removed_assignment.get("title", "Untitled assignment") if isinstance(removed_assignment, dict) else f"Assignment {assignment_number}"
     print(
-        f"\n'{removed_assignment['title']}' "
+        f"\n'{title}' "
         "has been removed.\n"
     )

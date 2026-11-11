@@ -5,7 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from academic_logic import GRADE_POINTS, academic_summary, predicted_summary, target_plan, validate_courses
+from academic_logic import GRADE_POINTS, academic_summary, predicted_summary, target_plan, validate_courses, validate_assignments
 from web_actions import course_change, remove_course_record, add_assignment_record, assignment_status
 from web_data import DataError, read_records, write_records
 
@@ -92,6 +92,10 @@ def course_page(courses, assignments):
 
 
 def assignment_page(courses, assignments):
+    valid, warnings = validate_assignments(assignments, courses)
+    for warning in warnings:
+        st.warning(warning + " The original record is unchanged.")
+    valid_indices = {index for index, record in valid}
     codes = list(dict.fromkeys(record["code"] for record in courses
                               if isinstance(record, dict) and isinstance(record.get("code"), str) and record["code"].strip()))
     if codes:
@@ -111,7 +115,15 @@ def assignment_page(courses, assignments):
         st.info("No assignments yet. Your upcoming work will appear here.")
     for index, record in enumerate(assignments):
         if not isinstance(record, dict):
-            st.warning(f"Assignment {index + 1} is invalid and has been left unchanged.")
+            continue
+        if index not in valid_indices:
+            with st.expander(f"Assignment {index + 1}: needs attention"):
+                st.caption("This record is excluded from pending counts. Restore or correct it locally; removal requires confirmation.")
+                confirm = st.checkbox("Confirm removal", key=f"invalid_assignment_{index}_{hash(str(record))}")
+                if st.button("Remove assignment", key=f"delete_invalid_{index}", disabled=not confirm):
+                    result = deepcopy(assignments)
+                    result.pop(index)
+                    save_records("assignments.json", result)
             continue
         done = record.get("completed") is True
         with st.expander(f"{'Completed' if done else 'Pending'} · {record.get('title', 'Untitled assignment')}"):
@@ -128,7 +140,7 @@ def assignment_page(courses, assignments):
 
 def prediction_page(courses):
     st.info("What-if results only. These grades are never saved and do not change your actual CGPA.")
-    valid, _ = validate_courses(courses)
+    valid, _ = validate_courses(courses, check_saved_grades=False)
     if not valid:
         st.info("Add at least one course with valid credit units to try a prediction.")
         return
@@ -153,9 +165,10 @@ def prediction_page(courses):
 def planner_page(courses, summary):
     metrics(summary)
     st.caption("Current grades stay fixed. Enter all remaining credits, including ungraded courses. No graduation or repeat-course policy is assumed.")
+    st.caption("Use at most four decimal places. Remaining credits must be from 0.0001 to 1,000,000.")
     with st.form("target_plan"):
-        target = st.number_input("Desired final CGPA", min_value=0.0, max_value=5.0, value=4.0, step=0.1)
-        remaining = st.number_input("Remaining credit units", min_value=0.0, value=30.0, step=1.0)
+        target = st.number_input("Desired final CGPA", min_value=0.0, max_value=5.0, value=4.0, step=0.1, format="%.4f")
+        remaining = st.number_input("Remaining credit units", min_value=0.0, max_value=1000000.0, value=30.0, step=1.0, format="%.4f")
         if st.form_submit_button("Calculate required average", type="primary"):
             try:
                 result = target_plan(courses, target, remaining)
@@ -207,15 +220,18 @@ if page == "Dashboard":
     metrics(summary)
     left, right = st.columns(2)
     left.metric("Ungraded courses", summary["ungraded"])
-    pending = sum(isinstance(item, dict) and item.get("completed") is not True for item in assignments)
+    valid_assignments, assignment_warnings = validate_assignments(assignments, courses)
+    pending = sum(not item["completed"] for index, item in valid_assignments)
     right.metric("Pending assignments", pending)
     st.caption("Completed means graded, including F. Attempted credits exclude ungraded courses.")
     st.subheader("Semester performance")
     performance(summary)
     st.subheader("Upcoming work")
+    for warning in assignment_warnings:
+        st.warning(warning + " Review it on the Assignments page.")
     upcoming = [{"Assignment": str(item.get("title", "Untitled")), "Course": str(item.get("course_code", "")),
-                 "Due": str(item.get("due_date", "Not set"))} for item in assignments
-                if isinstance(item, dict) and item.get("completed") is not True]
+                 "Due": str(item["due_date"])} for index, item in valid_assignments
+                if not item["completed"]]
     if upcoming:
         st.dataframe(upcoming, hide_index=True, width="stretch")
     else:

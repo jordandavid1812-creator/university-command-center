@@ -11,16 +11,19 @@ Your courses and assignments are saved in JSON files. The CLI uses only Python's
 
 ## Local web application
 
-Use Python 3.11 or newer (tested with Python 3.12). From the project folder:
+Python **3.12** is the supported and CI-tested version for this milestone. The CLI uses only its standard library. From the project folder:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install --upgrade pip==26.3
+python -m pip install --require-hashes -r requirements-lock.txt
 python -m streamlit run web_app.py --server.address 127.0.0.1
 ```
 
 On Windows, activate the environment with `.venv\Scripts\activate` instead. Open the local address printed by Streamlit in your browser, usually `http://127.0.0.1:8501`. Stop the app with Ctrl+C.
+
+CI and the fresh-install checks run on Linux. Native Windows and macOS are not part of this milestone's verified platform matrix.
 
 The sidebar has six pages:
 
@@ -86,3 +89,45 @@ python -m unittest discover -v
 ```
 
 Run this command inside the environment where requirements were installed to include the Streamlit interaction tests. Without Streamlit, the CLI and pure-logic tests still run, but web interaction tests are explicitly skipped. All tests use synthetic data and temporary directories. Tests cover calculations, backups, failed and stale saves, course/assignment forms, read-only pages, and corrupted-file handling.
+
+## Production foundation — Milestone 1
+
+The project is still a local, single-user application. No Django, PostgreSQL, authentication, or deployment is included in this milestone. See [foundation review](docs/FOUNDATION_REVIEW.md) for the data-history audit and remaining risks.
+
+### Supported calculation inputs
+
+- The grading scale stays A=5, B=4, C=3, D=2, E=1, F=0. Lowercase letters are normalized. Missing, null, or blank actual grades stay ungraded; booleans and numeric grade values are invalid.
+- Calculation credit values and remaining credits must be finite numbers from **0.0001 to 1,000,000**, with at most **four decimal places**. These are technical safety limits, not university graduation rules. Saved course credits must be JSON numbers rather than strings. Unsupported records are reported and left unchanged, not rounded or rewritten.
+- Target CGPA must be **0–5**, with at most **four decimal places**. CLI planning parses Decimal values directly, without float conversion. Unsupported tiny remaining credits such as `1e-30` are rejected rather than producing a false guarantee.
+- Calculations use an isolated Decimal context and an algebraically equivalent planner formula to avoid subtracting nearly equal graduation totals. Displayed values are rounded; achievable/impossible decisions use unrounded values.
+- Course creation/editing keeps its existing whole-number **1–6** credit rule. Valid older fractional-credit records remain usable in calculations. The legacy CLI calculator still displays its existing zero-credit warning, but zero credits are not accepted by planning or prediction.
+- Predictions use their own grades and never save or overwrite actual grades. An invalid actual grade does not prevent a hypothetical prediction for an otherwise valid course.
+- A normal pending assignment must have a nonempty title, an existing course code, a real `YYYY-MM-DD` date, and a Boolean completion flag. Incomplete, orphaned, or malformed records are excluded from dashboard pending counts and upcoming work, with a needs-attention message. The original records are left untouched.
+
+### Automated quality and dependency checks
+
+GitHub Actions runs the full suite and a dependency audit on pull requests, pushes to `master`, and weekly. It installs web requirements so Streamlit tests are included. Workflows use read-only repository permissions and pinned action commits. Configure branch protection to require the `tests` and `dependency-audit` checks before merging; adding a workflow does not itself enable branch protection.
+
+`requirements.txt` lists the direct web dependency. `requirements-lock.txt` fixes all runtime dependency versions and package hashes. Install from the lock file for reproducibility. Streamlit was updated to a patched release after the dependency audit identified advisories affecting the earlier installation. The audit fails on known findings; no vulnerabilities are silently ignored.
+
+To run the same checks locally after installing the runtime lock file:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pip check
+python tools/check_repository_safety.py
+python -m unittest discover -v
+python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner off -r requirements-lock.txt
+```
+
+`pip-audit` needs access to PyPI and vulnerability metadata. Network or audit-service failures are failures, not evidence that dependencies are safe. A clean scan only means no known advisories were reported at scan time.
+
+To deliberately refresh the runtime lock on Python 3.12 after changing the direct requirement:
+
+```bash
+python -m piptools compile --generate-hashes --strip-extras --no-header --no-emit-index-url --index-url https://pypi.org/simple -o requirements-lock.txt requirements.txt
+```
+
+Run all tests and the audit after updating it. Dependabot proposes dependency and action updates weekly; review and regenerate the lock as needed. It does not merge updates automatically.
+
+Student JSON files, backups, temporary files, local secrets, and common virtual environment folders are ignored by Git. CI also rejects tracked private/local paths, including files added with `git add -f`. Ignore rules do not erase old history or prevent someone from overriding a failing check.
