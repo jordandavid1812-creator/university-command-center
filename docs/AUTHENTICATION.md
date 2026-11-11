@@ -144,6 +144,17 @@ headers. No email-change route exists, and the auth role cannot update email.
 An offline administrative email change must clear verification, revoke tokens and
 sessions, then arrange fresh verification; there is no public shortcut around that.
 
+**Password-hash upgrades (F04b fix):** `StudentBackend` verifies passwords
+without Django's auto-saving upgrade setter. Previously, a login that loaded the
+account row before a concurrent reset or change could save an upgraded hash of
+the OLD password over the new one. Upgrades are now a compare-and-swap on the
+exact hash that was verified (`UPDATE ... WHERE id = %s AND password = <verified>`).
+Before creating a session, `login` re-reads the account under the same Student
+row lock that reset and change use. It proceeds only if the stored hash is the one
+verified, or still accepts the submitted password (a concurrent same-password
+upgrade). Otherwise it returns the generic invalid-login form. No new grants.
+Regression tests: `auth_tests/test_password_upgrade_race.py`.
+
 ## Sessions, cookies and request boundaries
 
 Django's DB session engine stores signed, NOT encrypted, session data through the
