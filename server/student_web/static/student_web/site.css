@@ -958,3 +958,64 @@ legend {
     margin:0 0 12px;
   }
 }
+
+/* 4B design scale: compact academic workspace; no remote assets or motion. */
+:root {
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-6:24px;
+  --space-8:32px;
+  --radius:12px;
+  --focus:#805000;
+}
+:focus-visible { outline-color:var(--focus); }
+.sidebar :focus-visible { outline-color:#fff; outline-offset:3px; }
+.hero { background:var(--nav); }
+.dashboard-heading { align-items:flex-start; gap:var(--space-6); }
+.dashboard-heading h1 { font-size:clamp(24px,2.5vw,32px); }
+.dashboard-heading .action-row { flex-shrink:0; margin:0; }
+.onboarding { border-left:4px solid var(--accent); margin-bottom:var(--space-6); }
+.onboarding h2 { margin-bottom:var(--space-2); }
+.onboarding ol { padding-left:var(--space-6); margin:var(--space-2) 0; }
+.onboarding p { margin-bottom:0; }
+.form-guidance,.search-summary { color:var(--muted); font-size:14px; margin:0 0 var(--space-3); }
+.form-guidance { margin:0; }
+.actions a,.assignment-actions>a,.pagination a,.text-button {
+  display:inline-flex; align-items:center; min-height:44px; padding:8px 4px;
+}
+.actions a { margin-right:var(--space-2); }
+.notice:focus { outline:3px solid var(--focus); outline-offset:3px; }
+.mobile-nav summary { min-height:48px; }
+.filter-form .form-field { flex-basis:180px; }
+@media(min-width:761px) and (max-width:1100px) {
+  .dashboard-heading { flex-direction:column; }
+}
+@media(max-width:760px) {
+  .main-content { padding-top:var(--space-6); }
+  .dashboard-heading { margin-bottom:var(--space-6); }
+  .dashboard-heading .action-row { width:100%; gap:var(--space-2); }
+  .dashboard-heading .button { flex:1 1 130px; }
+  .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-3); }
+  .metric { padding:var(--space-4); }
+  .metric strong { font-size:24px; letter-spacing:-.5px; }
+  .metric small { font-size:12px; }
+  .filter-form .form-field { max-width:none; }
+  .onboarding { padding:var(--space-4); }
+}
+@media(forced-colors:active) {
+  .button,.badge,.nav-link.active { border:1px solid ButtonText; }
+  :focus-visible { outline:3px solid Highlight; }
+}
+/* Keep checkboxes and secondary navigation comfortable for touch and zoom. */
+.form-field input[type=checkbox] { width:24px; height:24px; }
+.form-field:has(input[type=checkbox]) label { min-height:44px; padding:8px 0; }
+.logout-button,.mobile-nav nav a,.mobile-nav nav button { min-height:44px; }
+/* Error links are separate touch targets, not tightly stacked inline text. */
+#error-summary a {
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+  padding:6px 2px;
+}

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
 from .models import Assignment, Course, Semester
-from .ownership import database_alias, require_identity, student_transaction
+from .ownership import database_alias, student_transaction
 from .services import InvalidRecord, RecordNotFound, record_id
 
 PAGE_SIZE = 25
@@ -53,7 +53,7 @@ def options(identity, kind):
     if kind not in ('semester', 'course'):
         raise InvalidRecord()
     with student_transaction(identity):
-        records = _records(MODELS[kind], require_identity(identity))
+        records = _records(MODELS[kind], identity.student_id)
         limit = MAX_SEMESTERS if kind == 'semester' else MAX_COURSES
         if kind == 'course':
             records = records.order_by('normalized_code', 'id')
@@ -63,11 +63,14 @@ def options(identity, kind):
         return rows
 
 
-def page(identity, kind, *, number=1, semester_id=None, status='all', sort='due', today=None):
+def page(identity, kind, *, number=1, semester_id=None, status='all', sort='due', today=None, search=''):
     if kind not in MODELS or type(number) is not int or not 1 <= number <= 10000:
         raise InvalidRecord()
+    if not isinstance(search, str) or len(search) > 80 or (search and kind == 'semester'):
+        raise InvalidRecord()
     with student_transaction(identity):
-        owner = require_identity(identity)
+        # The transaction validates the live session and signature before yielding.
+        owner = identity.student_id
         records = _records(MODELS[kind], owner)
         if kind == 'course':
             records = records.select_related('semester').order_by(
@@ -85,6 +88,12 @@ def page(identity, kind, *, number=1, semester_id=None, status='all', sort='due'
                     raise InvalidRecord()
                 records = records.filter(**{'due_date__gte' if status == 'upcoming' else 'due_date__lt': today})
             records = records.order_by('-due_date' if sort == 'latest' else 'due_date', 'id')
+        if search:
+            if kind == 'course':
+                records = records.filter(Q(normalized_code__icontains=search) | Q(name__icontains=search))
+            else:
+                records = records.filter(Q(title__icontains=search) | Q(course__normalized_code__icontains=search)
+                                         | Q(course__name__icontains=search))
         paginator = Paginator(records, PAGE_SIZE)
         try:
             selected = paginator.page(number)
@@ -96,7 +105,8 @@ def page(identity, kind, *, number=1, semester_id=None, status='all', sort='due'
 def academic_snapshot(identity):
     """One bounded course read with joined semester metadata; no float conversion."""
     with student_transaction(identity):
-        owner = require_identity(identity)
+        # The transaction validates the live session and signature before yielding.
+        owner = identity.student_id
         records = list(_records(Course, owner).select_related('semester').order_by(
             'semester__display_order', 'semester__created_at', 'semester_id', 'created_at', 'id')[:MAX_COURSES + 1])
         semesters = list(_records(Semester, owner)[:MAX_SEMESTERS + 1])
@@ -107,7 +117,7 @@ def academic_snapshot(identity):
 
 def assignment_metrics(identity, today):
     with student_transaction(identity):
-        records = _records(Assignment, require_identity(identity))
+        records = _records(Assignment, identity.student_id)
         counts = records.aggregate(total_count=Count('id'), completed_count=Count('id', filter=Q(completed=True)),
                                    pending_count=Count('id', filter=Q(completed=False)),
                                    overdue_count=Count('id', filter=Q(completed=False, due_date__lt=today)))
@@ -118,7 +128,7 @@ def assignment_metrics(identity, today):
 
 def code_in_use(identity, code, exclude=None):
     with student_transaction(identity):
-        records = _records(Course, require_identity(identity)).filter(normalized_code=code.strip(' ').upper())
+        records = _records(Course, identity.student_id).filter(normalized_code=code.strip(' ').upper())
         if exclude is not None:
             records = records.exclude(pk=record_id(exclude))
         return records.exists()

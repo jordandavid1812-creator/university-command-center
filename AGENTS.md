@@ -77,3 +77,13 @@ Do not truncate analyses into misleading partial GPAs or persist hypothetical gr
 Keep the 255 historical tests unchanged and run web_tests on real PostgreSQL.
 Keep mobile table regions keyboard-scrollable and all forms functional without JavaScript.
 Do not deploy, import JSON, add account deletion/email changes or start 4B without a new task.
+
+Milestone 4B: preserve bounded literal search and its owner/semester/status filters.
+Read a capability's student_id only inside validated student_transaction; never
+replace its live-session/signature checks with direct trust or cache identities.
+Keep error summaries keyboard-focusable and linked only to visible controls.
+Preserve all historical tests (307 from 4A plus 13 from PR #24) and polish
+regressions; run real PostgreSQL.
+The opt-in web_tests.benchmark is not part of ordinary discovery/CI latency checks.
+Read docs/MILESTONE_4B_REVIEW.md for accessibility/performance evidence and limits.
+No deployment or Milestone 5 without a new task.
