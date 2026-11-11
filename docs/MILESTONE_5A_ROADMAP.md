@@ -7,7 +7,8 @@ PR #26 or override Claude's responsibility for S0-02 implementation.
 
 Prepared 11 November 2026 (Africa/Lagos), against master
 `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`. Draft security HEAD reviewed separately:
-`0e9e478fd4ed4249cbb81501a75ffda5e2744fd4`. Re-evaluate changed revisions before execution.
+`61bf63232e4ca62296949c18040280cf5940c9af` (follow-up to initial review
+`0e9e478fd4ed4249cbb81501a75ffda5e2744fd4`). Re-evaluate changed revisions before execution.
 
 ## Outcome and boundaries
 
@@ -335,7 +336,7 @@ select an independent qualified tester; require retests for High/Critical findin
 | Private access / HTTPS | Unapproved external clients cannot reach Django or DB; no origin bypass; certificate renewal/proxy spoofing/CSRF/host checks pass |
 | PG17 / privileges | Fresh install + upgrade + real-role RLS/context tests; no app owner/migrator credentials; approved foundation fixes independently retested |
 | Existing product | All current tests for the pinned release pass; CLI/Streamlit/calculations preserved; no personal JSON changed |
-| S0-02 gate | [PR #26 implementation review](https://github.com/jordandavid1812-creator/university-command-center/blob/docs/s0-02-independent-review/docs/security/PR_26_S0_02A_IMPLEMENTATION_REVIEW.md): fix case-sensitive classification, PG17 privilege-drift detection and nullable constraint; decide explicit-revocation freshness |
+| S0-02 gate | [PR #26 implementation review](https://github.com/jordandavid1812-creator/university-command-center/blob/docs/s0-02-independent-review/docs/security/PR_26_S0_02A_IMPLEMENTATION_REVIEW.md): case-sensitive/UUID correction independently confirmed at 61bf632; resolve PG17 privilege-drift detection, nullable rotation constraint and wrong-account old-cookie deletion; decide explicit-revocation freshness |
 | Dormant vs active | Device evidence/account enforcement remains off unless separately authorized; 02B counters, finalization and 02C recovery need their own evidence, not schema-only approval |
 | Recovery/email | Real controlled-mailbox delivery, bounded retry/outage handling, safe resends and accessible recovery under attack; no correct-password bypass of an enforced gate |
 | Restore | Fresh isolated restore meets approved RPO/RTO, verifies academic integrity/roles and invalidates restored auth artifacts; alert tested |
