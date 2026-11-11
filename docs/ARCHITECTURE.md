@@ -23,3 +23,12 @@ This is not a database or a multi-user application. Snapshot comparison detects 
 Streamlit is the only direct web dependency. Its charts and testing tools supply the UI and interaction tests. The CLI and business rules use only the standard library. Tests and browser checks must use synthetic records in temporary directories, never real student data.
 
 Future authentication, user isolation, database transactions, deployment, and backup retention are outside this milestone. Public multi-user hosting must wait for a storage and security design that isolates each student's records.
+
+## Separate Django database foundation (Milestone 2A)
+
+`server/` now holds an independent Django 5.2 LTS/PostgreSQL 17 foundation. It
+reuses academic validators but does not read legacy JSON or change CLI/Streamlit
+storage. UUID accounts own semesters, courses and assignments. Database checks
+and composite foreign keys protect data integrity; request-level owner isolation
+is deferred to Milestone 2B. See [DATABASE_FOUNDATION.md](DATABASE_FOUNDATION.md)
+for model relationships, exact numeric storage, migrations and security boundaries.

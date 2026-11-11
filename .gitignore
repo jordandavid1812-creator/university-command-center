@@ -25,3 +25,6 @@ __pypackages__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local verification scripts, logs and ephemeral test credentials.
+/work/

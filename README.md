@@ -131,3 +131,11 @@ python -m piptools compile --generate-hashes --strip-extras --no-header --no-emi
 Run all tests and the audit after updating it. Dependabot proposes dependency and action updates weekly; review and regenerate the lock as needed. It does not merge updates automatically.
 
 Student JSON files, backups, temporary files, local secrets, and common virtual environment folders are ignored by Git. CI also rejects tracked private/local paths, including files added with `git add -f`. Ignore rules do not erase old history or prevent someone from overriding a failing check.
+
+## Django/PostgreSQL foundation (Milestone 2A)
+
+The separate `server/` project adds database models without replacing the CLI or
+Streamlit. It has no login/registration routes and is not approved for public
+hosting. See [local setup, schema, testing and security limits](docs/DATABASE_FOUNDATION.md)
+and the [implementation plan](docs/MILESTONE_2A_PLAN.md). Owner isolation must still
+be verified in Milestone 2B.

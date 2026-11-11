@@ -42,3 +42,11 @@ Use checked_credits, checked_grade, checked_target, and validate_assignments ins
 Do not count invalid or incomplete assignments as pending work. Warn and preserve their records.
 Run tools/check_repository_safety.py before committing. Never print student records while auditing history.
 Do not rewrite history, delete personal records, merge, deploy, or start Milestone 2 as part of foundation work.
+
+Django foundation: server/ is independent of the CLI/Streamlit entry points.
+See docs/DATABASE_FOUNDATION.md before changing its schema or settings.
+Use Python 3.12, the hashed requirements-django-lock.txt, and real PostgreSQL 17
+for Django tests. Never substitute SQLite for database constraint verification.
+Preserve the composite same-owner foreign keys and exact numeric credit checks.
+Owner integrity is not complete owner isolation; Milestone 2B needs separate review.
+Do not expose account routes, deploy, or migrate JSON as part of Milestone 2A.
