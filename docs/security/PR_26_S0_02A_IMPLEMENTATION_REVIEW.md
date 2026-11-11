@@ -49,7 +49,7 @@ this reviewed commit. A future changed HEAD needs fresh verification.
 ### P26-01 — High latent risk: checking/rotation still equates distinct case-sensitive accounts
 
 **References:** [devices.py:104–121][normalization], [185–212][classify],
-[215–249][rotate], [test_trusted_devices.py:98–104][case-test];
+[215–249][rotate], [test_trusted_devices.py:106–113][case-test];
 [unchanged backend:7–20][backend].
 
 `issue()` now locks the Student UUID and requires the **exact stored username** and
@@ -255,7 +255,7 @@ Only review documents are published by this assignment.
 [auth-guard]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/accounts/boundary.py#L24-L43
 [runtime-guard]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/academics/ownership.py#L95-L123
 [grants]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/accounts/management/commands/configure_auth_role.py#L55-L67
-[case-test]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L98-L104
+[case-test]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L106-L113
 [constraint-tests]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L285-L305
 [compat-tests]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L308-L332
 [revocation-tests]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L353-L434
