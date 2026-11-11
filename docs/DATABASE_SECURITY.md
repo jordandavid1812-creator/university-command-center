@@ -9,7 +9,16 @@ extension is installed by migration 0004 in its private `ucc_crypto` schema.
 Use a dedicated application database with no pre-existing pgcrypto installation;
 the migration deliberately fails instead of taking over an existing extension.
 
-## Trusted ownership boundary
+## Milestone 3 update
+
+For application authentication use [AUTHENTICATION.md](AUTHENTICATION.md). The
+historical persisted-Student fixture boundary below is now available ONLY in
+explicit non-web 2B test settings. Web applications require a verified live-session
+principal and session/password-bound capabilities; they cannot mint from a Student
+instance. Academic RLS/roles/context remain as described here. Auth web settings
+configure a separate restricted account/session role, never a migration connection.
+
+## Trusted ownership boundary (historical 2B fixture adapter)
 
 `academics.ownership.identity_for_verified_student(principal)` is an INTERNAL
 adapter boundary. Only trusted server code that already verified the principal

@@ -203,3 +203,10 @@ transactions. Its setup/testing instructions supersede the historical deferred
 items above. The 33 original database tests remain unchanged and run separately
 from the restricted-role security suite. Public authentication and deployment
 are still unimplemented.
+
+## Milestone 3 authentication profiles
+
+Use [AUTHENTICATION.md](AUTHENTICATION.md) for registration/session settings, new
+account fields and separate authentication role provisioning. The original default
+foundation profiles stay route-free for compatibility; web authentication is opt-in
+and must never run with the migration/DBA credentials described for test setup.

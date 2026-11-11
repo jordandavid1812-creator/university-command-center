@@ -9,3 +9,6 @@ DATABASES["runtime"]["USER"] = required("UCC_RUNTIME_ROLE")
 DATABASES["runtime"]["PASSWORD"] = required("UCC_RUNTIME_PASSWORD")
 DATABASES["runtime"]["TEST"] = {"MIRROR": "default"}
 TEST_RUNNER = "security_tests.runner.SecurityTestRunner"
+
+# Historical 2B fixture adapter only; never enable in a web profile.
+ALLOW_INTERNAL_TEST_PRINCIPALS = True
