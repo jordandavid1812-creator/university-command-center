@@ -26,7 +26,7 @@ class ValidatedRecord(Timestamped):
 
     def save(self, *args, **kwargs):
         # QuerySet.update/bulk_create bypass this: database constraints remain
-        # essential. record_version is a token, not optimistic locking yet.
+        # essential. Use the services for version-checked transactional edits.
         self.full_clean()
         return super().save(*args, **kwargs)
 
@@ -36,11 +36,13 @@ class Semester(ValidatedRecord):
                               related_name="semesters")
     label = models.CharField(max_length=120)
     display_order = models.PositiveIntegerField(default=0)
+    record_version = models.PositiveBigIntegerField(default=1)
 
     class Meta:
         ordering = ["display_order", "created_at", "id"]
         constraints = [
             models.UniqueConstraint(fields=["id", "owner"], name="semester_id_owner_unique"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1), name="semester_version_positive"),
             models.CheckConstraint(condition=~models.Q(label__regex=r"^\s*$"),
                                    name="semester_label_nonempty"),
         ]
@@ -70,7 +72,7 @@ class Course(ValidatedRecord):
         super().clean_fields(exclude=exclude)
 
     def clean(self):
-        if self.semester_id and self.owner_id and not Semester.objects.filter(
+        if self.semester_id and self.owner_id and not Semester.objects.using(self._state.db).filter(
                 pk=self.semester_id, owner_id=self.owner_id).exists():
             raise ValidationError({"semester": "Semester must belong to the course owner."})
 
@@ -104,7 +106,7 @@ class Assignment(ValidatedRecord):
     record_version = models.PositiveBigIntegerField(default=1)
 
     def clean(self):
-        if self.course_id and self.owner_id and not Course.objects.filter(
+        if self.course_id and self.owner_id and not Course.objects.using(self._state.db).filter(
                 pk=self.course_id, owner_id=self.owner_id).exists():
             raise ValidationError({"course": "Course must belong to the assignment owner."})
 

@@ -157,7 +157,7 @@ They are reversible SQL migrations because Django's ordinary single-column
 ForeignKey cannot represent this rule. Do not remove them during schema changes.
 The test suite checks both actual PostgreSQL metadata and rejected writes.
 
-**Owner isolation is not complete.** These constraints prevent inconsistent links;
+**Milestone 2A historical boundary (extended in Milestone 2B).** These constraints prevent inconsistent links;
 they do not restrict who may read or change an otherwise consistent row. There
 are no authenticated application endpoints, owner-scoped query services,
 authorization tests, PostgreSQL row-level security or reviewed production roles.
@@ -194,3 +194,12 @@ protected deletion and composite ownership constraints. The test database is
 created with migrations enabled and destroyed after completion. CI adds a
 PostgreSQL 17 service job and audits both dependency locks. Hosted CI status must
 be checked separately; local passing tests do not establish hosted success.
+
+## Milestone 2B update
+
+[DATABASE_SECURITY.md](DATABASE_SECURITY.md) now defines trusted owner-scoped
+services, forced PostgreSQL RLS, separate database roles and version-checked
+transactions. Its setup/testing instructions supersede the historical deferred
+items above. The 33 original database tests remain unchanged and run separately
+from the restricted-role security suite. Public authentication and deployment
+are still unimplemented.

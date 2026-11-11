@@ -50,3 +50,10 @@ for Django tests. Never substitute SQLite for database constraint verification.
 Preserve the composite same-owner foreign keys and exact numeric credit checks.
 Owner integrity is not complete owner isolation; Milestone 2B needs separate review.
 Do not expose account routes, deploy, or migrate JSON as part of Milestone 2A.
+
+Milestone 2B: use academics.services with a trusted capability for academic CRUD.
+Read docs/DATABASE_SECURITY.md first. Never mint identities from client owner IDs.
+Never replace signed transaction/backend context with an unsigned PostgreSQL GUC.
+Runtime must have no schema ownership, bypass rights, role memberships or account/key access.
+Run legacy, original 2A database and restricted-role security suites separately.
+Preserve all original tests. Never run application requests with the migration connection.
