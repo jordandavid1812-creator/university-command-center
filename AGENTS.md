@@ -67,3 +67,13 @@ ALLOW_INTERNAL_TEST_PRINCIPALS is only for historical 2B non-web fixtures.
 Run auth_tests separately on real PostgreSQL; preserve all 192 historical tests unchanged.
 Use only console/private local or in-memory test email, synthetic identities and hashed tokens.
 Do not deploy, add social login, migrate JSON or start the full dashboard without a new task.
+
+Milestone 4A: read docs/STUDENT_WEBSITE.md before changing website pages.
+Use web_development/web_test profiles; old auth/foundation profiles stay compatible.
+All writes use existing services; all new reads need signed context and owner filters.
+Preserve Decimal credits and semester UUID grouping; never merge semesters by labels.
+No calculation formulas were changed. Do not convert database credits through float.
+Do not truncate analyses into misleading partial GPAs or persist hypothetical grades.
+Keep the 255 historical tests unchanged and run web_tests on real PostgreSQL.
+Keep mobile table regions keyboard-scrollable and all forms functional without JavaScript.
+Do not deploy, import JSON, add account deletion/email changes or start 4B without a new task.

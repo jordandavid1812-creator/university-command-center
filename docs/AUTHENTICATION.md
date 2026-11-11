@@ -284,3 +284,10 @@ logs; none is purchased or configured here. Do not use the console backend publi
 Auth role/DB compromise, stolen sessions/email links, credential stuffing from many
 IPs, endpoint compromise and arbitrary trusted Python/DBA access remain material
 risks. No MFA/social login/payments/email-change/dashboard work is included.
+
+## Milestone 4A website
+
+For the full student pages, use the [student website profiles and guide](STUDENT_WEBSITE.md).
+They inherit this authentication/role boundary and do not broaden runtime privileges.
+`auth_development` remains the historical minimal demonstration profile;
+`web_development` provides the new local student website and shared presentation.

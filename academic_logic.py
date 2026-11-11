@@ -88,7 +88,8 @@ def validate_courses(courses, check_saved_grades=True):
             continue
         code = code.strip().upper()
         units = course.get("credit_units")
-        if isinstance(units, bool) or not isinstance(units, (int, float)):
+        # PostgreSQL uses exact Decimal credits; JSON int/float behavior stays unchanged.
+        if isinstance(units, bool) or not isinstance(units, (int, float, Decimal)):
             warnings.append(f"Skipping {code}: credit units must be a positive number.")
             continue
         try:

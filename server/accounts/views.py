@@ -1,5 +1,6 @@
 """Local authentication and a deliberately small academic integration surface."""
 from functools import wraps
+from django.conf import settings
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.db import DatabaseError, transaction
 from django.contrib.auth.models import AnonymousUser
@@ -46,7 +47,7 @@ def login(request):
     if request.method == 'POST' and form.is_valid():
         auth_login(request, form.get_user())  # Django rotates the anonymous session key.
         request.session.set_expiry(0)  # Browser-session cookie; server-side limit is 30 minutes.
-        return redirect('accounts:academic')  # Ignore request-controlled redirect destinations.
+        return redirect('student_web:dashboard' if getattr(settings, 'STUDENT_WEBSITE_ENABLED', False) else 'accounts:academic')
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Login', 'submit': 'Login'})
 
 
@@ -121,6 +122,7 @@ def student_required(view):
                 request.user = AnonymousUser()  # Do not evaluate a malformed lazy session user while flushing it.
                 auth_logout(request)
             return redirect('accounts:login')
+        request.student_identity = identity
         return view(request, identity, *args, **kwargs)
     return wrapped
 
@@ -168,6 +170,8 @@ def academic_errors(view):
 @student_required
 @academic_errors
 def academic(request, identity):
+    if getattr(settings, 'STUDENT_WEBSITE_ENABLED', False):
+        return redirect('student_web:dashboard')
     return render(request, 'accounts/academic.html', {
         'courses': courses.list(identity), 'assignments': assignments.list(identity),
         'semesters': semesters.list(identity),

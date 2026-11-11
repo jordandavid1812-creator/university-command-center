@@ -153,3 +153,12 @@ on the original restricted role with forced RLS. Start with the
 [authentication setup and security boundary](docs/AUTHENTICATION.md), then open
 `http://127.0.0.1:8000/accounts/register/`. Use only synthetic data and local
 console/in-memory email. Public deployment and the full dashboard remain deferred.
+
+## Student website (Milestone 4A)
+
+The Django website now includes the dashboard, semester/course/assignment management,
+weighted GPA/CGPA, read-only prediction, target planning and account settings.
+See [student website setup, pages and limits](docs/STUDENT_WEBSITE.md). Run locally
+with `python server/manage.py runserver 127.0.0.1:8000 --settings=config.settings.web_development`
+after the separate role/schema setup, then open `http://127.0.0.1:8000/`.
+No personal JSON import, public deployment or replacement of CLI/Streamlit is included.
