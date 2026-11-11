@@ -1,0 +1,9 @@
+{% extends 'accounts/base.html' %}
+{% block content %}<h2>Your academic records</h2>
+<h3>Semesters</h3><ul>{% for item in semesters %}<li>{{ item.label }}</li>{% empty %}<li>No semesters yet.</li>{% endfor %}</ul>
+<h3>Courses</h3><ul>{% for item in courses %}<li>{{ item.original_code }} — {{ item.name }} ({{ item.actual_grade|default_if_none:'Ungraded' }})
+<form method="post" action="{% url 'accounts:course' item.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ item.record_version }}"><label>Actual grade <select name="actual_grade"><option value=""{% if item.actual_grade == None %} selected{% endif %}>Ungraded</option>{% for grade in "ABCDEF" %}<option{% if grade == item.actual_grade %} selected{% endif %}>{{ grade }}</option>{% endfor %}</select></label><button>Save grade</button></form></li>{% empty %}<li>No courses yet.</li>{% endfor %}</ul>
+<h3>Assignments</h3><ul>{% for item in assignments %}<li>{{ item.title }} — {{ item.due_date }}
+<form method="post" action="{% url 'accounts:delete-assignment' item.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ item.record_version }}"><button>Delete assignment</button></form></li>{% empty %}<li>No assignments yet.</li>{% endfor %}</ul>
+<a href="{% url 'accounts:password-change' %}">Change password</a><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button>Logout</button></form>
+{% endblock %}

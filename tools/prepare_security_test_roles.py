@@ -24,10 +24,13 @@ def main():
     scratch = required("UCC_SECURITY_SCRATCH_DATABASE")
     migration_password = required("UCC_MIGRATION_PASSWORD")
     runtime_password = required("UCC_RUNTIME_PASSWORD")
-    if migrator == runtime:
+    auth_role = os.environ.get("UCC_AUTH_ROLE")
+    auth_password = required("UCC_AUTH_PASSWORD") if auth_role else None
+    targets = [migrator, runtime] + ([auth_role] if auth_role else [])
+    if len(set(targets)) != len(targets):
         raise SystemExit("Migration and runtime role names must differ.")
     with psycopg.connect(autocommit=True) as connection:
-        if connection.execute("SELECT 1 FROM pg_roles WHERE rolname IN (%s,%s)", (migrator, runtime)).fetchone():
+        if connection.execute("SELECT 1 FROM pg_roles WHERE rolname = ANY(%s)", (targets,)).fetchone():
             raise SystemExit("A target role already exists; nothing was changed.")
         if connection.execute("SELECT 1 FROM pg_database WHERE datname=%s", (scratch,)).fetchone():
             raise SystemExit("The scratch database already exists; nothing was changed.")
@@ -36,6 +39,9 @@ def main():
                 sql.Identifier(migrator), sql.Literal(migration_password)))
             connection.execute(sql.SQL("CREATE ROLE {} LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD {}").format(
                 sql.Identifier(runtime), sql.Literal(runtime_password)))
+            if auth_role:
+                connection.execute(sql.SQL("CREATE ROLE {} LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD {}").format(
+                    sql.Identifier(auth_role), sql.Literal(auth_password)))
         connection.execute(sql.SQL("CREATE DATABASE {} OWNER {}").format(sql.Identifier(scratch), sql.Identifier(migrator)))
     print("Disposable test roles and scratch database created; no secret values printed.")
 

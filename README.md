@@ -144,3 +144,12 @@ Milestone 2B adds [database security and student isolation](docs/DATABASE_SECURI
 owner-scoped services, restricted PostgreSQL roles, forced RLS and optimistic
 concurrency. These controls are tested database foundations; public authentication,
 registration and deployment remain outside scope.
+
+## Student authentication (Milestone 3)
+
+Local Django registration, email verification, login/logout and password recovery
+now use a separate restricted authentication connection. Academic access remains
+on the original restricted role with forced RLS. Start with the
+[authentication setup and security boundary](docs/AUTHENTICATION.md), then open
+`http://127.0.0.1:8000/accounts/register/`. Use only synthetic data and local
+console/in-memory email. Public deployment and the full dashboard remain deferred.

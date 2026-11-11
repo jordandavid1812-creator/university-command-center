@@ -42,3 +42,15 @@ Services provide atomic units, compare-and-swap updates and version-checked
 deletes; semesters now also carry record_version. See
 [DATABASE_SECURITY.md](DATABASE_SECURITY.md) for the trust boundary and operational
 role setup. The CLI/Streamlit JSON architecture remains independent.
+
+## Authentication (Milestone 3)
+
+The opt-in Django auth profiles add a separate narrow `auth` database connection
+for accounts, Django sessions, hashed one-use email/reset tokens and shared
+throttle counters. The application default remains the restricted academic role;
+no migration connection is configured in web settings. Verified server-side
+sessions mint session/password-bound capabilities, revalidated by existing
+owner-scoped services before opening the signed PostgreSQL owner transaction.
+A Student instance or request owner ID alone cannot mint web capabilities. See
+[AUTHENTICATION.md](AUTHENTICATION.md) for routing, privileges, transactions, forms,
+local setup and production limitations. CLI/Streamlit remain local JSON apps.

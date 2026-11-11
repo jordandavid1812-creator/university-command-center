@@ -1,7 +1,7 @@
 """Trusted in-process capabilities and transaction-local PostgreSQL context.
 
-Only a future verified authentication adapter may call identity_for_verified_student.
-Never construct a principal from request JSON/URL owner IDs. No auth flow is added.
+Only verified server-side sessions may mint web capabilities.
+Never construct a principal from request JSON/URL owner IDs.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -41,28 +41,45 @@ class TrustedStudent:
     student_id: uuid.UUID
     expires_at: int
     proof: str = field(repr=False)
+    session_key: str | None = field(default=None, repr=False)
+    auth_hash: str | None = field(default=None, repr=False)
 
 
 def identity_for_verified_student(principal):
-    """Trusted adapter boundary, NOT an identity lookup or public authentication API."""
-    if (not isinstance(principal, Student) or principal._state.adding
-            or not isinstance(principal.pk, uuid.UUID)
-            or not principal.is_authenticated or not principal.is_active):
-        raise OwnershipRequired()
-    expires = int(time.time()) + 300
-    proof = signature(f"identity|{principal.pk}|{expires}")
-    return TrustedStudent(principal.pk, expires, proof)
+    """A model instance/is_authenticated flag alone never authenticates a web principal."""
+    if getattr(settings, "ALLOW_INTERNAL_TEST_PRINCIPALS", False):
+        # Historical 2B fixture adapter ONLY; auth application settings disable it.
+        if (not isinstance(principal, Student) or principal._state.adding
+                or not isinstance(principal.pk, uuid.UUID)
+                or not principal.is_authenticated or not principal.is_active):
+            raise OwnershipRequired()
+        expires = int(time.time()) + 300
+        return TrustedStudent(principal.pk, expires, signature(f"identity|{principal.pk}|{expires}"))
+    from accounts.principals import validate_principal
+    student = validate_principal(principal)
+    expires = min(principal.expires_at, int(time.time()) + 300)
+    payload = f"identity-session|{student.pk}|{expires}|{principal.session_key}|{principal.auth_hash}"
+    return TrustedStudent(student.pk, expires, signature(payload), principal.session_key, principal.auth_hash)
 
 
 def require_identity(identity):
-    if (not isinstance(identity, TrustedStudent)
-            or not isinstance(identity.student_id, uuid.UUID)
-            or type(identity.expires_at) is not int
-            or identity.expires_at <= time.time()
-            or not isinstance(identity.proof, str)
-            or not identity.proof.isascii() or len(identity.proof) != 64
-            or not hmac.compare_digest(identity.proof, signature(
-                f"identity|{identity.student_id}|{identity.expires_at}"))):
+    if (not isinstance(identity, TrustedStudent) or not isinstance(identity.student_id, uuid.UUID)
+            or type(identity.expires_at) is not int or identity.expires_at <= time.time()
+            or not isinstance(identity.proof, str) or not identity.proof.isascii() or len(identity.proof) != 64):
+        raise OwnershipRequired()
+    if getattr(settings, "AUTHENTICATION_REQUIRED_FOR_CAPABILITIES", False):
+        from accounts.principals import session_student
+        student = session_student(identity.session_key)
+        if (not student or student.pk != identity.student_id or not isinstance(identity.auth_hash, str) or not identity.auth_hash.isascii()
+                or not hmac.compare_digest(student.get_session_auth_hash(), identity.auth_hash)):
+            raise OwnershipRequired()
+        payload = (f"identity-session|{identity.student_id}|{identity.expires_at}|"
+                   f"{identity.session_key}|{identity.auth_hash}")
+    elif getattr(settings, "ALLOW_INTERNAL_TEST_PRINCIPALS", False):
+        payload = f"identity|{identity.student_id}|{identity.expires_at}"
+    else:
+        raise OwnershipRequired()
+    if not hmac.compare_digest(identity.proof, signature(payload)):
         raise OwnershipRequired()
     return identity.student_id
 
@@ -80,6 +97,7 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment') AND relowner=r.oid)
+                   OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    OR has_schema_privilege(current_user, 'public', 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'TEMP')

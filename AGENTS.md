@@ -57,3 +57,13 @@ Never replace signed transaction/backend context with an unsigned PostgreSQL GUC
 Runtime must have no schema ownership, bypass rights, role memberships or account/key access.
 Run legacy, original 2A database and restricted-role security suites separately.
 Preserve all original tests. Never run application requests with the migration connection.
+
+Milestone 3: read docs/AUTHENTICATION.md before changing authentication.
+Web default DB credentials are academic runtime; accounts/sessions use the separate auth role.
+Never put migration/DBA credentials in web settings or grant runtime account/key access.
+A Student/is_authenticated flag alone must never mint a web capability.
+Use principal_for_request plus the live session/password-bound factory.
+ALLOW_INTERNAL_TEST_PRINCIPALS is only for historical 2B non-web fixtures.
+Run auth_tests separately on real PostgreSQL; preserve all 192 historical tests unchanged.
+Use only console/private local or in-memory test email, synthetic identities and hashed tokens.
+Do not deploy, add social login, migrate JSON or start the full dashboard without a new task.
