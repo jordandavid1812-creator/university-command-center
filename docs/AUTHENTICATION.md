@@ -171,10 +171,26 @@ students are tested on PostgreSQL.
 
 ## Bounded brute-force protection
 
-The database-backed fixed window uses socket REMOTE_ADDR only; untrusted forwarded
-headers cannot choose a new bucket. Successful and failed attempts both count.
-New browser sessions do not bypass it. Requests over the limit return generic 429
-with Retry-After. The default limits per source IP are:
+The database-backed fixed window is keyed by a normalized source address from
+`accounts.throttling.client_address`:
+
+- The socket `REMOTE_ADDR` is the trusted default. `X-Forwarded-For` is ignored.
+- An IPv6 source is grouped by its /64 network, so rotating addresses inside one
+  allocation shares one bucket. Side effect: devices that share one /64 (one home or
+  campus network) share the limit, just as IPv4 users behind one NAT do. An
+  IPv4-mapped IPv6 address uses its IPv4 bucket.
+- A missing or malformed address uses one shared `unknown` bucket.
+- `UCC_TRUSTED_PROXIES` (default `()`, empty in every profile) is opt-in. Only when
+  the socket peer is inside a listed network is `X-Forwarded-For` read, from the
+  right, skipping listed proxies. The first untrusted address is the client. Entries
+  further left (client-supplied, forgeable) are ignored. A missing or malformed
+  header keeps the proxy address. Configuring `0.0.0.0/0`, `::/0`, a single string
+  or an invalid network fails closed with `ImproperlyConfigured`. Do not set this
+  until a deployment topology has been reviewed.
+
+Successful and failed attempts both count. New browser sessions do not bypass it.
+Requests over the limit return generic 429 with Retry-After. The default limits
+per source are:
 
 - Login: 10 submissions / 15 minutes.
 - Registration, reset and verification resend: 5 submissions / hour per action.
@@ -183,8 +199,10 @@ with Retry-After. The default limits per source IP are:
 
 Counts saturate at limit+1; expiry starts a new window atomically. This is a clearly
 bounded local mechanism, NOT complete distributed-abuse protection. Shared NAT
-users share limits, distributed attackers can evade IP limits, and IPv6/proxy
-policy needs production review. Do not blindly trust X-Forwarded-For. Run cleanup
+and shared-/64 users share limits. Attackers who rotate across distinct IPv4
+addresses or /64 networks can evade IP limits: there is no per-account limit yet
+(S0-02, proposal in `docs/security/S1_PROPOSALS.md`). Proxy settings need
+production review. Do not blindly trust X-Forwarded-For. Run cleanup
 regularly to bound expired bucket/token/session retention; active source count is
 not globally capped. Future public hosting needs perimeter limits/monitoring and
 possibly account-target controls without introducing easy account-lockout abuse.
