@@ -105,7 +105,11 @@ db digest    = sha256(b"ucc.trusted-device.v1|" + raw_id).hexdigest()
 A device is issued **only after a successful password authentication**, or in 02C
 after a verified recovery (A.7). This happens in one `auth` transaction:
 
-1. `SELECT ... FOR UPDATE` on the student row. This keeps the existing lock order (Student first) and serializes device issuance per student.
+1. `SELECT ... FOR UPDATE` on the student row. This keeps the existing lock order (Student first) and serializes device issuance per student. **Under that lock** (implemented in S0-02A):
+   * the supplied username must equal the student's **stored** username exactly, and the binding key is derived from the record;
+   * the caller's `credential_stamp` (the password-derived `get_session_auth_hash()` captured when the password was verified) must still match.
+   
+   So a login verified before a password change or reset can never create trust after it.
 2. If the browser presented a cookie for a record of *this* student, rotate that record instead of creating a new one (A.4.3).
 3. Otherwise, if the student has 10 or more live records, delete the least-recently-used ones down to 9 (`ORDER BY last_used_at, id`).
 4. Insert a record with `username_key = HMAC(normalized username)`, `expires_at = now + 30 days`, and `current_digest`.
@@ -454,7 +458,7 @@ on `64fe874`). All must pass in **hosted PostgreSQL 17 CI** before merge.
 
 **S0-02A: schema, grants, primitives (no login behaviour change), IMPLEMENTED**
 
-File: `server/auth_tests/test_trusted_devices.py` (28 tests, real migrator, runtime and auth LOGIN roles).
+File: `server/auth_tests/test_trusted_devices.py` (35 tests, real migrator, runtime and auth LOGIN roles; the 7 added after review are in `DeviceBindingAndRevocationTests`).
 
 | Group | Tests |
 | --- | --- |
@@ -594,11 +598,31 @@ Regression tests:
 | --- | --- | --- |
 | Legitimate two-tab or double-submit | Previous digest, within 60 s of rotation | `grace`: trusted for this request, no rotation, no cookie |
 | Copied cookie used after the owner's next login | Previous digest, more than 60 s after rotation | `replayed`: record deleted for both parties; unfamiliar path |
-| Copied cookie used within 60 s of the owner's rotation | Previous digest, within grace | `grace` (accepted limitation, bounded by `device_fail`) |
+| Copied cookie used within 60 s of the owner's rotation | Previous digest, within grace | `grace`: **treated as an unfamiliar browser for all limits** (see below) |
 | Identifier two or more rotations old | No match | `absent` (unfamiliar path); not detected as replay (accepted) |
+
+**How S0-02B treats `grace` (review issue 3):**
+
+* `Check.selects_trusted_limits` is `True` **only** for `trusted` (a current identifier).
+* A `grace` request uses the **unfamiliar** path for throttling: the IP failure bucket, `ip_ceiling_unfamiliar`, `account_fail` and `account_success`.
+* It gets no IP bypass and no trusted ceiling. It never rotates, renews or sets a cookie.
+
+The only effect of `grace` is to avoid falsely revoking a legitimate device when
+two tabs race. A copied cookie replayed inside the window therefore adds no
+guessing capacity beyond what an unfamiliar browser already has, and can't
+bypass account limits. A legitimate second tab is at worst subject to the
+ordinary unfamiliar-browser limits for that one request; the first tab has
+already succeeded.
+
+S0-02B regression tests:
+
+* `test_grace_request_uses_unfamiliar_limits_not_device_bypass`
+* `test_grace_replay_within_window_cannot_exceed_account_fail`
+* `test_grace_request_never_sets_cookie_or_renews`
 
 Implemented tests:
 
+* `test_grace_never_selects_trusted_limits_or_renews`
 * `test_concurrent_two_tab_rotation_gives_one_cookie_and_one_grace`
 * `test_superseded_identifier_within_grace_gets_no_new_cookie`
 * `test_superseded_identifier_after_grace_is_replay_and_revokes`
@@ -609,6 +633,40 @@ Mutation evidence: with the grace window set to 0, the grace test fails. With
 the lost-update guard removed, the lost-update test fails. The concurrency test
 verifies lock serialization: the waiting tab's timestamp predates the
 rotation, so it falls inside the window.
+
+#### E. Record binding, revocation races and lock order (review issues 1–2, implemented in S0-02A)
+
+**Lock order:** (1) `accounts_student` row → (2) `accounts_trusteddevice` rows → (3) `accounts_loginlimit` rows.
+
+| Operation | Lock behaviour |
+| --- | --- |
+| `issue()` | Student `FOR UPDATE`, then devices (expiry and eviction deletes, insert) |
+| `revoke_all()` | **Always** Student `FOR UPDATE` first (re-entrant inside a password change or reset transaction that already holds it), then DELETE all devices |
+| `rotate()` | Only its own device row (`FOR UPDATE OF self`). It never takes the Student lock, so it can't form a cycle with `issue` or `revoke_all`. |
+| S0-02B password change, reset, "forget all" | Student `FOR UPDATE`, update the password where applicable, `revoke_all()`, in **one** auth transaction |
+
+Guarantees:
+
+* **Issue racing a reset or change:** the issuance blocks on the Student lock. After the reset commits, the credential stamp no longer matches, so `DeviceError` is raised and no record is created.
+* **`revoke_all` racing an in-flight issue:** the DELETE waits for the Student lock, so its statement snapshot includes the committed device, which is then deleted.
+* **`revoke_all` racing a rotation:** the DELETE waits for the device-row lock and then deletes the rotated row. Neither the old nor the new cookie remains valid, and a later `rotate()` of either returns `absent`.
+* **Explicit revocation without a password change** removes every existing device. Someone who still knows the password can log in and earn trust again later, so compromise response must be a **password reset**, which changes the stamp and revokes everything atomically.
+
+Tests:
+
+* `test_issue_binds_to_the_student_record_not_the_supplied_username`
+* `test_issue_with_stamp_from_before_a_password_change_is_refused`
+* `test_issue_waiting_on_a_password_reset_cannot_recreate_trust`
+* `test_revoke_all_waits_for_inflight_issuance_and_removes_it`
+* `test_revoke_all_removes_a_device_rotated_concurrently`
+* `test_mixed_concurrent_issue_rotate_revoke_never_deadlock`
+
+The race tests block on real PostgreSQL row locks, observed through `pg_locks`,
+not sleeps. Mutation evidence:
+
+* Removing the username check fails the binding test.
+* Removing the stamp check fails 3 tests.
+* Removing the Student lock in `revoke_all` fails the in-flight-issuance test.
 
 #### D. Fail-closed vs. a release failure after a correct password
 
@@ -634,7 +692,8 @@ Regression tests:
 | --- | --- |
 | A | Design corrected; tests specified for S0-02B |
 | B | Design corrected; tests specified for S0-02B |
-| C | **Implemented and tested in S0-02A** |
+| C | **Implemented and tested in S0-02A.** `grace` uses the unfamiliar limits in S0-02B. |
+| E | **Implemented and tested in S0-02A** (record binding, credential stamp, revocation lock order) |
 | D | Design corrected; tests specified for S0-02B |
 
 ---

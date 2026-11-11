@@ -14,6 +14,17 @@ Security properties:
   is honoured only inside a short grace window (concurrent tabs) and otherwise
   revokes the record (replay of a copied cookie).
 - All writes go through the restricted `auth` connection, never runtime/migrator.
+
+Lock order (deadlock-free; S0-02B must follow it):
+  1. accounts_student row (SELECT ... FOR UPDATE)   -- issue, revoke_all, password change/reset
+  2. accounts_trusteddevice rows                     -- issue (eviction), revoke_all, rotate
+  3. accounts_loginlimit rows (S0-02B)
+rotate() locks only its device row (a suffix of this order) and never takes the
+Student lock, so it cannot deadlock with issue/revoke_all. revoke_all() always
+takes the Student lock first, so it serializes with issuance and its DELETE sees
+every device committed before it; issue() re-checks the password-derived
+credential stamp under that lock, so a login verified before a password change
+or reset can never create trust after it.
 """
 import base64
 import binascii
@@ -59,6 +70,17 @@ class Check:
     """status: trusted | grace | absent | mismatch | replayed. Never an authentication result."""
     status: str
     device_id: uuid.UUID | None = None
+
+    @property
+    def selects_trusted_limits(self):
+        """Only a CURRENT identifier may select the trusted-device limits in S0-02B.
+
+        'grace' (a superseded identifier inside the 60 s window) only prevents a
+        false replay revocation for a concurrent tab; for throttling it is treated
+        exactly like an unfamiliar browser, so replaying a copied cookie inside the
+        window gains no IP bypass and no extra guessing capacity.
+        """
+        return self.status == 'trusted'
 
 
 @dataclass(frozen=True)
@@ -122,19 +144,30 @@ def _live(now):
             .filter(expires_at__gt=now, student__is_active=True))
 
 
-def issue(student_id, username, *, now=None):
+def issue(student_id, username, *, credential_stamp, now=None):
     """Create a record for an ACTIVE student, enforcing the per-student cap atomically.
 
-    Locks the Student row first (the existing Student-then-token lock order), so
-    concurrent issuance for one student is serialized and can never exceed the cap.
+    Locks the Student row first, then verifies under that lock that:
+    - `username` is exactly the student's stored username (the binding is derived
+      from the record, never from the supplied string alone); and
+    - `credential_stamp` (student.get_session_auth_hash() captured when the password
+      was verified) still matches, so a password change/reset that committed in the
+      meantime makes issuance fail instead of re-creating trust.
     """
     now = now or timezone.now()
-    key = username_key(username)
+    _normalized(username)
+    if not isinstance(credential_stamp, str) or not credential_stamp:
+        raise DeviceError('A credential stamp is required.')
     with transaction.atomic(using=ALIAS):
-        locked = list(Student.objects.using(ALIAS).select_for_update()
-                      .filter(pk=student_id, is_active=True).values_list('pk', flat=True))
-        if not locked:
+        student = (Student.objects.using(ALIAS).select_for_update()
+                   .filter(pk=student_id, is_active=True).first())
+        if student is None:
             raise DeviceError('Devices can only be issued to an active student.')
+        if student.username != username:  # exact stored username (not a secret)
+            raise DeviceError('The username does not belong to this student.')
+        if not hmac.compare_digest(student.get_session_auth_hash(), credential_stamp):
+            raise DeviceError('Credentials changed; device not issued.')
+        key = username_key(student.username)
         devices = TrustedDevice.objects.using(ALIAS).filter(student_id=student_id)
         devices.filter(expires_at__lte=now).delete()
         live = list(devices.order_by('last_used_at', 'id').values_list('pk', flat=True))
@@ -221,9 +254,18 @@ def revoke(device_id):
 
 
 def revoke_all(student_id):
-    """Delete every device of one student. Safe inside an existing auth transaction that
-    already locked the Student row (password change/reset in S0-02B)."""
-    return TrustedDevice.objects.using(ALIAS).filter(student_id=student_id).delete()[0]
+    """Delete every device of one student (password change/reset, explicit revocation).
+
+    Always locks the Student row first (re-entrant inside a caller's transaction that
+    already holds it), so the DELETE runs after any in-flight issuance has committed
+    and sees its row. Rotations hold only their device-row lock; the DELETE waits for
+    them and then removes the rotated row. An explicit revocation WITHOUT a password
+    change cannot stop someone who still knows the password from logging in and
+    earning trust again later: compromise response must be a password reset.
+    """
+    with transaction.atomic(using=ALIAS):
+        list(Student.objects.using(ALIAS).select_for_update().filter(pk=student_id).values_list('pk', flat=True))
+        return TrustedDevice.objects.using(ALIAS).filter(student_id=student_id).delete()[0]
 
 
 def _delete_expired(model, now, batch_size):

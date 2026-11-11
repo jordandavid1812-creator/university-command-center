@@ -40,12 +40,24 @@ def ensure_latest_schema():
 
 
 def in_thread(function):
-    def run(*args):
+    def run(*args, **kwargs):
         try:
-            return function(*args)
+            return function(*args, **kwargs)
         finally:
             connections.close_all()
     return run
+
+
+def wait_for_lock_waiter(timeout=15):
+    """Block until some backend is waiting on a lock (pg_locks is readable by every role)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with connections['default'].cursor() as cursor:
+            cursor.execute('SELECT count(*) FROM pg_locks WHERE NOT granted')
+            if cursor.fetchone()[0]:
+                return
+        time.sleep(0.02)
+    raise AssertionError('No blocked lock waiter observed: the operation did not serialize.')
 
 
 def table_names():
@@ -57,9 +69,12 @@ class DeviceCase(AuthenticationCase):
         ensure_latest_schema()
         super().setUp()
 
+    def stamp(self, student=None):
+        return Student.objects.using('auth').get(pk=(student or self.a).pk).get_session_auth_hash()
+
     def issue(self, student=None, **kwargs):
         student = student or self.a
-        return devices.issue(student.pk, student.username, **kwargs)
+        return devices.issue(student.pk, student.username, credential_stamp=self.stamp(student), **kwargs)
 
     def rows(self, student=None):
         return TrustedDevice.objects.using('auth').filter(student=student or self.a)
@@ -333,6 +348,106 @@ class DeviceCompatibilityTests(DeviceCase):
             student.save(using='auth', update_fields=['password', 'updated_at'])
             devices.revoke_all(self.a.pk)
         self.assertEqual(self.rows().count(), 0)
+
+
+class DeviceBindingAndRevocationTests(DeviceCase):
+    """Review issues 1-3: record binding, revocation races and grace semantics."""
+
+    def test_issue_binds_to_the_student_record_not_the_supplied_username(self):
+        stamp = self.stamp()
+        for username in ('bravo', 'ALPHA', 'nobody', 'alpha '):
+            with self.subTest(username=username), self.assertRaises(devices.DeviceError):
+                devices.issue(self.a.pk, username, credential_stamp=stamp)
+        with self.assertRaises(devices.DeviceError):
+            devices.issue(self.a.pk, 'alpha', credential_stamp=self.stamp(self.b))  # another student's stamp
+        for stamp_value in (None, ''):
+            with self.assertRaises(devices.DeviceError):
+                devices.issue(self.a.pk, 'alpha', credential_stamp=stamp_value)
+        self.assertEqual(TrustedDevice.objects.using('auth').count(), 0)
+        issued = devices.issue(self.a.pk, 'alpha', credential_stamp=stamp)
+        self.assertEqual(self.rows().get().username_key, devices.username_key(self.a.username))
+        self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
+
+    def test_issue_with_stamp_from_before_a_password_change_is_refused(self):
+        old_stamp = self.stamp()
+        student = Student.objects.using('auth').get(pk=self.a.pk)
+        student.set_password(NEW_PASSWORD)
+        student.save(using='auth', update_fields=['password', 'updated_at'])
+        with self.assertRaises(devices.DeviceError):
+            devices.issue(self.a.pk, 'alpha', credential_stamp=old_stamp)
+        self.assertEqual(self.rows().count(), 0)
+
+    def test_issue_waiting_on_a_password_reset_cannot_recreate_trust(self):
+        self.issue()
+        old_stamp = self.stamp()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with transaction.atomic(using='auth'):
+                student = Student.objects.using('auth').select_for_update().get(pk=self.a.pk)
+                student.set_password(NEW_PASSWORD)
+                student.save(using='auth', update_fields=['password', 'updated_at'])
+                devices.revoke_all(self.a.pk)
+                pending = executor.submit(in_thread(devices.issue), self.a.pk, 'alpha',
+                                          credential_stamp=old_stamp)
+                wait_for_lock_waiter()  # the login-side issuance is blocked on the Student lock
+            with self.assertRaises(devices.DeviceError):
+                pending.result(timeout=30)
+        self.assertEqual(self.rows().count(), 0)
+
+    def test_revoke_all_waits_for_inflight_issuance_and_removes_it(self):
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with transaction.atomic(using='auth'):
+                inflight = self.issue()  # holds the Student lock until this block commits
+                pending = executor.submit(in_thread(devices.revoke_all), self.a.pk)
+                wait_for_lock_waiter()
+            self.assertEqual(pending.result(timeout=30), 1)
+        self.assertEqual(self.rows().count(), 0)
+        self.assertEqual(devices.check(inflight.cookie, 'alpha').status, 'absent')
+
+    def test_revoke_all_removes_a_device_rotated_concurrently(self):
+        issued = self.issue()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with transaction.atomic(using='auth'):
+                rotated = devices.rotate(issued.cookie, 'alpha')  # holds the device-row lock
+                pending = executor.submit(in_thread(devices.revoke_all), self.a.pk)
+                wait_for_lock_waiter()
+            self.assertEqual(pending.result(timeout=30), 1)
+        self.assertEqual(rotated.status, 'rotated')
+        for cookie in (issued.cookie, rotated.cookie):
+            self.assertEqual(devices.check(cookie, 'alpha').status, 'absent')
+            self.assertEqual(devices.rotate(cookie, 'alpha').status, 'absent')
+
+    def test_mixed_concurrent_issue_rotate_revoke_never_deadlock(self):
+        seed = [self.issue() for _ in range(4)]
+        barrier = Barrier(12)
+
+        @in_thread
+        def work(index):
+            barrier.wait()
+            if index % 3 == 0:
+                return devices.revoke_all(self.a.pk)
+            if index % 3 == 1:
+                return devices.rotate(seed[index % 4].cookie, 'alpha').status
+            return self.issue().device_id
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(work, range(12)))  # a deadlock would raise here
+        self.assertEqual(len(results), 12)
+        self.assertLessEqual(self.rows().count(), devices.MAX_DEVICES_PER_STUDENT)
+
+    def test_grace_never_selects_trusted_limits_or_renews(self):
+        issued = self.issue()
+        rotated = devices.rotate(issued.cookie, 'alpha')
+        before = self.rows().values_list('current_digest', 'last_used_at', 'expires_at').get()
+        for _ in range(5):
+            result = devices.check(issued.cookie, 'alpha')
+            self.assertEqual(result.status, 'grace')
+            self.assertFalse(result.selects_trusted_limits)
+            again = devices.rotate(issued.cookie, 'alpha')
+            self.assertEqual((again.status, again.cookie), ('grace', None))
+        self.assertEqual(self.rows().values_list('current_digest', 'last_used_at', 'expires_at').get(), before)
+        self.assertTrue(devices.check(rotated.cookie, 'alpha').selects_trusted_limits)
+        self.assertEqual(devices.check(issued.cookie, 'bravo').status, 'mismatch')
+        for value in ('junk', None):
+            self.assertFalse(devices.check(value, 'alpha').selects_trusted_limits)
 
 
 class DeviceRoleTests(DeviceCase):
