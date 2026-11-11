@@ -68,6 +68,7 @@ by the human tester rather than guessed here.
 ### S0-01 — Throttle keyed solely on REMOTE_ADDR (shared-IP lockout; proxy and IPv6 weaknesses)
 
 * **State:** Confirmed vulnerability. Impact depends on deployment topology.
+* **S1 status (PR `claude/upbeat-clarke-prrzc0`):** Partly remediated. IPv6 is now grouped by /64, and opt-in trusted-proxy derivation exists but is disabled in every profile. **Still open by decision:** without a reviewed proxy list, students behind one IPv4 NAT address or one IPv6 /64 still share the IP limit. Per-account limiting (S0-02) is deferred. Tests: `server/auth_tests/test_client_address.py`.
 * **Priority:** P2. CWE-307 and CWE-770. WSTG-ATHN-03. ASVS Authentication chapter (anti-automation).
 * **Component / boundary:** `server/accounts/throttling.py:14`, TB2 (browser to session).
 * **Scenario:** The site sits behind a TLS-terminating reverse proxy, or many students share a campus NAT. In both cases `REMOTE_ADDR` is the same for everyone. An attacker sends 10 failed logins in 15 minutes, and every user then gets HTTP 429 at login. The same applies to registration and reset (5 per hour). In the other direction, an IPv6 attacker gets a fresh bucket for every /128 address.
@@ -79,7 +80,7 @@ by the human tester rather than guessed here.
 
 ### S0-02 — No per-account login attempt limit
 
-* **State:** Confirmed vulnerability.
+* **State:** Confirmed vulnerability. **Open.** S1 implementation paused by the owner because of the lockout trade-off. Design proposal: `S1_PROPOSALS.md` section A.
 * **Priority:** P2. CWE-307. WSTG-ATHN-03. ASVS Authentication chapter.
 * **Component:** `server/accounts/views.py:41-51`, `server/accounts/backends.py:8`.
 * **Scenario:** A botnet or rotating proxy pool sends guesses for one known username, each from a new address. No counter is keyed on the target account.

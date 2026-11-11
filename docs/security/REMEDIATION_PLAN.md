@@ -19,6 +19,8 @@ nothing would be merged automatically.
 
 ## Stage S1 — critical and high-risk
 
+**S1 outcome (owner decisions, 2026-11-11):** S0-01 implemented (IPv6 /64 grouping; opt-in trusted proxies, disabled everywhere; IP limit otherwise unchanged). S0-02 paused because the approved hard limit creates a targeted lockout; proposal in `S1_PROPOSALS.md` section A. S0-03 design in section B, not implemented.
+
 No P0 or P1 finding was confirmed, so **S1 has no mandatory work**. I recommend
 pulling the two authentication-abuse P2s into S1, because they are the most
 exploitable once any non-local exposure happens:
