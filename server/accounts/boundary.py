@@ -21,6 +21,26 @@ def require_auth_role():
             OR has_any_column_privilege(current_user, 'academics_course', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_semester', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_assignment', 'SELECT')
+            -- S0-02A: once accounts.0003 exists, required grants must be present and
+            -- identity-binding columns must stay non-updatable. CASE keeps older schemas valid.
+            OR CASE WHEN to_regclass('public.accounts_trusteddevice') IS NULL THEN false ELSE (
+                NOT has_table_privilege(current_user, 'public.accounts_trusteddevice', 'SELECT')
+                OR NOT has_table_privilege(current_user, 'public.accounts_trusteddevice', 'INSERT')
+                OR NOT has_table_privilege(current_user, 'public.accounts_trusteddevice', 'DELETE')
+                OR NOT has_column_privilege(current_user, 'public.accounts_trusteddevice', 'current_digest', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'id', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'student_id', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'username_key', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'created_at', 'UPDATE')
+                OR has_table_privilege(current_user, 'public.accounts_trusteddevice', 'TRUNCATE, TRIGGER')) END
+            OR CASE WHEN to_regclass('public.accounts_loginlimit') IS NULL THEN false ELSE (
+                NOT has_table_privilege(current_user, 'public.accounts_loginlimit', 'SELECT')
+                OR NOT has_table_privilege(current_user, 'public.accounts_loginlimit', 'INSERT')
+                OR NOT has_table_privilege(current_user, 'public.accounts_loginlimit', 'DELETE')
+                OR NOT has_column_privilege(current_user, 'public.accounts_loginlimit', 'attempts', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_loginlimit', 'bucket', 'UPDATE')
+                OR has_column_privilege(current_user, 'public.accounts_loginlimit', 'kind', 'UPDATE')
+                OR has_table_privilege(current_user, 'public.accounts_loginlimit', 'TRUNCATE, TRIGGER')) END
             FROM pg_roles r WHERE rolname=current_user''')
         if cursor.fetchone() != (False,):
             raise ImproperlyConfigured('Authentication requires a separate restricted database role.')

@@ -98,6 +98,17 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment') AND relowner=r.oid)
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
+                   -- S0-02A: runtime must have NO access to device/login-limit records.
+                   OR CASE WHEN to_regclass('public.accounts_trusteddevice') IS NULL THEN false ELSE
+                       has_table_privilege(current_user, 'public.accounts_trusteddevice',
+                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                       OR has_any_column_privilege(current_user, 'public.accounts_trusteddevice',
+                           'SELECT, INSERT, UPDATE, REFERENCES') END
+                   OR CASE WHEN to_regclass('public.accounts_loginlimit') IS NULL THEN false ELSE
+                       has_table_privilege(current_user, 'public.accounts_loginlimit',
+                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                       OR has_any_column_privilege(current_user, 'public.accounts_loginlimit',
+                           'SELECT, INSERT, UPDATE, REFERENCES') END
                    OR has_schema_privilege(current_user, 'public', 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'TEMP')

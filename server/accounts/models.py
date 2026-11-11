@@ -1,5 +1,6 @@
 """Account identity and private, expiring authentication support records."""
 import uuid
+from datetime import timedelta
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
@@ -64,3 +65,61 @@ class AuthThrottle(models.Model):
     bucket = models.CharField(max_length=64, primary_key=True)
     attempts = models.PositiveIntegerField(default=1)
     expires_at = models.DateTimeField(db_index=True)
+
+
+HEX_DIGEST = r"^[0-9a-f]{64}$"
+
+
+class TrustedDevice(models.Model):
+    """S0-02A: server-side trusted-browser record. Stores digests only, never a raw cookie ID.
+
+    Dormant: not consulted by login until S0-02B is approved. A device never
+    authenticates a student; it can only select throttle limits (see
+    docs/security/S1_PROPOSALS.md section A).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="trusted_devices")
+    username_key = models.CharField(max_length=64)
+    current_digest = models.CharField(max_length=64, unique=True)
+    previous_digest = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    rotated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    last_used_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(current_digest__regex=HEX_DIGEST)
+                                   & models.Q(username_key__regex=HEX_DIGEST), name="trusteddevice_hex"),
+            models.CheckConstraint(condition=(models.Q(previous_digest__isnull=True) & models.Q(rotated_at__isnull=True))
+                                   | (models.Q(previous_digest__regex=HEX_DIGEST) & models.Q(rotated_at__isnull=False)
+                                      & ~models.Q(previous_digest=models.F("current_digest"))),
+                                   name="trusteddevice_rotation"),
+            models.CheckConstraint(condition=models.Q(expires_at__gt=models.F("created_at"))
+                                   & models.Q(last_used_at__gte=models.F("created_at"))
+                                   & models.Q(expires_at__lte=models.F("last_used_at") + timedelta(days=31)),
+                                   name="trusteddevice_expiry"),
+        ]
+        indexes = [
+            models.Index(fields=["student", "last_used_at"], name="trusteddevice_student_lru"),
+            models.Index(fields=["expires_at"], name="trusteddevice_expiry_idx"),
+        ]
+
+
+LOGIN_LIMIT_KINDS = [("account_fail", "Account failures"), ("account_trusted_fail", "Account trusted failures"),
+                     ("account_success", "Account successes"), ("device_fail", "Device failures"),
+                     ("ip_ceiling", "Source ceiling")]
+
+
+class LoginLimit(models.Model):
+    """S0-02A: account/device login counters keyed by HMAC. Schema only; used from S0-02B."""
+    bucket = models.CharField(max_length=64, primary_key=True)
+    kind = models.CharField(max_length=24, choices=LOGIN_LIMIT_KINDS)
+    attempts = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(bucket__regex=HEX_DIGEST), name="loginlimit_bucket_hex"),
+            models.CheckConstraint(condition=models.Q(kind__in=[kind for kind, _ in LOGIN_LIMIT_KINDS]), name="loginlimit_kind"),
+        ]
