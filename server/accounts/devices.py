@@ -20,6 +20,10 @@ Security properties:
   revokes the record (replay of a copied cookie).
 - All writes go through the restricted `auth` connection, never runtime/migrator.
 
+Generation barrier (review F04): S0-02B reads generation(student_id) BEFORE verifying the
+password and passes it to issue(); revoke_all() increments it under the Student lock, so a
+login in flight during a forget-all (even with an unchanged password) cannot re-create trust.
+
 Lock order (deadlock-free; S0-02B must follow it):
   1. accounts_student row (SELECT ... FOR UPDATE)   -- issue, revoke_all, password change/reset
   2. accounts_trusteddevice rows                     -- issue (eviction), revoke_all, rotate
@@ -44,7 +48,8 @@ from django.core import signing
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from .models import LoginLimit, Student, TrustedDevice
+from django.db.models import F
+from .models import DeviceGeneration, LoginLimit, Student, TrustedDevice
 
 DEVICE_LIFETIME = timedelta(days=30)
 MAX_DEVICES_PER_STUDENT = 10
@@ -132,7 +137,14 @@ def _live(now):
             .filter(expires_at__gt=now, student__is_active=True))
 
 
-def issue(student_id, username, *, credential_stamp, now=None):
+def generation(student_id):
+    """Current device-trust generation for a student (0 before any revocation). Read-only."""
+    value = (DeviceGeneration.objects.using(ALIAS).filter(student_id=student_id)
+             .values_list('generation', flat=True).first())
+    return value or 0
+
+
+def issue(student_id, username, *, credential_stamp, generation, now=None):
     """Create a record for an ACTIVE student, enforcing the per-student cap atomically.
 
     Locks the Student row first, then verifies under that lock that:
@@ -146,6 +158,8 @@ def issue(student_id, username, *, credential_stamp, now=None):
     _valid_username(username)
     if not isinstance(credential_stamp, str) or not credential_stamp:
         raise DeviceError('A credential stamp is required.')
+    if type(generation) is not int or generation < 0:
+        raise DeviceError('The device generation observed before verification is required.')
     with transaction.atomic(using=ALIAS):
         student = (Student.objects.using(ALIAS).select_for_update()
                    .filter(pk=student_id, is_active=True).first())
@@ -155,6 +169,10 @@ def issue(student_id, username, *, credential_stamp, now=None):
             raise DeviceError('The username does not belong to this student.')
         if not hmac.compare_digest(student.get_session_auth_hash(), credential_stamp):
             raise DeviceError('Credentials changed; device not issued.')
+        current = (DeviceGeneration.objects.using(ALIAS).filter(student_id=student_id)
+                   .values_list('generation', flat=True).first()) or 0
+        if current != generation:
+            raise DeviceError('Device trust was revoked after verification; device not issued.')
         devices = TrustedDevice.objects.using(ALIAS).filter(student_id=student_id)
         devices.filter(expires_at__lte=now).delete()
         live = list(devices.order_by('last_used_at', 'id').values_list('pk', flat=True))
@@ -258,7 +276,13 @@ def revoke_all(student_id):
     earning trust again later: compromise response must be a password reset.
     """
     with transaction.atomic(using=ALIAS):
-        list(Student.objects.using(ALIAS).select_for_update().filter(pk=student_id).values_list('pk', flat=True))
+        locked = list(Student.objects.using(ALIAS).select_for_update().filter(pk=student_id)
+                      .values_list('pk', flat=True))
+        if locked:
+            # Monotonic barrier: in-flight issuance that observed the old generation fails.
+            DeviceGeneration.objects.using(ALIAS).get_or_create(student_id=student_id)
+            DeviceGeneration.objects.using(ALIAS).filter(student_id=student_id).update(
+                generation=F('generation') + 1)
         return TrustedDevice.objects.using(ALIAS).filter(student_id=student_id).delete()[0]
 
 

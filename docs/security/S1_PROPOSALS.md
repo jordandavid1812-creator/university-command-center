@@ -180,7 +180,7 @@ CREATE TABLE accounts_trusteddevice (
         AND (previous_digest IS NULL OR previous_digest ~ '^[0-9a-f]{64}$')),
     CONSTRAINT trusteddevice_rotation CHECK (previous_digest IS DISTINCT FROM current_digest),
     CONSTRAINT trusteddevice_expiry CHECK (expires_at > created_at
-        AND expires_at <= last_used_at + interval '31 days')
+        AND expires_at <= last_used_at + interval '30 days')
 );
 CREATE INDEX trusteddevice_student_lru ON accounts_trusteddevice (student_id, last_used_at);
 CREATE INDEX trusteddevice_expiry_idx  ON accounts_trusteddevice (expires_at);
@@ -668,6 +668,27 @@ not sleeps. Mutation evidence:
 * Removing the stamp check fails 3 tests.
 * Removing the Student lock in `revoke_all` fails the in-flight-issuance test.
 
+#### F. Forget-all generation barrier and exact 30-day contract (owner-approved, implemented in S0-02A)
+
+* **Table:** `accounts_devicegeneration(student_id PK FK, generation bigint >= 0)`. The auth role has SELECT, INSERT and `UPDATE(generation)` only: **no DELETE or TRUNCATE**, so the epoch can never restart. Runtime has nothing.
+* **Behaviour:**
+  * `devices.generation(student_id)` is read **before** password verification (S0-02B).
+  * `issue(..., generation=g)` re-reads it under the Student lock and refuses if it changed.
+  * `revoke_all()` (forget-all, and in 02B also password change or reset) increments it under the Student lock.
+  * So a login in flight during a forget-all can't re-create trust, even with an unchanged password.
+* **Expiry:** the database CHECK is `expires_at <= last_used_at + interval '30 days'`, issuance and rotation set exactly 30 days, `_live` uses `expires_at > now`, and the signed cookie's max age is 30 days.
+* **Tests:** the `DeviceGenerationAndExpiryTests` class (9 tests, including microsecond and seconds boundaries). Mutation evidence:
+  * Ignoring the generation in `issue()` gives 3 failures.
+  * Not advancing it in `revoke_all()` gives 6 failures.
+  * Loosening the CHECK to 31 days gives 1 failure.
+* **Kept by owner decision:** purpose-separated signing, the 10-device LRU cap, and dormant per-login rotation.
+
+**Lost-response concern (for S0-02B):** if the response carrying a rotated cookie is lost, the browser keeps the superseded identifier. After 60 s that is classified `replayed` and the device is revoked: a legitimate loss of trust, falling back to the unfamiliar path, never a lockout of an authenticated session. S0-02B must:
+
+* log `device_reuse_detected` with a reason;
+* measure how often this happens in staging;
+* offer explicit renewal (fixed original expiry, no per-login rotation) as the alternative, if the rate is material.
+
 #### D. Fail-closed vs. a release failure after a correct password
 
 Resolution: **no session without a successful finalization.**
@@ -695,6 +716,61 @@ Regression tests:
 | C | **Implemented and tested in S0-02A.** `grace` uses the unfamiliar limits in S0-02B. |
 | E | **Implemented and tested in S0-02A** (record binding, credential stamp, revocation lock order) |
 | D | Design corrected; tests specified for S0-02B |
+
+### A.20 S0-02B design baseline (accepted starting point; strengthened, NOT implemented)
+
+The quota taxonomy and commit order in `S0_02_RECONCILIATION.md` §§4–5 are the
+starting point. Before any S0-02B code:
+
+**1. Session creation protocol (concurrency-safe).** Finalization T2, on the `auth` connection, in this order:
+
+1. Lock the Student row.
+2. Re-read `password`. Require that it equals the verified hash, or still accepts the submitted password (the F04b rule, PR #29).
+3. Require the account is still active and verified.
+4. Require `devices.generation()` still equals the value read before verification.
+5. Upsert `account_success`.
+6. Release the provisional failure units.
+7. Rotate or issue the device.
+8. Create and **save the session row explicitly inside T2** (cycle key, `HASH_SESSION_KEY` from the re-read row).
+9. Commit.
+
+Set-Cookie is emitted only after commit. A credential change or forget-all serialized before T2 refuses the login; one serialized after T2 invalidates the new session through the existing auth-hash check and revokes the device.
+
+**2. Required tests:**
+
+| Area | Tests |
+| --- | --- |
+| Quota isolation | `test_failures_never_touch_success_quota` (20 failures across independent account and source windows, then a trusted correct login admitted); `test_success_quota_only_counts_committed_sessions`; `test_concurrent_finalizations_never_exceed_success_limit` (N+1 threads, separate connections); `test_t1_rollback_consumes_nothing`; `test_crash_between_t1_and_t2_counts_as_failure_only` |
+| Revalidation | `test_password_change_between_verify_and_t2_refuses_session`; `test_forget_all_between_verify_and_t2_refuses_session_and_device`; `test_deactivation_between_verify_and_t2_refuses_session` |
+| Fault injection (raise `DatabaseError` at each point) | role check, device lookup, T1, after T1 commit, password verification, T2 each statement, session save, response middleware. Each must give the stage outcome in reconciliation §5: no hash before T1; no session or cookie after a failed T2; nothing double-counted. Faults are injected on the real auth connection, not a mocked first cursor only. |
+| Campus traffic simulation | Bounded, local: (a) 11 and 61 distinct correct unfamiliar students from one source; (b) the same with trusted devices while an attacker floods unfamiliar failures from that source; (c) attacker-owned accounts spending success volume; (d) IPv6 /64 sharing. Record intended refusals. Ceilings are **settings**, sized per deployment from measured data. **No fixed 60 or 600 value is assumed for every campus.** |
+| Grace and replay | `test_grace_request_uses_unfamiliar_limits_not_device_bypass`; `test_grace_replay_within_window_cannot_exceed_account_fail`; `test_lost_rotation_response_revokes_only_that_device` |
+
+**3. Logging and monitoring requirements:**
+
+* Events: `login_limited` (kind, lane), `account_limit_would_restrict`, `device_issued`, `device_rotated`, `device_revoked` (reason), `device_reuse_detected`, `auth_protection_failure` (stage, error class), `finalize_refused` (reason enum).
+* Rules:
+  * Pseudonymous references use an independent logging key.
+  * Never log raw usernames, IPs, tokens, cookies, session keys or token URLs.
+  * Use route names, not paths.
+  * Deduplicate per bucket and window using the bucket's `expires_at` (a durable marker) and a bounded in-process cache.
+  * Give priority to protection-failure events.
+  * Count dropped events.
+* Alerts: on rates of `auth_protection_failure`, `device_reuse_detected` and `login_limited` for each lane, and on success-quota refusals.
+* Retention: 30 days, bounded by size at the collector. This is a deployment requirement.
+
+**4. No hard account lockout is activated in S0-02B.** `account_fail` and `account_success` run in `observe` only. Enforcement stays disabled until all of A.21 is met.
+
+### A.21 Conditions before ANY account enforcement (owner decision)
+
+All of these must be satisfied and evidenced:
+
+1. Real transactional email is operational (SPF, DKIM, DMARC, TLS, asynchronous queue, bounce handling).
+2. Recovery-token issuance can't be abused to invalidate a student's working recovery link (coalesced issuance; no unauthenticated invalidation).
+3. Recovery redemption is independently protected from login throttling.
+4. Email-outage behaviour and rollback procedures are tested.
+5. Campus network ceilings are tested with realistic traffic and approved per deployment.
+6. Students have a reliable, documented way to recover access.
 
 ---
 

@@ -18,7 +18,7 @@ from django.utils import timezone
 from academics.ownership import require_runtime_role
 from accounts import devices
 from accounts.boundary import require_auth_role
-from accounts.models import AuthThrottle, LoginLimit, Student, TrustedDevice
+from accounts.models import AuthThrottle, DeviceGeneration, LoginLimit, Student, TrustedDevice
 from .base import AuthenticationCase, NEW_PASSWORD, PASSWORD
 
 LATEST = ('accounts', '0003_trusted_device_foundation')
@@ -74,6 +74,7 @@ class DeviceCase(AuthenticationCase):
 
     def issue(self, student=None, **kwargs):
         student = student or self.a
+        kwargs.setdefault('generation', devices.generation(student.pk))
         return devices.issue(student.pk, student.username, credential_stamp=self.stamp(student), **kwargs)
 
     def rows(self, student=None):
@@ -135,9 +136,10 @@ class DeviceLifecycleTests(DeviceCase):
         self.assertIsNone(devices.read_cookie(stale_cookie))
         self.assertEqual(devices.check(stale_cookie, 'alpha').status, 'absent')
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
+        moment = timezone.now()
         TrustedDevice.objects.using('default').filter(pk=issued.device_id).update(
-            created_at=timezone.now() - timedelta(days=31), last_used_at=timezone.now() - timedelta(days=31),
-            expires_at=timezone.now() - timedelta(seconds=1))
+            created_at=moment - timedelta(days=31), last_used_at=moment - timedelta(days=31),
+            expires_at=moment - timedelta(days=1))  # exactly last use + 30 days, already past
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'absent')
         self.assertEqual(devices.rotate(issued.cookie, self.a.pk).status, 'absent')
 
@@ -292,7 +294,7 @@ class DeviceLifecycleTests(DeviceCase):
             {'previous_digest': 'b' * 64, 'rotated_at': now},               # previous == current
             {'previous_digest': 'c' * 64},                                  # rotated_at missing
             {'expires_at': now - timedelta(seconds=1)},
-            {'expires_at': now + timedelta(days=40)},                       # beyond lifetime bound
+            {'expires_at': now + timedelta(days=30, microseconds=1)},       # one microsecond beyond 30 days
         )
         for changes in bad_values:
             with self.subTest(changes=list(changes)), self.assertRaises(IntegrityError):
@@ -416,7 +418,7 @@ class DeviceIdentityBindingTests(DeviceCase):
         stamp = self.stamp(self.upper)
         for candidate in ('jordan', 'JORDAN'):
             with self.subTest(candidate=candidate), self.assertRaises(devices.DeviceError):
-                devices.issue(self.upper.pk, candidate, credential_stamp=stamp)
+                devices.issue(self.upper.pk, candidate, credential_stamp=stamp, generation=0)
         self.assertEqual(self.rows(self.upper).count(), 0)
 
     def test_rotation_requires_the_authenticated_student_uuid(self):
@@ -446,6 +448,124 @@ class DeviceIdentityBindingTests(DeviceCase):
         self.assertEqual(TrustedDevice.objects.using('auth').get(pk=issued.device_id).student_id, self.upper.pk)
 
 
+class DeviceGenerationAndExpiryTests(DeviceCase):
+    """Owner-approved additions: forget-all generation barrier and the exact 30-day contract."""
+
+    def generation_row(self, student=None):
+        return DeviceGeneration.objects.using('auth').filter(student=student or self.a).first()
+
+    def test_generation_starts_at_zero_and_each_revocation_increments_it(self):
+        self.assertEqual(devices.generation(self.a.pk), 0)
+        self.assertIsNone(self.generation_row())  # created lazily, only by a revocation
+        for expected in (1, 2, 3):
+            devices.revoke_all(self.a.pk)
+            self.assertEqual(devices.generation(self.a.pk), expected)
+        self.assertEqual(devices.generation(self.b.pk), 0)
+
+    def test_issue_with_a_generation_observed_before_forget_all_is_refused(self):
+        observed = devices.generation(self.a.pk)
+        devices.revoke_all(self.a.pk)  # explicit forget-all; the password is unchanged
+        with self.assertRaises(devices.DeviceError):
+            devices.issue(self.a.pk, 'alpha', credential_stamp=self.stamp(), generation=observed)
+        self.assertEqual(self.rows().count(), 0)
+        for bad in (None, -1, '1', 1.0, True):
+            with self.subTest(bad=bad), self.assertRaises(devices.DeviceError):
+                devices.issue(self.a.pk, 'alpha', credential_stamp=self.stamp(), generation=bad)
+        self.issue()  # the current generation is accepted
+        self.assertEqual(self.rows().count(), 1)
+
+    def test_forget_all_during_an_inflight_login_blocks_reissue(self):
+        stamp, observed = self.stamp(), devices.generation(self.a.pk)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with transaction.atomic(using='auth'):
+                devices.revoke_all(self.a.pk)  # holds the Student lock until commit
+                pending = executor.submit(in_thread(devices.issue), self.a.pk, 'alpha',
+                                          credential_stamp=stamp, generation=observed)
+                wait_for_lock_waiter()
+            with self.assertRaises(devices.DeviceError):
+                pending.result(timeout=30)
+        self.assertEqual(self.rows().count(), 0)
+        self.assertEqual(devices.generation(self.a.pk), 1)
+
+    def test_concurrent_revocations_increment_exactly_once_each(self):
+        barrier = Barrier(10)
+
+        @in_thread
+        def revoke(_):
+            barrier.wait()
+            return devices.revoke_all(self.a.pk)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            list(executor.map(revoke, range(10)))
+        self.assertEqual(devices.generation(self.a.pk), 10)
+
+    def test_concurrent_issue_rotate_and_forget_all_leave_no_stale_device(self):
+        seed = self.issue()
+        observed, stamp = devices.generation(self.a.pk), self.stamp()
+        barrier = Barrier(9)
+
+        @in_thread
+        def work(index):
+            barrier.wait()
+            if index == 0:
+                return ('revoke', devices.revoke_all(self.a.pk))
+            if index < 4:
+                return ('rotate', devices.rotate(seed.cookie, self.a.pk).status)
+            try:
+                return ('issue', devices.issue(self.a.pk, 'alpha', credential_stamp=stamp, generation=observed).device_id)
+            except devices.DeviceError:
+                return ('issue', None)
+        with ThreadPoolExecutor(max_workers=9) as executor:
+            results = list(executor.map(work, range(9)))
+        # Every device that survives was issued before the revocation committed is impossible:
+        # revoke_all deletes all rows it can see after taking the Student lock, and any issue
+        # serialized after it fails the generation check. So nothing may survive.
+        self.assertEqual(self.rows().count(), 0, results)
+        self.assertEqual(devices.generation(self.a.pk), observed + 1)
+        self.assertEqual(devices.check(seed.cookie, 'alpha').status, 'absent')
+
+    def test_auth_role_cannot_delete_or_reset_the_generation(self):
+        devices.revoke_all(self.a.pk)
+        for statement in ('DELETE FROM accounts_devicegeneration',
+                          'TRUNCATE accounts_devicegeneration',
+                          'UPDATE accounts_devicegeneration SET student_id = student_id'):
+            with self.subTest(statement=statement), self.assertRaises(DatabaseError):
+                with transaction.atomic(using='auth'), connections['auth'].cursor() as cursor:
+                    cursor.execute(statement)
+        self.assertEqual(devices.generation(self.a.pk), 1)
+
+    def test_record_expiry_boundary_is_exactly_thirty_days(self):
+        start = timezone.now()
+        issued = self.issue(now=start)
+        record = self.rows().get()
+        self.assertEqual(record.expires_at - record.last_used_at, timedelta(days=30))
+        edge = start + timedelta(days=30)
+        self.assertEqual(devices.check(issued.cookie, 'alpha', now=edge - timedelta(microseconds=1)).status, 'trusted')
+        self.assertEqual(devices.check(issued.cookie, 'alpha', now=edge).status, 'absent')
+        self.assertEqual(devices.rotate(issued.cookie, self.a.pk, now=edge).status, 'absent')
+        rotated = devices.rotate(issued.cookie, self.a.pk, now=start + timedelta(days=10))
+        renewed = self.rows().get()
+        self.assertEqual(renewed.expires_at - renewed.last_used_at, timedelta(days=30))
+        self.assertEqual(rotated.status, 'rotated')
+
+    def test_database_accepts_exactly_thirty_days_and_rejects_beyond(self):
+        now = timezone.now()
+        base = dict(student_id=self.a.pk, created_at=now, last_used_at=now)
+        TrustedDevice.objects.using('auth').create(current_digest='1' * 64, expires_at=now + timedelta(days=30), **base)
+        with self.assertRaises(IntegrityError), transaction.atomic(using='auth'):
+            TrustedDevice.objects.using('auth').create(
+                current_digest='2' * 64, expires_at=now + timedelta(days=30, microseconds=1), **base)
+
+    def test_signed_cookie_age_boundary_is_thirty_days(self):
+        identifier = devices.read_cookie(self.issue().cookie)
+        real = time.time()
+        with patch('time.time', return_value=real - 30 * 86400 + 5):
+            young = devices.cookie_value(identifier)
+        with patch('time.time', return_value=real - 30 * 86400 - 5):
+            old = devices.cookie_value(identifier)
+        self.assertEqual(devices.read_cookie(young), identifier)
+        self.assertIsNone(devices.read_cookie(old))
+
+
 class DeviceBindingAndRevocationTests(DeviceCase):
     """Review issues 1-3: record binding, revocation races and grace semantics."""
 
@@ -453,14 +573,14 @@ class DeviceBindingAndRevocationTests(DeviceCase):
         stamp = self.stamp()
         for username in ('bravo', 'ALPHA', 'nobody', 'alpha '):
             with self.subTest(username=username), self.assertRaises(devices.DeviceError):
-                devices.issue(self.a.pk, username, credential_stamp=stamp)
+                devices.issue(self.a.pk, username, credential_stamp=stamp, generation=0)
         with self.assertRaises(devices.DeviceError):
-            devices.issue(self.a.pk, 'alpha', credential_stamp=self.stamp(self.b))  # another student's stamp
+            devices.issue(self.a.pk, 'alpha', credential_stamp=self.stamp(self.b), generation=0)  # another student's stamp
         for stamp_value in (None, ''):
             with self.assertRaises(devices.DeviceError):
-                devices.issue(self.a.pk, 'alpha', credential_stamp=stamp_value)
+                devices.issue(self.a.pk, 'alpha', credential_stamp=stamp_value, generation=0)
         self.assertEqual(TrustedDevice.objects.using('auth').count(), 0)
-        issued = devices.issue(self.a.pk, 'alpha', credential_stamp=stamp)
+        issued = devices.issue(self.a.pk, 'alpha', credential_stamp=stamp, generation=0)
         self.assertEqual(self.rows().get().student_id, self.a.pk)
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
 
@@ -470,12 +590,12 @@ class DeviceBindingAndRevocationTests(DeviceCase):
         student.set_password(NEW_PASSWORD)
         student.save(using='auth', update_fields=['password', 'updated_at'])
         with self.assertRaises(devices.DeviceError):
-            devices.issue(self.a.pk, 'alpha', credential_stamp=old_stamp)
+            devices.issue(self.a.pk, 'alpha', credential_stamp=old_stamp, generation=0)
         self.assertEqual(self.rows().count(), 0)
 
     def test_issue_waiting_on_a_password_reset_cannot_recreate_trust(self):
         self.issue()
-        old_stamp = self.stamp()
+        old_stamp, observed = self.stamp(), devices.generation(self.a.pk)
         with ThreadPoolExecutor(max_workers=1) as executor:
             with transaction.atomic(using='auth'):
                 student = Student.objects.using('auth').select_for_update().get(pk=self.a.pk)
@@ -483,7 +603,7 @@ class DeviceBindingAndRevocationTests(DeviceCase):
                 student.save(using='auth', update_fields=['password', 'updated_at'])
                 devices.revoke_all(self.a.pk)
                 pending = executor.submit(in_thread(devices.issue), self.a.pk, 'alpha',
-                                          credential_stamp=old_stamp)
+                                          credential_stamp=old_stamp, generation=observed)
                 wait_for_lock_waiter()  # the login-side issuance is blocked on the Student lock
             with self.assertRaises(devices.DeviceError):
                 pending.result(timeout=30)
@@ -523,7 +643,10 @@ class DeviceBindingAndRevocationTests(DeviceCase):
                 return devices.revoke_all(self.a.pk)
             if index % 3 == 1:
                 return devices.rotate(seed[index % 4].cookie, self.a.pk).status
-            return self.issue().device_id
+            try:
+                return self.issue().device_id
+            except devices.DeviceError:
+                return None  # expected: a concurrent forget-all advanced the generation
         with ThreadPoolExecutor(max_workers=12) as executor:
             results = list(executor.map(work, range(12)))  # a deadlock would raise here
         self.assertEqual(len(results), 12)
@@ -571,6 +694,14 @@ class DeviceRoleTests(DeviceCase):
                 WHERE attrelid='accounts_loginlimit'::regclass AND attnum>0 AND NOT attisdropped
                   AND has_column_privilege(current_user, attrelid, attnum, 'UPDATE')""")
             self.assertEqual(cursor.fetchone()[0], ['attempts', 'expires_at'])
+            cursor.execute("""SELECT
+                has_table_privilege(current_user,'accounts_devicegeneration','SELECT'),
+                has_table_privilege(current_user,'accounts_devicegeneration','INSERT'),
+                has_table_privilege(current_user,'accounts_devicegeneration','DELETE'),
+                has_table_privilege(current_user,'accounts_devicegeneration','TRUNCATE'),
+                has_column_privilege(current_user,'accounts_devicegeneration','generation','UPDATE'),
+                has_column_privilege(current_user,'accounts_devicegeneration','student_id','UPDATE')""")
+            self.assertEqual(cursor.fetchone(), (True, True, False, False, True, False))
         for statement in ('UPDATE accounts_trusteddevice SET student_id = student_id',
                           'UPDATE accounts_trusteddevice SET created_at = created_at',
                           'UPDATE accounts_loginlimit SET kind = kind',
@@ -579,6 +710,8 @@ class DeviceRoleTests(DeviceCase):
 
     def test_runtime_role_has_no_access_to_device_tables(self):
         for statement in ('SELECT count(*) FROM accounts_trusteddevice', 'SELECT count(*) FROM accounts_loginlimit',
+                          'SELECT count(*) FROM accounts_devicegeneration',
+                          "INSERT INTO accounts_devicegeneration VALUES (gen_random_uuid(), 0)",
                           "INSERT INTO accounts_loginlimit VALUES (repeat('a',64),'ip_ceiling',1,now())",
                           'DELETE FROM accounts_trusteddevice', 'UPDATE accounts_loginlimit SET attempts = 0'):
             self.denied('runtime', statement)
@@ -593,6 +726,8 @@ class DeviceRoleTests(DeviceCase):
         require_auth_role()
         try:
             for statement in (f'REVOKE SELECT ON accounts_trusteddevice FROM {role}',
+                              f'REVOKE UPDATE (generation) ON accounts_devicegeneration FROM {role}',
+                              f'REVOKE INSERT ON accounts_devicegeneration FROM {role}',
                               f'REVOKE DELETE ON accounts_loginlimit FROM {role}',
                               f'REVOKE UPDATE (current_digest) ON accounts_trusteddevice FROM {role}'):
                 with self.subTest(statement=statement):
@@ -614,6 +749,9 @@ class DeviceRoleTests(DeviceCase):
                     (f'GRANT UPDATE (student_id) ON accounts_trusteddevice TO {auth}', require_auth_role),
                     (f'GRANT UPDATE (kind) ON accounts_loginlimit TO {auth}', require_auth_role),
                     (f'GRANT TRUNCATE ON accounts_trusteddevice TO {auth}', require_auth_role),
+                    (f'GRANT DELETE ON accounts_devicegeneration TO {auth}', require_auth_role),
+                    (f'GRANT SELECT ON accounts_devicegeneration TO {runtime}',
+                     lambda: require_runtime_role(connections['runtime'])),
                     (f'GRANT SELECT ON accounts_loginlimit TO {runtime}',
                      lambda: require_runtime_role(connections['runtime'])),
                     (f'GRANT SELECT (id) ON accounts_trusteddevice TO {runtime}',
@@ -635,6 +773,7 @@ class DeviceRoleTests(DeviceCase):
             executor.migrate([PREVIOUS])
             self.assertNotIn('accounts_trusteddevice', table_names())
             self.assertNotIn('accounts_loginlimit', table_names())
+            self.assertNotIn('accounts_devicegeneration', table_names())
             provision()  # provisioning an older schema still succeeds
             require_auth_role()
             require_runtime_role(connections['runtime'])

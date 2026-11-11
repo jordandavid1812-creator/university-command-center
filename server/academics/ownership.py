@@ -104,6 +104,11 @@ def require_runtime_role(connection):
                            'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
                        OR has_any_column_privilege(current_user, 'public.accounts_trusteddevice',
                            'SELECT, INSERT, UPDATE, REFERENCES') END
+                   OR CASE WHEN to_regclass('public.accounts_devicegeneration') IS NULL THEN false ELSE
+                       has_table_privilege(current_user, 'public.accounts_devicegeneration',
+                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                       OR has_any_column_privilege(current_user, 'public.accounts_devicegeneration',
+                           'SELECT, INSERT, UPDATE, REFERENCES') END
                    OR CASE WHEN to_regclass('public.accounts_loginlimit') IS NULL THEN false ELSE
                        has_table_privilege(current_user, 'public.accounts_loginlimit',
                            'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')

@@ -16,15 +16,15 @@ Correction to my earlier report: the design-only merge commit on
 | ID | Codex finding | Verdict | Severity (mine) | Stage | Status |
 | --- | --- | --- | --- | --- | --- |
 | F02 | Casefolded device binding selects another account's lane | **Agree, reproduced** | High | 02A | **Fixed in this commit** |
-| F04 | Stale issuance after reset or forget-all | Agree | High | 02A schema, 02B wiring | Reset/change part fixed in `0e9e478`. Forget-all epoch **proposed** (§3). |
-| F04b | Stale hash-upgrade setter can undo a password reset (baseline code) | **Agree, reproduced** | High (conditional) | Separate baseline fix | **Proposed**; outside S0-02A |
+| F04 | Stale issuance after reset or forget-all | Agree | High | 02A schema, 02B wiring | Reset/change fixed in `0e9e478`. **Forget-all generation barrier implemented** (owner-approved; S1_PROPOSALS A.19 F). |
+| F04b | Stale hash-upgrade setter can undo a password reset (baseline code) | **Agree, reproduced** | High (conditional) | Separate baseline fix | **Fixed in separate PR #29** (draft) |
 | F01 | Failures consume the success quota | Agree | High | 02B design; no 02A schema change | **Proposed** (§4) |
 | F06 | Contradictory DB-failure outcomes | Agree | High | 02B | Partly corrected in A.19 D; full stage table §5 |
 | F05 | Concurrent rotation treated as theft | Partly agree | Medium (after `0e9e478`) | 02A, done; 02B | Grace plus no-cookie implemented; residual documented (§2) |
 | F03 | Shared-IP ceilings deny campus logins | Agree | High (availability) | 02B policy | **Proposed**; needs owner policy and measurements |
 | F07 | Recovery not independent of attack path | Agree | High (enforcement gate) | 02C | Proposed; blocks `enforce` |
 | F08 | Cross-account deletion; LRU eviction | Agree | Medium | 02A/02B | Cross-account deletion was never implemented; design corrected. Cap UX needs a decision. |
-| F09 | Signing key, 31-day CHECK, restore | Partly agree | Medium | 02A schema | **Proposed** (tighten CHECK to 30 d, independent key, restore runbook) |
+| F09 | Signing key, 31-day CHECK, restore | Partly agree | Medium | 02A schema | **30-day CHECK implemented** and boundary-tested. Signing kept by owner decision. Restore runbook still to do. |
 | F10 | Log deduplication and bounds | Agree | Medium | 02B | Proposed |
 | F11 | Response similarity isn't an enumeration proof | Agree | Medium | 02B/02C | My design wording corrected; tests to use distributions |
 | F12 | Codex's own design ("D") continuation | n/a (D-specific) | — | — | Noted; one compatibility point applies to C (§2) |
@@ -222,7 +222,16 @@ Django's `SessionMiddleware` normally saves the session at response time.
 so that a session can't be created after a failed T2, and a session-save failure
 can't leave a committed device without a session.
 
-## 6. Decisions requested
+## 6. Owner decisions recorded
+
+* Identity (UUID) correction: accepted.
+* F04b: fixed separately in PR #29.
+* Generation table and 30-day contract: implemented in PR #26.
+* Signing, LRU cap and dormant rotation: kept.
+* §§4–5: accepted as the S0-02B starting point, strengthened in S1_PROPOSALS A.20.
+* Account enforcement: blocked by A.21.
+
+## 6a. Decisions originally requested
 
 1. Approve the F04 device-generation table (02A schema).
 2. Approve the F09 30-day CHECK and decide on an independent device key (02A).

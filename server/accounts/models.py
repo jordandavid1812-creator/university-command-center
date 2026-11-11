@@ -98,13 +98,26 @@ class TrustedDevice(models.Model):
                                    name="trusteddevice_rotation"),
             models.CheckConstraint(condition=models.Q(expires_at__gt=models.F("created_at"))
                                    & models.Q(last_used_at__gte=models.F("created_at"))
-                                   & models.Q(expires_at__lte=models.F("last_used_at") + timedelta(days=31)),
+                                   & models.Q(expires_at__lte=models.F("last_used_at") + timedelta(days=30)),
                                    name="trusteddevice_expiry"),
         ]
         indexes = [
             models.Index(fields=["student", "last_used_at"], name="trusteddevice_student_lru"),
             models.Index(fields=["expires_at"], name="trusteddevice_expiry_idx"),
         ]
+
+
+class DeviceGeneration(models.Model):
+    """S0-02A: monotonic per-student device-trust generation (review F04).
+
+    Every explicit revocation increments it under the Student lock. Issuance must present
+    the generation observed BEFORE password verification, so a login in flight during a
+    forget-all can never re-create trust. Rows are never deleted or reset (the auth role
+    has no DELETE/TRUNCATE), so the epoch cannot restart.
+    """
+    student = models.OneToOneField(Student, on_delete=models.CASCADE, primary_key=True,
+                                   related_name="device_generation")
+    generation = models.PositiveBigIntegerField(default=0)
 
 
 LOGIN_LIMIT_KINDS = [("account_fail", "Account failures"), ("account_trusted_fail", "Account trusted failures"),
