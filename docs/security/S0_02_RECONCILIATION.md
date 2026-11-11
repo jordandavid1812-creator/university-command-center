@@ -108,7 +108,7 @@ Correction to my earlier report: the design-only merge commit on
   * If the winning response is lost in transit, the browser keeps the old cookie. After 60 s its next use is treated as `replayed`, and the device is revoked: a legitimate loss of trust, falling back to the unfamiliar path.
   * A thief holding a previous identifier can deliberately trigger that revocation.
   * Owner decision: accept, or adopt explicit renewal (D-style) instead of per-login rotation.
-* **Destructive action before the binding check:** replay revocation only ever deletes the record the presented identifier belongs to. It never touches another account's record. Keeping replay-first is intentional.
+* **Destructive action before the binding check: superseded by owner decision and Codex P26-05.** Account identity is now checked **first**. An owner's cookie presented for a different account is always `mismatch` and never revokes the owner's device. Same-account replay after grace still revokes. Tests: `WrongAccountReplayTests` (6).
 
 ### F03 — Shared-IP ceilings (High availability). Agree.
 

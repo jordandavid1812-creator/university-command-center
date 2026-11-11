@@ -188,14 +188,19 @@ def issue(student_id, username, *, credential_stamp, generation, now=None):
 
 
 def _classify(record, digest, same_account, now):
+    """Account identity is checked FIRST. A cookie presented for a different account is
+    'mismatch' and NEVER triggers destructive replay handling of the owner's device
+    (Codex P26-05); only the owning account's superseded identifier can be 'replayed'."""
     if record is None:
         return 'absent'
+    if not same_account:
+        return 'mismatch'
     if record.current_digest != digest:
         # Superseded identifier: a concurrent tab inside the grace window, otherwise replay.
         if record.rotated_at is not None and now - record.rotated_at <= ROTATION_GRACE:
-            return 'grace' if same_account else 'mismatch'
+            return 'grace'
         return 'replayed'
-    return 'trusted' if same_account else 'mismatch'
+    return 'trusted'
 
 
 def check(cookie, username, *, now=None):

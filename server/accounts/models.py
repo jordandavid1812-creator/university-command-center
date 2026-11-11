@@ -93,7 +93,10 @@ class TrustedDevice(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(current_digest__regex=HEX_DIGEST), name="trusteddevice_hex"),
             models.CheckConstraint(condition=(models.Q(previous_digest__isnull=True) & models.Q(rotated_at__isnull=True))
-                                   | (models.Q(previous_digest__regex=HEX_DIGEST) & models.Q(rotated_at__isnull=False)
+                                   # Explicit IS NOT NULL: a CHECK accepts UNKNOWN, so without it
+                                   # previous_digest=NULL with rotated_at set would pass (Codex P26-03).
+                                   | (models.Q(previous_digest__isnull=False) & models.Q(rotated_at__isnull=False)
+                                      & models.Q(previous_digest__regex=HEX_DIGEST)
                                       & ~models.Q(previous_digest=models.F("current_digest"))),
                                    name="trusteddevice_rotation"),
             models.CheckConstraint(condition=models.Q(expires_at__gt=models.F("created_at"))

@@ -128,8 +128,10 @@ On a login POST with a cookie:
 
 1. Verify the signature with the purpose salt (`SECRET_KEY` plus `SECRET_KEY_FALLBACKS`). Invalid → unfamiliar path (no DB access).
 2. Look up the digest (`current_digest = d OR previous_digest = d`), joined to `accounts_student.is_active` and `expires_at > now()`.
-3. **Superseded identifier.** A match on `previous_digest` within `ROTATION_GRACE` (60 s) of `rotated_at` is a concurrent tab (`grace`; see A.19 C). After the grace window it is a replayed copy: delete the record, log `device_reuse_detected`, and use the unfamiliar path. Replay detection happens before the username check, so a replay is revoked whatever username accompanies it.
-4. A `current_digest` match whose owner's **stored** username is not exactly equal to the submitted (form-cleaned, NFKC) username → unfamiliar path. This is the same exact-match identity `StudentBackend` uses: `Jordan` and `jordan` are different accounts. The record is untouched, because it may be another legitimate account on that browser.
+3. **Account identity first (Codex P26-05).** If the record's owner is not the target account → `mismatch` and the unfamiliar path. The record is **never** modified or deleted, whether the identifier is current or superseded, inside or outside grace.
+   * Before authentication, "target" means the owner's stored username equals the submitted (form-cleaned, NFKC) username exactly: the same exact-match identity `StudentBackend` uses, so `Jordan` and `jordan` are different accounts.
+   * After authentication (`rotate`), it means the authenticated Student UUID.
+4. **Superseded identifier of the same account.** A match on `previous_digest` within `ROTATION_GRACE` (60 s, inclusive) of `rotated_at` is a concurrent tab: `grace`, which is treated as **unfamiliar** for limits (A.19 C). After the window it is a replayed copy: delete the record, log `device_reuse_detected`, and use the unfamiliar path.
 5. Otherwise → trusted path. This is used **only** to choose throttle buckets. The password is always checked by the unchanged `StudentBackend`.
 
 On every **successful** trusted login, the ID rotates: a new random ID is generated, `previous_digest` is set to the old one, `current_digest` to the new one, `last_used_at` and `expires_at` (now + 30 days) are updated, and a new cookie is set. A thief replaying the old cookie after the victim's next login triggers step 3, which revokes the device for both parties. The student simply re-earns trust at their next successful login.
@@ -178,7 +180,9 @@ CREATE TABLE accounts_trusteddevice (
     expires_at       timestamptz NOT NULL,
     CONSTRAINT trusteddevice_hex CHECK (current_digest ~ '^[0-9a-f]{64}$'
         AND (previous_digest IS NULL OR previous_digest ~ '^[0-9a-f]{64}$')),
-    CONSTRAINT trusteddevice_rotation CHECK (previous_digest IS DISTINCT FROM current_digest),
+    CONSTRAINT trusteddevice_rotation CHECK ((previous_digest IS NULL AND rotated_at IS NULL)
+        OR (previous_digest IS NOT NULL AND rotated_at IS NOT NULL      -- explicit: CHECK accepts UNKNOWN
+            AND previous_digest ~ '^[0-9a-f]{64}$' AND previous_digest <> current_digest)),
     CONSTRAINT trusteddevice_expiry CHECK (expires_at > created_at
         AND expires_at <= last_used_at + interval '30 days')
 );
@@ -333,8 +337,14 @@ time doesn't reveal whether an account exists.
 | `accounts_loginlimit` | SELECT, INSERT, DELETE. UPDATE (`attempts`, `expires_at`) only. | **None** |
 | `accounts_accounttoken` (02C) | Unchanged grants, plus SELECT and INSERT on the new `browser_binding` column through the existing table-level grants | None |
 
-* `require_auth_role()` also fails closed if the auth role **lacks** SELECT on the two new tables (so a missing provisioning step gives a site-wide generic 503 instead of mid-login errors).
-* `require_runtime_role()` also fails closed if runtime has **any** privilege on them.
+* `require_auth_role()` enforces an **exact allowlist** generated from `accounts.boundary.SUPPORT_TABLES` (Codex P26-02). It fails closed if any of the following holds:
+  * a required table privilege is missing;
+  * the set of UPDATE-able columns differs **in either direction** from the allowlist;
+  * any other privilege is held (TRUNCATE, REFERENCES, TRIGGER, a forbidden DELETE, or **MAINTAIN on PostgreSQL 17**);
+  * any grant option is held;
+  * only some of the support tables exist (partial schema).
+* `require_auth_role()` and `require_runtime_role()` both reject **MAINTAIN** on any table in `public` or `ucc_security` (PostgreSQL 17+; the check is version-aware).
+* `require_runtime_role()` also fails closed if runtime has **any** privilege on the support tables.
 * No new roles, no `SECURITY DEFINER` functions, no RLS change, no grant to PUBLIC, and nothing touches `ucc_security` or `ucc_crypto`.
 * RLS is not applied to these auth tables, consistent with the existing account, token and session tables. The auth role is a single trusted server principal, not a per-student identity.
 
@@ -596,8 +606,9 @@ Regression tests:
 
 | Situation | Classification | Effect |
 | --- | --- | --- |
-| Legitimate two-tab or double-submit | Previous digest, within 60 s of rotation | `grace`: trusted for this request, no rotation, no cookie |
-| Copied cookie used after the owner's next login | Previous digest, more than 60 s after rotation | `replayed`: record deleted for both parties; unfamiliar path |
+| Legitimate two-tab or double-submit | Previous digest, same account, within 60 s of rotation | `grace`: **unfamiliar limits** for this request, no rotation, no cookie |
+| Copied cookie used after the owner's next login | Previous digest, **same account**, more than 60 s after rotation | `replayed`: record deleted for both parties; unfamiliar path |
+| Owner's cookie presented for a **different** account | Current or previous digest, any time | `mismatch`: unfamiliar path; the owner's record is untouched |
 | Copied cookie used within 60 s of the owner's rotation | Previous digest, within grace | `grace`: **treated as an unfamiliar browser for all limits** (see below) |
 | Identifier two or more rotations old | No match | `absent` (unfamiliar path); not detected as replay (accepted) |
 

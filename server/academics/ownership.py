@@ -90,7 +90,9 @@ def database_alias():
 
 def require_runtime_role(connection):
     """Fail closed if an operator accidentally connects a service as a privileged role."""
+    from accounts.boundary import maintain_anywhere_sql, runtime_support_violation_sql
     with connection.cursor() as cursor:
+        # Bandit B608 false positive below: only module-constant identifiers are interpolated.
         cursor.execute("""
             SELECT r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole
                    OR r.rolinherit OR NOT r.rolcanlogin
@@ -98,27 +100,15 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment') AND relowner=r.oid)
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
-                   -- S0-02A: runtime must have NO access to device/login-limit records.
-                   OR CASE WHEN to_regclass('public.accounts_trusteddevice') IS NULL THEN false ELSE
-                       has_table_privilege(current_user, 'public.accounts_trusteddevice',
-                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
-                       OR has_any_column_privilege(current_user, 'public.accounts_trusteddevice',
-                           'SELECT, INSERT, UPDATE, REFERENCES') END
-                   OR CASE WHEN to_regclass('public.accounts_devicegeneration') IS NULL THEN false ELSE
-                       has_table_privilege(current_user, 'public.accounts_devicegeneration',
-                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
-                       OR has_any_column_privilege(current_user, 'public.accounts_devicegeneration',
-                           'SELECT, INSERT, UPDATE, REFERENCES') END
-                   OR CASE WHEN to_regclass('public.accounts_loginlimit') IS NULL THEN false ELSE
-                       has_table_privilege(current_user, 'public.accounts_loginlimit',
-                           'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
-                       OR has_any_column_privilege(current_user, 'public.accounts_loginlimit',
-                           'SELECT, INSERT, UPDATE, REFERENCES') END
+                   -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
+                   OR {support}
+                   OR {maintain}
                    OR has_schema_privilege(current_user, 'public', 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'CREATE')
                    OR has_database_privilege(current_user, current_database(), 'TEMP')
             FROM pg_roles r WHERE rolname=current_user
-        """)
+        """.format(support=runtime_support_violation_sql(connection),  # nosec B608
+                   maintain=maintain_anywhere_sql(connection)))
         if cursor.fetchone() != (False,):
             raise ImproperlyConfigured("Student services require a restricted runtime database role.")
         cursor.execute("""

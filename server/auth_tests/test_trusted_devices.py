@@ -4,6 +4,8 @@ from datetime import timedelta
 import os
 import re
 import time
+import uuid
+from unittest import skipUnless
 from threading import Barrier
 from unittest.mock import patch
 from urllib.parse import urlsplit
@@ -182,14 +184,6 @@ class DeviceLifecycleTests(DeviceCase):
                 self.assertEqual(operation(issued.cookie).status, 'replayed')
                 self.assertFalse(TrustedDevice.objects.using('auth').filter(pk=issued.device_id).exists())
                 self.assertEqual(devices.check(rotated.cookie, 'alpha').status, 'absent')
-
-    def test_replay_is_detected_even_with_another_username(self):
-        issued = self.issue()
-        devices.rotate(issued.cookie, self.a.pk)
-        TrustedDevice.objects.using('default').filter(pk=issued.device_id).update(
-            rotated_at=timezone.now() - timedelta(minutes=5))
-        self.assertEqual(devices.check(issued.cookie, 'bravo').status, 'replayed')
-        self.assertEqual(self.rows().count(), 0)
 
     def test_two_generation_old_identifier_is_absent(self):
         issued = self.issue()
@@ -446,6 +440,205 @@ class DeviceIdentityBindingTests(DeviceCase):
         self.assertEqual(self.rows(self.upper).count(), 0)
         issued = self.issue(student=self.upper)
         self.assertEqual(TrustedDevice.objects.using('auth').get(pk=issued.device_id).student_id, self.upper.pk)
+
+
+def server_version():
+    with connections['default'].cursor():
+        return connections['default'].pg_version
+
+
+class WrongAccountReplayTests(DeviceCase):
+    """Correction A (Codex P26-05): identity is checked BEFORE any destructive replay action."""
+
+    def rotated(self, at):
+        issued = self.issue(now=at - timedelta(minutes=1))
+        current = devices.rotate(issued.cookie, self.a.pk, now=at)
+        self.assertEqual(current.status, 'rotated')
+        return issued.cookie, current.cookie, issued.device_id
+
+    def test_old_cookie_for_another_account_never_revokes_the_owner_after_grace(self):
+        start = timezone.now()
+        previous, current, device = self.rotated(start)
+        later = start + devices.ROTATION_GRACE + timedelta(seconds=1)
+        self.assertEqual(devices.check(previous, 'bravo', now=later).status, 'mismatch')
+        self.assertEqual(devices.rotate(previous, self.b.pk, now=later).status, 'mismatch')
+        self.assertTrue(TrustedDevice.objects.using('auth').filter(pk=device).exists())
+        self.assertEqual(devices.check(current, 'alpha', now=later).status, 'trusted')
+
+    def test_old_cookie_for_another_account_inside_grace_is_mismatch_and_unchanged(self):
+        start = timezone.now()
+        previous, current, device = self.rotated(start)
+        before = self.rows().values_list('current_digest', 'previous_digest', 'rotated_at', 'expires_at').get()
+        inside = start + timedelta(seconds=5)
+        self.assertEqual(devices.check(previous, 'bravo', now=inside).status, 'mismatch')
+        result = devices.rotate(previous, self.b.pk, now=inside)
+        self.assertEqual((result.status, result.cookie), ('mismatch', None))
+        self.assertEqual(self.rows().values_list('current_digest', 'previous_digest', 'rotated_at', 'expires_at').get(), before)
+
+    def test_current_cookie_for_another_account_is_mismatch_and_unchanged(self):
+        issued = self.issue()
+        before = self.rows().values_list('current_digest', 'previous_digest', 'rotated_at').get()
+        self.assertEqual(devices.check(issued.cookie, 'bravo').status, 'mismatch')
+        self.assertEqual(devices.rotate(issued.cookie, self.b.pk).status, 'mismatch')
+        self.assertEqual(self.rows().values_list('current_digest', 'previous_digest', 'rotated_at').get(), before)
+
+    def test_unknown_or_malformed_uuid_never_revokes(self):
+        start = timezone.now()
+        previous, _, device = self.rotated(start)
+        later = start + devices.ROTATION_GRACE + timedelta(seconds=1)
+        self.assertEqual(devices.rotate(previous, uuid.uuid4(), now=later).status, 'mismatch')
+        for bad in (None, str(self.a.pk), self.a.pk.hex):
+            self.assertEqual(devices.rotate(previous, bad, now=later).status, 'absent')
+        self.assertTrue(TrustedDevice.objects.using('auth').filter(pk=device).exists())
+
+    def test_same_account_replay_after_grace_still_revokes(self):
+        for name, operation in (('check', lambda cookie, at: devices.check(cookie, 'alpha', now=at)),
+                                ('rotate', lambda cookie, at: devices.rotate(cookie, self.a.pk, now=at))):
+            with self.subTest(operation=name):
+                start = timezone.now()
+                previous, current, device = self.rotated(start)
+                at_limit = start + devices.ROTATION_GRACE
+                self.assertEqual(devices.check(previous, 'alpha', now=at_limit).status, 'grace')  # boundary inclusive
+                result = operation(previous, at_limit + timedelta(microseconds=1))
+                self.assertEqual(result.status, 'replayed')
+                self.assertFalse(TrustedDevice.objects.using('auth').filter(pk=device).exists())
+                self.assertEqual(devices.check(current, 'alpha').status, 'absent')
+
+    def test_two_generation_old_cookie_is_absent_for_every_account(self):
+        start = timezone.now()
+        previous, current, device = self.rotated(start)
+        devices.rotate(current, self.a.pk, now=start + timedelta(minutes=5))
+        later = start + timedelta(minutes=10)
+        for username, student in (('alpha', self.a), ('bravo', self.b)):
+            self.assertEqual(devices.check(previous, username, now=later).status, 'absent')
+            self.assertEqual(devices.rotate(previous, student.pk, now=later).status, 'absent')
+        self.assertTrue(TrustedDevice.objects.using('auth').filter(pk=device).exists())
+
+
+class RotationConstraintTests(DeviceCase):
+    """Correction C (Codex P26-03): the rotation pair is all-NULL or all-valid, never UNKNOWN."""
+
+    def row(self, **changes):
+        now = timezone.now()
+        values = dict(student_id=self.a.pk, current_digest='a' * 64, previous_digest=None, rotated_at=None,
+                      created_at=now, last_used_at=now, expires_at=now + timedelta(days=30))
+        values.update(changes)
+        return values
+
+    def test_rotation_pair_truth_table_on_insert(self):
+        now = timezone.now()
+        valid = {'unrotated': {}, 'rotated': {'previous_digest': 'b' * 64, 'rotated_at': now}}
+        invalid = {
+            'previous NULL, rotated_at set': {'rotated_at': now},
+            'previous set, rotated_at NULL': {'previous_digest': 'b' * 64},
+            'previous equals current': {'previous_digest': 'a' * 64, 'rotated_at': now},
+            'previous not hex': {'previous_digest': 'B' * 64, 'rotated_at': now},
+        }
+        for label, changes in valid.items():
+            with self.subTest(valid=label):
+                with transaction.atomic(using='auth'):
+                    TrustedDevice.objects.using('auth').create(**self.row(**changes))
+                    transaction.set_rollback(True, using='auth')
+        for label, changes in invalid.items():
+            with self.subTest(invalid=label), self.assertRaises(IntegrityError):
+                with transaction.atomic(using='auth'):
+                    TrustedDevice.objects.using('auth').create(**self.row(**changes))
+        self.assertEqual(TrustedDevice.objects.using('auth').count(), 0)
+
+    def test_rotation_pair_truth_table_on_update(self):
+        record = TrustedDevice.objects.using('auth').create(**self.row())
+        for label, changes in {'only rotated_at': {'rotated_at': timezone.now()},
+                               'only previous_digest': {'previous_digest': 'c' * 64}}.items():
+            with self.subTest(update=label), self.assertRaises(IntegrityError):
+                with transaction.atomic(using='auth'):
+                    TrustedDevice.objects.using('auth').filter(pk=record.pk).update(**changes)
+        TrustedDevice.objects.using('auth').filter(pk=record.pk).update(
+            previous_digest='c' * 64, rotated_at=timezone.now())
+        with self.assertRaises(IntegrityError), transaction.atomic(using='auth'):
+            TrustedDevice.objects.using('auth').filter(pk=record.pk).update(previous_digest=None)
+
+    def test_raw_sql_cannot_insert_the_null_rotation_combination(self):
+        with self.assertRaises(IntegrityError), transaction.atomic(using='auth'):
+            with connections['auth'].cursor() as cursor:
+                cursor.execute("""INSERT INTO accounts_trusteddevice
+                    (id, student_id, current_digest, previous_digest, rotated_at, created_at, last_used_at, expires_at)
+                    VALUES (gen_random_uuid(), %s, repeat('d', 64), NULL, now(), now(), now(), now() + interval '1 day')""",
+                               [self.a.pk])
+
+
+class RoleDriftTests(DeviceCase):
+    """Correction B (Codex P26-02): exact grant allowlist, every required column, PG17 MAINTAIN."""
+
+    REQUIRED_UPDATES = {
+        'accounts_trusteddevice': ('current_digest', 'previous_digest', 'rotated_at', 'last_used_at', 'expires_at'),
+        'accounts_loginlimit': ('attempts', 'expires_at'),
+        'accounts_devicegeneration': ('generation',),
+    }
+
+    def run_sql(self, statement):
+        with connections['default'].cursor() as cursor:
+            cursor.execute(statement)
+
+    def assert_auth_rejected_then_restore(self, statement):
+        self.run_sql(statement)
+        try:
+            with self.assertRaises(ImproperlyConfigured):
+                require_auth_role()
+            self.assertEqual(Client().get(reverse('accounts:login')).status_code, 503)
+        finally:
+            provision()
+        require_auth_role()
+
+    def assert_runtime_rejected_then_restore(self, statement):
+        self.run_sql(statement)
+        try:
+            with self.assertRaises(ImproperlyConfigured):
+                require_runtime_role(connections['runtime'])
+        finally:
+            provision()
+        require_runtime_role(connections['runtime'])
+
+    def test_every_required_column_update_grant_is_verified(self):
+        role = os.environ['UCC_AUTH_ROLE']
+        for table, columns in self.REQUIRED_UPDATES.items():
+            for column in columns:
+                with self.subTest(table=table, column=column):
+                    self.assert_auth_rejected_then_restore(f'REVOKE UPDATE ({column}) ON {table} FROM {role}')
+
+    def test_unexpected_auth_privileges_and_grant_options_are_rejected(self):
+        role = os.environ['UCC_AUTH_ROLE']
+        for statement in (f'GRANT UPDATE (id) ON accounts_trusteddevice TO {role}',
+                          f'GRANT UPDATE (created_at) ON accounts_trusteddevice TO {role}',
+                          f'GRANT UPDATE (bucket) ON accounts_loginlimit TO {role}',
+                          f'GRANT REFERENCES ON accounts_trusteddevice TO {role}',
+                          f'GRANT REFERENCES (bucket) ON accounts_loginlimit TO {role}',
+                          f'GRANT TRIGGER ON accounts_devicegeneration TO {role}',
+                          f'GRANT SELECT ON accounts_trusteddevice TO {role} WITH GRANT OPTION',
+                          f'GRANT UPDATE (attempts) ON accounts_loginlimit TO {role} WITH GRANT OPTION'):
+            with self.subTest(statement=statement):
+                self.assert_auth_rejected_then_restore(statement)
+
+    def test_partial_support_schema_is_rejected(self):
+        self.run_sql('ALTER TABLE accounts_loginlimit RENAME TO accounts_loginlimit_moved')
+        try:
+            with self.assertRaises(ImproperlyConfigured):
+                require_auth_role()
+        finally:
+            self.run_sql('ALTER TABLE accounts_loginlimit_moved RENAME TO accounts_loginlimit')
+            provision()
+        require_auth_role()
+
+    @skipUnless(server_version() >= 170000, 'MAINTAIN privilege exists only on PostgreSQL 17+')
+    def test_postgresql17_maintain_is_rejected_for_auth_and_runtime(self):
+        auth, runtime = os.environ['UCC_AUTH_ROLE'], os.environ['UCC_RUNTIME_ROLE']
+        for table in ('accounts_trusteddevice', 'accounts_loginlimit', 'accounts_devicegeneration',
+                      'accounts_student', 'django_session'):
+            with self.subTest(role='auth', table=table):
+                self.assert_auth_rejected_then_restore(f'GRANT MAINTAIN ON {table} TO {auth}')
+        for table in ('accounts_trusteddevice', 'accounts_loginlimit', 'accounts_devicegeneration',
+                      'academics_semester', 'academics_course', 'academics_assignment', 'accounts_student'):
+            with self.subTest(role='runtime', table=table):
+                self.assert_runtime_rejected_then_restore(f'GRANT MAINTAIN ON {table} TO {runtime}')
 
 
 class DeviceGenerationAndExpiryTests(DeviceCase):
