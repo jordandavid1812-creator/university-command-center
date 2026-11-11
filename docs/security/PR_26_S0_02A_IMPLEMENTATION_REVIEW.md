@@ -1,7 +1,8 @@
 # Independent implementation review — draft PR #26 (S0-02A)
 
-**Recommendation: request revisions to the dormant foundation before merge; do not
-activate S0-02B/C from this review.** No fix or source change was made on Claude's
+**Recommendation at follow-up HEAD `61bf632`: request targeted revisions/decisions
+for remaining foundation gaps; the original case-binding finding is now addressed.
+Do not activate S0-02B/C from this review.** No fix or source change was made on Claude's
 branch. This report accompanies [the independent design review](S0_02_INDEPENDENT_REVIEW.md)
 in documentation PR #27.
 
@@ -10,7 +11,9 @@ in documentation PR #27.
 Reviewed 11 November 2026:
 
 - PR: [#26](https://github.com/jordandavid1812-creator/university-command-center/pull/26).
-- Exact implementation HEAD: `0e9e478fd4ed4249cbb81501a75ffda5e2744fd4`.
+- Initial implementation snapshot: `0e9e478fd4ed4249cbb81501a75ffda5e2744fd4`.
+- Follow-up reviewed HEAD: `61bf63232e4ca62296949c18040280cf5940c9af`; see the current
+  disposition immediately below. Historical evidence remains pinned to its own SHA.
 - Base: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`.
 - Isolated detached worktree; all commands read this revision. Temporary test drivers
   and synthetic PostgreSQL data lived outside its source tree and are not deliverables.
@@ -32,7 +35,8 @@ migrator had test-only CREATEDB; application-role grants came from PR provisioni
 | Website | 69 passed |
 | Total supplied tests | **372 passed** |
 
-The PR description's 104 auth / 365 total / 28 new figures lag the reviewed source.
+The PR body read at the initial 0e9e478 snapshot listed 104 auth / 365 total /
+28 new, lagging that snapshot's source. This is not an assertion about later PR metadata.
 This is a reporting discrepancy, not a failing suite. Five supplementary observational
 probes also completed on a separate PG17 test DB. They record behavior, not successful
 security regressions: their completion does not mean the defects below are fixed.
@@ -43,6 +47,56 @@ GitHub now confirms [run 43102150178][ci] **success** for this exact HEAD: tests
 dependency-audit and database-tests all succeeded. The workflow uses postgres:17.
 The draft body still says hosted verification is missing; that warning is stale for
 this reviewed commit. A future changed HEAD needs fresh verification.
+
+## Follow-up review of 61bf632 — current disposition
+
+Claude advanced PR #26 during this review. The new commit removes username_key and
+casefolding, compares `check()` with the device owner's exact stored username, and
+changes `rotate()` to compare the authenticated **Student UUID**. See
+[devices.py:183–234][latest-device] and the revised
+[case-sensitive test:106–112][latest-test]. This is the right substantive correction:
+the same independent two-account probe now returns `mismatch`, no trusted-limit
+selection, and `mismatch` for rotation. **P26-01/F02 is addressed for current identifiers.**
+Do not use the initial snapshot's positive collision result as a claim about this HEAD.
+
+Remaining independently rechecked observations on PostgreSQL 17.11:
+
+| Item | Follow-up result |
+| --- | --- |
+| P26-02 role drift ([current auth guard][latest-auth-guard], [runtime guard][latest-runtime-guard]) | Direct MAINTAIN grant still passes both role guards; revoked UPDATE(rotated_at) still passes the auth guard |
+| P26-03 NULL constraint | Row with previous_digest=NULL and rotated_at set is still accepted; [models.py:95–102][latest-models] |
+| P26-04 forget-all ([current revoke_all][latest-revoke]) | A pre-revocation credential stamp with unchanged password can still issue after forget-all; contract decision remains |
+| New P26-05 wrong-account old-cookie replay | After rotating A's cookie, call rotate(previous_cookie, B.uuid) beyond the 60-second grace: returns `replayed` and deletes A's record |
+
+**P26-05 — Medium, latent availability/ownership side effect:**
+[latest devices.py:172–180 and 226–232][latest-replay] returns `replayed` before using
+`same_account` when an old identifier is beyond grace. The caller then deletes the
+row even though the authenticated Student UUID belongs to B. `check()` has the same
+classification order. This contradicts rotate's new promise that an account mismatch
+changes nothing. Preconditions include possession/presentation of A's valid previous
+cookie; this is not academic-data access or passwordless authentication. Recommend
+checking intended-account equality before destructive reuse handling, and regress
+current/previous/two-generation cookies with both A and B, inside and outside grace.
+Correct same-account replay behavior should remain explicit. S0-02A dormancy limits
+current exposure but does not close the primitive contract.
+
+The new commit also adds reconciliation documentation; its decisions are not a
+substitute for the tests or owner approval described here. No source/fix from Codex
+was applied to Claude's branch.
+
+**Follow-up verification:** all **380 supplied tests pass** independently at 61bf632
+on PostgreSQL 17.11: 113 legacy, 33 foundation, 46 academic-security, **119 auth**
+(76 historical + 43 new), and 69 website. All 337 baseline tests remain intact.
+Six supplementary observational probes completed; they reproduced the remaining
+items above and confirmed the identity fix. A probe completing successfully is
+not a claim that the observed security defect passed its desired regression.
+GitHub also confirms [run 43104257423](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43104257423)
+success on this exact revision (tests, dependency-audit, database-tests). These
+results supersede the earlier snapshot's counts/CI status, but not its history.
+
+The following detailed findings and twelve-item mapping describe the **initial
+0e9e478 snapshot** where linked. The follow-up table above supersedes their case-
+binding status; the other recorded contracts/limits still apply where unchanged.
 
 ## Findings requiring changes or an explicit contract decision
 
@@ -238,8 +292,8 @@ so integration tests have one authoritative contract. This review does not edit 
 ## Disposition and limits
 
 Positive PG17/CI results close the earlier **verification-environment** uncertainty
-for this HEAD; they do not close the independently observed findings. Request targeted
-revisions/tests for P26-01–03 and an explicit P26-04 contract decision. Keep the PR
+for this HEAD; they do not close the independently observed findings. At follow-up HEAD 61bf632, P26-01 is addressed for current evidence. Request targeted
+revisions/tests for P26-02/03/05 and an explicit P26-04 contract decision. Keep the PR
 and any schema rollout separate from permission to enable device/IP-bypass/account
 restrictions. No fixes, commits, pushes or merges to Claude's branch were performed.
 Only review documents are published by this assignment.
@@ -262,3 +316,12 @@ Only review documents are published by this assignment.
 [role-tests]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L459-L534
 [tests-isolation]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/auth_tests/test_trusted_devices.py#L563-L575
 [backend]: https://github.com/jordandavid1812-creator/university-command-center/blob/0e9e478fd4ed4249cbb81501a75ffda5e2744fd4/server/accounts/backends.py#L7-L20
+
+[latest-device]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/accounts/devices.py#L183-L234
+[latest-test]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/auth_tests/test_trusted_devices.py#L106-L112
+[latest-models]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/accounts/models.py#L95-L102
+[latest-replay]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/accounts/devices.py#L172-L232
+
+[latest-auth-guard]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/accounts/boundary.py#L24-L42
+[latest-runtime-guard]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/academics/ownership.py#L95-L123
+[latest-revoke]: https://github.com/jordandavid1812-creator/university-command-center/blob/61bf63232e4ca62296949c18040280cf5940c9af/server/accounts/devices.py#L250-L262
