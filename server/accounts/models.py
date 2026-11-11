@@ -73,13 +73,15 @@ HEX_DIGEST = r"^[0-9a-f]{64}$"
 class TrustedDevice(models.Model):
     """S0-02A: server-side trusted-browser record. Stores digests only, never a raw cookie ID.
 
+    Account binding is the immutable `student` foreign key (UUID); there is no
+    username-derived key, so device trust follows exact account identity.
+
     Dormant: not consulted by login until S0-02B is approved. A device never
     authenticates a student; it can only select throttle limits (see
     docs/security/S1_PROPOSALS.md section A).
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="trusted_devices")
-    username_key = models.CharField(max_length=64)
     current_digest = models.CharField(max_length=64, unique=True)
     previous_digest = models.CharField(max_length=64, unique=True, null=True, blank=True)
     rotated_at = models.DateTimeField(null=True, blank=True)
@@ -89,8 +91,7 @@ class TrustedDevice(models.Model):
 
     class Meta:
         constraints = [
-            models.CheckConstraint(condition=models.Q(current_digest__regex=HEX_DIGEST)
-                                   & models.Q(username_key__regex=HEX_DIGEST), name="trusteddevice_hex"),
+            models.CheckConstraint(condition=models.Q(current_digest__regex=HEX_DIGEST), name="trusteddevice_hex"),
             models.CheckConstraint(condition=(models.Q(previous_digest__isnull=True) & models.Q(rotated_at__isnull=True))
                                    | (models.Q(previous_digest__regex=HEX_DIGEST) & models.Q(rotated_at__isnull=False)
                                       & ~models.Q(previous_digest=models.F("current_digest"))),

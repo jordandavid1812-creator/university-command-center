@@ -87,7 +87,7 @@ class DeviceLifecycleTests(DeviceCase):
         record = self.rows().get()
         self.assertEqual(record.current_digest, devices.identifier_digest(identifier))
         stored = ' '.join(str(value) for value in TrustedDevice.objects.using('auth').values_list(
-            'username_key', 'current_digest', 'previous_digest').get())
+            'current_digest', 'previous_digest').get())
         self.assertNotIn(identifier, stored)
         self.assertNotIn('alpha', stored)
         payload = signing.b64_decode(issued.cookie.split(':')[0].encode()).decode()
@@ -106,7 +106,7 @@ class DeviceLifecycleTests(DeviceCase):
     def test_check_accepts_only_the_bound_account(self):
         issued = self.issue()
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
-        self.assertEqual(devices.check(issued.cookie, 'ALPHA').status, 'trusted')  # casefold
+        self.assertEqual(devices.check(issued.cookie, 'ALPHA').status, 'mismatch')  # exact identity, no casefold
         self.assertEqual(devices.check(issued.cookie, 'bravo').status, 'mismatch')
         self.assertEqual(devices.check(issued.cookie, 'unknown-user').status, 'mismatch')
         self.assertEqual(self.rows().count(), 1)
@@ -122,7 +122,7 @@ class DeviceLifecycleTests(DeviceCase):
                       signing.dumps(devices.new_identifier(), salt=devices.COOKIE_SALT)):
             with self.subTest(value=str(value)[:20]):
                 self.assertEqual(devices.check(value, 'alpha').status, 'absent')
-                self.assertEqual(devices.rotate(value, 'alpha').status, 'absent')
+                self.assertEqual(devices.rotate(value, self.a.pk).status, 'absent')
         self.assertEqual(devices.check(issued.cookie, '').status, 'absent')
         self.assertEqual(devices.check(issued.cookie, None).status, 'absent')
         self.assertEqual(self.rows().count(), 1)
@@ -139,19 +139,19 @@ class DeviceLifecycleTests(DeviceCase):
             created_at=timezone.now() - timedelta(days=31), last_used_at=timezone.now() - timedelta(days=31),
             expires_at=timezone.now() - timedelta(seconds=1))
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'absent')
-        self.assertEqual(devices.rotate(issued.cookie, 'alpha').status, 'absent')
+        self.assertEqual(devices.rotate(issued.cookie, self.a.pk).status, 'absent')
 
     def test_deactivated_student_devices_are_absent_and_cannot_be_issued(self):
         issued = self.issue()
         Student.objects.using('default').filter(pk=self.a.pk).update(is_active=False)
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'absent')
-        self.assertEqual(devices.rotate(issued.cookie, 'alpha').status, 'absent')
+        self.assertEqual(devices.rotate(issued.cookie, self.a.pk).status, 'absent')
         with self.assertRaises(devices.DeviceError):
             self.issue()
 
     def test_rotation_replaces_identifier_and_renews_expiry(self):
         issued = self.issue(now=timezone.now() - timedelta(days=5))
-        rotated = devices.rotate(issued.cookie, 'alpha')
+        rotated = devices.rotate(issued.cookie, self.a.pk)
         self.assertEqual(rotated.status, 'rotated')
         self.assertNotEqual(rotated.cookie, issued.cookie)
         record = self.rows().get()
@@ -162,27 +162,28 @@ class DeviceLifecycleTests(DeviceCase):
 
     def test_superseded_identifier_within_grace_gets_no_new_cookie(self):
         issued = self.issue()
-        first = devices.rotate(issued.cookie, 'alpha')
-        second = devices.rotate(issued.cookie, 'alpha')
+        first = devices.rotate(issued.cookie, self.a.pk)
+        second = devices.rotate(issued.cookie, self.a.pk)
         self.assertEqual((second.status, second.cookie), ('grace', None))
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'grace')
         self.assertEqual(devices.check(first.cookie, 'alpha').status, 'trusted')
         self.assertEqual(self.rows().count(), 1)
 
     def test_superseded_identifier_after_grace_is_replay_and_revokes(self):
-        for operation in (devices.check, devices.rotate):
-            with self.subTest(operation=operation.__name__):
+        for name, operation in (('check', lambda cookie: devices.check(cookie, 'alpha')),
+                                ('rotate', lambda cookie: devices.rotate(cookie, self.a.pk))):
+            with self.subTest(operation=name):
                 issued = self.issue()
-                rotated = devices.rotate(issued.cookie, 'alpha')
+                rotated = devices.rotate(issued.cookie, self.a.pk)
                 TrustedDevice.objects.using('default').filter(pk=issued.device_id).update(
                     rotated_at=timezone.now() - devices.ROTATION_GRACE - timedelta(seconds=1))
-                self.assertEqual(operation(issued.cookie, 'alpha').status, 'replayed')
+                self.assertEqual(operation(issued.cookie).status, 'replayed')
                 self.assertFalse(TrustedDevice.objects.using('auth').filter(pk=issued.device_id).exists())
                 self.assertEqual(devices.check(rotated.cookie, 'alpha').status, 'absent')
 
     def test_replay_is_detected_even_with_another_username(self):
         issued = self.issue()
-        devices.rotate(issued.cookie, 'alpha')
+        devices.rotate(issued.cookie, self.a.pk)
         TrustedDevice.objects.using('default').filter(pk=issued.device_id).update(
             rotated_at=timezone.now() - timedelta(minutes=5))
         self.assertEqual(devices.check(issued.cookie, 'bravo').status, 'replayed')
@@ -190,8 +191,8 @@ class DeviceLifecycleTests(DeviceCase):
 
     def test_two_generation_old_identifier_is_absent(self):
         issued = self.issue()
-        first = devices.rotate(issued.cookie, 'alpha')
-        devices.rotate(first.cookie, 'alpha')
+        first = devices.rotate(issued.cookie, self.a.pk)
+        devices.rotate(first.cookie, self.a.pk)
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'absent')
 
     def test_concurrent_two_tab_rotation_gives_one_cookie_and_one_grace(self):
@@ -201,7 +202,7 @@ class DeviceLifecycleTests(DeviceCase):
         @in_thread
         def attempt(_):
             barrier.wait()
-            return devices.rotate(issued.cookie, 'alpha')
+            return devices.rotate(issued.cookie, self.a.pk)
         with ThreadPoolExecutor(max_workers=2) as executor:
             results = list(executor.map(attempt, (1, 2)))
         self.assertEqual(sorted(result.status for result in results), ['grace', 'rotated'])
@@ -216,7 +217,7 @@ class DeviceLifecycleTests(DeviceCase):
         # Simulate the outcome of losing a rotation race: the conditional UPDATE
         # (current_digest = presented digest) matches no row.
         with patch.object(QuerySet, 'update', lambda queryset, **values: 0):
-            result = devices.rotate(issued.cookie, 'alpha')
+            result = devices.rotate(issued.cookie, self.a.pk)
         self.assertEqual((result.status, result.cookie), ('grace', None))
         self.assertEqual(self.rows().get().current_digest, before)
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
@@ -284,10 +285,10 @@ class DeviceLifecycleTests(DeviceCase):
 
     def test_database_constraints_reject_invalid_records(self):
         now = timezone.now()
-        good = dict(student_id=self.a.pk, username_key='a' * 64, current_digest='b' * 64,
+        good = dict(student_id=self.a.pk, current_digest='b' * 64,
                     created_at=now, last_used_at=now, expires_at=now + timedelta(days=30))
         bad_values = (
-            {'current_digest': 'NOT-HEX'}, {'username_key': 'z' * 64},
+            {'current_digest': 'NOT-HEX'}, {'current_digest': 'Z' * 64},
             {'previous_digest': 'b' * 64, 'rotated_at': now},               # previous == current
             {'previous_digest': 'c' * 64},                                  # rotated_at missing
             {'expires_at': now - timedelta(seconds=1)},
@@ -350,6 +351,101 @@ class DeviceCompatibilityTests(DeviceCase):
         self.assertEqual(self.rows().count(), 0)
 
 
+class DeviceIdentityBindingTests(DeviceCase):
+    """Codex F02: device trust must follow the backend's exact account identity, never casefold."""
+
+    def setUp(self):
+        super().setUp()
+        self.upper = self.account('Jordan', 'jordan-upper@example.invalid')
+        self.lower = self.account('jordan', 'jordan-lower@example.invalid')
+
+    def account(self, username, email):
+        return Student.objects.db_manager('default').create_user(
+            username, PASSWORD, email=email, email_verified_at=timezone.now())
+
+    def authenticated(self, username):
+        from accounts.backends import StudentBackend
+        student = StudentBackend().authenticate(None, username=username, password=PASSWORD)
+        return student.pk if student else None
+
+    def test_case_distinct_accounts_exist_and_backend_distinguishes_them(self):
+        self.assertNotEqual(self.upper.pk, self.lower.pk)
+        self.assertEqual(self.authenticated('Jordan'), self.upper.pk)
+        self.assertEqual(self.authenticated('jordan'), self.lower.pk)
+        self.assertIsNone(self.authenticated('JORDAN'))
+
+    def test_device_for_one_case_variant_never_selects_another_accounts_lane(self):
+        for owner, other in ((self.upper, self.lower), (self.lower, self.upper)):
+            with self.subTest(owner=owner.username):
+                issued = self.issue(student=owner)
+                self.assertEqual(devices.check(issued.cookie, owner.username).status, 'trusted')
+                for candidate in (other.username, 'JORDAN', 'jOrDaN'):
+                    result = devices.check(issued.cookie, candidate)
+                    self.assertEqual(result.status, 'mismatch', candidate)
+                    self.assertFalse(result.selects_trusted_limits)
+                self.assertEqual(self.rows(owner).count(), 1)  # mismatch never mutates the owner's device
+
+    def test_device_check_agrees_exactly_with_backend_identity(self):
+        import unicodedata
+        candidates = ['alpha', 'Alpha', 'ALPHA', 'alpha ', ' alpha', 'alpha\u200b', 'bravo',
+                      '\uff41\uff4c\uff50\uff48\uff41',  # fullwidth "alpha"
+                      unicodedata.normalize('NFKC', '\uff41\uff4c\uff50\uff48\uff41'),
+                      'Jordan', 'jordan', 'JORDAN']
+        for owner in (self.a, self.upper, self.lower):
+            issued = self.issue(student=owner)
+            for candidate in candidates:
+                with self.subTest(owner=owner.username, candidate=repr(candidate)):
+                    expected = self.authenticated(candidate) == owner.pk
+                    self.assertEqual(devices.check(issued.cookie, candidate).selects_trusted_limits, expected)
+
+    def test_stored_non_nfkc_and_nfkc_accounts_are_never_interchangeable(self):
+        normalized = self.account('fiona', 'fiona@example.invalid')
+        raw = Student.objects.db_manager('default').create(  # bypasses clean(): stores the ligature
+            username='\ufb01ona', email='raw-fiona@example.invalid', email_verified_at=timezone.now())
+        raw.set_password(PASSWORD)
+        raw.save(using='default', update_fields=['password'])
+        self.assertEqual(self.authenticated('fiona'), normalized.pk)
+        self.assertEqual(self.authenticated('\ufb01ona'), raw.pk)
+        normal_device, raw_device = self.issue(student=normalized), self.issue(student=raw)
+        self.assertEqual(devices.check(normal_device.cookie, 'fiona').status, 'trusted')
+        self.assertEqual(devices.check(normal_device.cookie, '\ufb01ona').status, 'mismatch')
+        self.assertEqual(devices.check(raw_device.cookie, '\ufb01ona').status, 'trusted')
+        self.assertEqual(devices.check(raw_device.cookie, 'fiona').status, 'mismatch')
+
+    def test_issue_requires_the_exact_stored_username(self):
+        stamp = self.stamp(self.upper)
+        for candidate in ('jordan', 'JORDAN'):
+            with self.subTest(candidate=candidate), self.assertRaises(devices.DeviceError):
+                devices.issue(self.upper.pk, candidate, credential_stamp=stamp)
+        self.assertEqual(self.rows(self.upper).count(), 0)
+
+    def test_rotation_requires_the_authenticated_student_uuid(self):
+        issued = self.issue(student=self.upper)
+        before = self.rows(self.upper).get().current_digest
+        for wrong in (self.lower.pk, self.a.pk, str(self.upper.pk), None):
+            with self.subTest(wrong=wrong):
+                result = devices.rotate(issued.cookie, wrong)
+                self.assertIn(result.status, ('mismatch', 'absent'))
+                self.assertIsNone(result.cookie)
+        self.assertEqual(self.rows(self.upper).get().current_digest, before)
+        self.assertEqual(devices.rotate(issued.cookie, self.upper.pk).status, 'rotated')
+
+    def test_forged_or_foreign_identifiers_never_select_the_trusted_lane(self):
+        victim_device = self.issue(student=self.lower)
+        attacker_device = self.issue(student=self.upper)
+        forged = devices.cookie_value(devices.new_identifier())
+        self.assertFalse(devices.check(forged, 'jordan').selects_trusted_limits)
+        self.assertFalse(devices.check(attacker_device.cookie, 'jordan').selects_trusted_limits)
+        self.assertTrue(devices.check(victim_device.cookie, 'jordan').selects_trusted_limits)
+
+    def test_binding_is_the_student_foreign_key_not_a_username_hash(self):
+        names = {field.name for field in TrustedDevice._meta.get_fields()}
+        self.assertNotIn('username_key', names)
+        self.assertEqual(self.rows(self.upper).count(), 0)
+        issued = self.issue(student=self.upper)
+        self.assertEqual(TrustedDevice.objects.using('auth').get(pk=issued.device_id).student_id, self.upper.pk)
+
+
 class DeviceBindingAndRevocationTests(DeviceCase):
     """Review issues 1-3: record binding, revocation races and grace semantics."""
 
@@ -365,7 +461,7 @@ class DeviceBindingAndRevocationTests(DeviceCase):
                 devices.issue(self.a.pk, 'alpha', credential_stamp=stamp_value)
         self.assertEqual(TrustedDevice.objects.using('auth').count(), 0)
         issued = devices.issue(self.a.pk, 'alpha', credential_stamp=stamp)
-        self.assertEqual(self.rows().get().username_key, devices.username_key(self.a.username))
+        self.assertEqual(self.rows().get().student_id, self.a.pk)
         self.assertEqual(devices.check(issued.cookie, 'alpha').status, 'trusted')
 
     def test_issue_with_stamp_from_before_a_password_change_is_refused(self):
@@ -407,14 +503,14 @@ class DeviceBindingAndRevocationTests(DeviceCase):
         issued = self.issue()
         with ThreadPoolExecutor(max_workers=1) as executor:
             with transaction.atomic(using='auth'):
-                rotated = devices.rotate(issued.cookie, 'alpha')  # holds the device-row lock
+                rotated = devices.rotate(issued.cookie, self.a.pk)  # holds the device-row lock
                 pending = executor.submit(in_thread(devices.revoke_all), self.a.pk)
                 wait_for_lock_waiter()
             self.assertEqual(pending.result(timeout=30), 1)
         self.assertEqual(rotated.status, 'rotated')
         for cookie in (issued.cookie, rotated.cookie):
             self.assertEqual(devices.check(cookie, 'alpha').status, 'absent')
-            self.assertEqual(devices.rotate(cookie, 'alpha').status, 'absent')
+            self.assertEqual(devices.rotate(cookie, self.a.pk).status, 'absent')
 
     def test_mixed_concurrent_issue_rotate_revoke_never_deadlock(self):
         seed = [self.issue() for _ in range(4)]
@@ -426,7 +522,7 @@ class DeviceBindingAndRevocationTests(DeviceCase):
             if index % 3 == 0:
                 return devices.revoke_all(self.a.pk)
             if index % 3 == 1:
-                return devices.rotate(seed[index % 4].cookie, 'alpha').status
+                return devices.rotate(seed[index % 4].cookie, self.a.pk).status
             return self.issue().device_id
         with ThreadPoolExecutor(max_workers=12) as executor:
             results = list(executor.map(work, range(12)))  # a deadlock would raise here
@@ -435,13 +531,13 @@ class DeviceBindingAndRevocationTests(DeviceCase):
 
     def test_grace_never_selects_trusted_limits_or_renews(self):
         issued = self.issue()
-        rotated = devices.rotate(issued.cookie, 'alpha')
+        rotated = devices.rotate(issued.cookie, self.a.pk)
         before = self.rows().values_list('current_digest', 'last_used_at', 'expires_at').get()
         for _ in range(5):
             result = devices.check(issued.cookie, 'alpha')
             self.assertEqual(result.status, 'grace')
             self.assertFalse(result.selects_trusted_limits)
-            again = devices.rotate(issued.cookie, 'alpha')
+            again = devices.rotate(issued.cookie, self.a.pk)
             self.assertEqual((again.status, again.cookie), ('grace', None))
         self.assertEqual(self.rows().values_list('current_digest', 'last_used_at', 'expires_at').get(), before)
         self.assertTrue(devices.check(rotated.cookie, 'alpha').selects_trusted_limits)
@@ -476,7 +572,7 @@ class DeviceRoleTests(DeviceCase):
                   AND has_column_privilege(current_user, attrelid, attnum, 'UPDATE')""")
             self.assertEqual(cursor.fetchone()[0], ['attempts', 'expires_at'])
         for statement in ('UPDATE accounts_trusteddevice SET student_id = student_id',
-                          'UPDATE accounts_trusteddevice SET username_key = username_key',
+                          'UPDATE accounts_trusteddevice SET created_at = created_at',
                           'UPDATE accounts_loginlimit SET kind = kind',
                           'TRUNCATE accounts_trusteddevice'):
             self.denied('auth', statement)

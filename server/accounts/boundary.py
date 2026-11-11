@@ -30,7 +30,6 @@ def require_auth_role():
                 OR NOT has_column_privilege(current_user, 'public.accounts_trusteddevice', 'current_digest', 'UPDATE')
                 OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'id', 'UPDATE')
                 OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'student_id', 'UPDATE')
-                OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'username_key', 'UPDATE')
                 OR has_column_privilege(current_user, 'public.accounts_trusteddevice', 'created_at', 'UPDATE')
                 OR has_table_privilege(current_user, 'public.accounts_trusteddevice', 'TRUNCATE, TRIGGER')) END
             OR CASE WHEN to_regclass('public.accounts_loginlimit') IS NULL THEN false ELSE (

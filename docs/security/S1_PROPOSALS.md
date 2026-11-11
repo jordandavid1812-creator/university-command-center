@@ -106,14 +106,14 @@ A device is issued **only after a successful password authentication**, or in 02
 after a verified recovery (A.7). This happens in one `auth` transaction:
 
 1. `SELECT ... FOR UPDATE` on the student row. This keeps the existing lock order (Student first) and serializes device issuance per student. **Under that lock** (implemented in S0-02A):
-   * the supplied username must equal the student's **stored** username exactly, and the binding key is derived from the record;
+   * the supplied username must equal the student's **stored** username exactly. The record is bound by the student **UUID foreign key**; there is no username-derived key (review F02);
    * the caller's `credential_stamp` (the password-derived `get_session_auth_hash()` captured when the password was verified) must still match.
    
    So a login verified before a password change or reset can never create trust after it.
 2. If the browser presented a cookie for a record of *this* student, rotate that record instead of creating a new one (A.4.3).
 3. Otherwise, if the student has 10 or more live records, delete the least-recently-used ones down to 9 (`ORDER BY last_used_at, id`).
-4. Insert a record with `username_key = HMAC(normalized username)`, `expires_at = now + 30 days`, and `current_digest`.
-5. After commit, set the cookie. If the browser held a cookie for a **different** student, that student's record is deleted in the same transaction (single-account browser, A.4.4).
+4. Insert a record with `student_id`, `expires_at = now + 30 days`, and `current_digest`.
+5. After commit, set the cookie. If the browser held a cookie for a **different** student, only the **cookie** is replaced. The other student's server record is **not** touched; it expires or is evicted under that student's own cap (review F08: no cross-account mutation).
 
 Abuse resistance:
 
@@ -129,7 +129,7 @@ On a login POST with a cookie:
 1. Verify the signature with the purpose salt (`SECRET_KEY` plus `SECRET_KEY_FALLBACKS`). Invalid → unfamiliar path (no DB access).
 2. Look up the digest (`current_digest = d OR previous_digest = d`), joined to `accounts_student.is_active` and `expires_at > now()`.
 3. **Superseded identifier.** A match on `previous_digest` within `ROTATION_GRACE` (60 s) of `rotated_at` is a concurrent tab (`grace`; see A.19 C). After the grace window it is a replayed copy: delete the record, log `device_reuse_detected`, and use the unfamiliar path. Replay detection happens before the username check, so a replay is revoked whatever username accompanies it.
-4. A `current_digest` match whose `username_key` differs from the submitted username's key → unfamiliar path. The record is untouched, because it may be another legitimate account on that browser.
+4. A `current_digest` match whose owner's **stored** username is not exactly equal to the submitted (form-cleaned, NFKC) username → unfamiliar path. This is the same exact-match identity `StudentBackend` uses: `Jordan` and `jordan` are different accounts. The record is untouched, because it may be another legitimate account on that browser.
 5. Otherwise → trusted path. This is used **only** to choose throttle buckets. The password is always checked by the unchanged `StudentBackend`.
 
 On every **successful** trusted login, the ID rotates: a new random ID is generated, `previous_digest` is set to the old one, `current_digest` to the new one, `last_used_at` and `expires_at` (now + 30 days) are updated, and a new cookie is set. A thief replaying the old cookie after the victim's next login triggers step 3, which revokes the device for both parties. The student simply re-earns trust at their next successful login.
@@ -161,7 +161,7 @@ usage data.
 | "Forget all trusted browsers" (settings page, POST + CSRF + authenticated session) | All deleted | Cleared on this browser |
 | Account compromise | Owner resets the password → all deleted. Sessions are already invalidated by the existing auth-hash check. | — |
 | Deactivation (`is_active=false`, offline) | Lookup join ignores them; runbook deletes them; cleanup removes them | Ignored |
-| `DJANGO_SECRET_KEY` rotation | Unchanged (`username_key` is checked against the current key and every fallback) | With the old key in `SECRET_KEY_FALLBACKS`: still valid; a rotation re-signs the cookie, but the record's `username_key` stays bound to the old key, so trust ends when the fallback is removed. Without: signature fails, so the browser is treated as unfamiliar (graceful) and the record expires. |
+| `DJANGO_SECRET_KEY` rotation | Unchanged (binding is the student UUID, independent of keys) | With the old key in `SECRET_KEY_FALLBACKS`: still valid, and re-signed at the next rotation. Without: signature fails, so the browser is treated as unfamiliar (graceful) and the record expires. |
 | Logout | Unchanged (device trust is not a session) | Kept |
 
 ### A.5 Database schema proposal (S0-02A, new migration `accounts.0003`)
@@ -170,7 +170,6 @@ usage data.
 CREATE TABLE accounts_trusteddevice (
     id               uuid PRIMARY KEY,
     student_id       uuid NOT NULL REFERENCES accounts_student(id) DEFERRABLE INITIALLY DEFERRED,
-    username_key     char(64) NOT NULL,
     current_digest   char(64) NOT NULL UNIQUE,
     previous_digest  char(64) UNIQUE,
     rotated_at       timestamptz,          -- NULL iff previous_digest IS NULL (CHECK)
@@ -178,8 +177,7 @@ CREATE TABLE accounts_trusteddevice (
     last_used_at     timestamptz NOT NULL,
     expires_at       timestamptz NOT NULL,
     CONSTRAINT trusteddevice_hex CHECK (current_digest ~ '^[0-9a-f]{64}$'
-        AND (previous_digest IS NULL OR previous_digest ~ '^[0-9a-f]{64}$')
-        AND username_key ~ '^[0-9a-f]{64}$'),
+        AND (previous_digest IS NULL OR previous_digest ~ '^[0-9a-f]{64}$')),
     CONSTRAINT trusteddevice_rotation CHECK (previous_digest IS DISTINCT FROM current_digest),
     CONSTRAINT trusteddevice_expiry CHECK (expires_at > created_at
         AND expires_at <= last_used_at + interval '31 days')
@@ -213,15 +211,17 @@ Notes:
 | --- | --- | --- | --- |
 | IP failure (`AuthThrottle`, existing key) | `client_address()` (IPv4 or IPv6 /64) | 10 / 15 min (`AUTH_RATE_LIMITS['login']`) | **Failures** (reserve, release on success) |
 | `ip_ceiling` | same source | 60 / 15 min | **All** attempts, successes included (bounds hashing CPU and session creation per source) |
-| `account_fail` | `NFKC(username).casefold()` | 10 / 15 min | Failures on the unfamiliar path |
+| `account_fail` | exact form-cleaned (NFKC) username, **no casefold** | 10 / 15 min | Failures on the unfamiliar path |
 | `account_trusted_fail` | same | 20 / 15 min | Failures on the trusted path, across **all** of the account's devices |
 | `account_success` | same | 20 / hour | Successful logins on either path (bounds session creation per account) |
 | `device_fail` | device record id | 5 / 15 min | Failures on that device; reaching the limit deletes the device |
 
 Bucket = `salted_hmac("ucc-login-limit", f"{kind}|{subject}", algorithm="sha256")`.
 Unknown and known usernames compute identically, with no account lookup. The
-username is normalized exactly as `UsernameField` does (NFKC), then casefolded.
-That over-groups case variants, which is conservative.
+subject is the exact value passed to `authenticate()` (the form's NFKC-cleaned
+username), matching `StudentBackend`'s exact lookup. It is **not** casefolded:
+case-folding would let failures against `Jordan` restrict the distinct account
+`jordan` (review F02).
 
 | Path | Buckets reserved before checking the password |
 | --- | --- |

@@ -9,7 +9,12 @@ Security properties:
   digest is stored. A database reader cannot reconstruct a usable cookie.
 - Cookies are additionally signed (purpose salt, SECRET_KEY + SECRET_KEY_FALLBACKS,
   30-day max age) so junk is rejected before any database access.
-- Records are bound to one account through an HMAC of the normalized username.
+- Records are bound to one account by the immutable Student UUID (foreign key).
+  Before authentication, check() compares the device owner's STORED username with
+  the submitted username exactly -- the same exact-match identity semantics as
+  StudentBackend (Django's form NFKC-normalizes before both). After authentication,
+  rotate() compares the authenticated Student UUID. Nothing is casefolded, so
+  case-distinct or normalization-distinct accounts never share device trust.
 - Rotation replaces the identifier on each successful use; a superseded identifier
   is honoured only inside a short grace window (concurrent tabs) and otherwise
   revokes the record (replay of a copied cookie).
@@ -34,21 +39,17 @@ import hashlib
 import hmac
 import re
 import secrets
-import unicodedata
 import uuid
-from django.conf import settings
 from django.core import signing
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from django.utils.crypto import salted_hmac
 from .models import LoginLimit, Student, TrustedDevice
 
 DEVICE_LIFETIME = timedelta(days=30)
 MAX_DEVICES_PER_STUDENT = 10
 ROTATION_GRACE = timedelta(seconds=60)
 COOKIE_SALT = 'ucc.trusted-device.v1'
-USERNAME_KEY_SALT = 'ucc.trusted-device.username.v1'
 MAX_COOKIE_LENGTH = 256
 ALIAS = 'auth'
 _IDENTIFIER = re.compile(r'\A[A-Za-z0-9_-]{43}\Z')  # 32 random bytes, unpadded URL-safe base64
@@ -101,24 +102,11 @@ def identifier_digest(identifier):
     return hashlib.sha256(f'{COOKIE_SALT}|{identifier}'.encode('ascii')).hexdigest()
 
 
-def _normalized(username):
+def _valid_username(username):
+    """Shape check only. Deliberately NO normalization: identity is the exact stored value."""
     if not isinstance(username, str) or not username or len(username) > 150:
         raise DeviceError('A username is required.')
-    return unicodedata.normalize('NFKC', username).casefold()
-
-
-def username_key(username):
-    return salted_hmac(USERNAME_KEY_SALT, _normalized(username), algorithm='sha256').hexdigest()
-
-
-def _username_matches(stored, username):
-    """Accept keys made with SECRET_KEY or an explicitly configured fallback key."""
-    value = _normalized(username)
-    for secret in [settings.SECRET_KEY, *getattr(settings, 'SECRET_KEY_FALLBACKS', [])]:
-        candidate = salted_hmac(USERNAME_KEY_SALT, value, secret=secret, algorithm='sha256').hexdigest()
-        if hmac.compare_digest(candidate, stored):
-            return True
-    return False
+    return username
 
 
 def cookie_value(identifier):
@@ -155,7 +143,7 @@ def issue(student_id, username, *, credential_stamp, now=None):
       meantime makes issuance fail instead of re-creating trust.
     """
     now = now or timezone.now()
-    _normalized(username)
+    _valid_username(username)
     if not isinstance(credential_stamp, str) or not credential_stamp:
         raise DeviceError('A credential stamp is required.')
     with transaction.atomic(using=ALIAS):
@@ -167,7 +155,6 @@ def issue(student_id, username, *, credential_stamp, now=None):
             raise DeviceError('The username does not belong to this student.')
         if not hmac.compare_digest(student.get_session_auth_hash(), credential_stamp):
             raise DeviceError('Credentials changed; device not issued.')
-        key = username_key(student.username)
         devices = TrustedDevice.objects.using(ALIAS).filter(student_id=student_id)
         devices.filter(expires_at__lte=now).delete()
         live = list(devices.order_by('last_used_at', 'id').values_list('pk', flat=True))
@@ -176,44 +163,55 @@ def issue(student_id, username, *, credential_stamp, now=None):
             devices.filter(pk__in=live[:excess]).delete()
         identifier = new_identifier()
         record = TrustedDevice.objects.using(ALIAS).create(
-            id=uuid.uuid4(), student_id=student_id, username_key=key,
+            id=uuid.uuid4(), student_id=student_id,
             current_digest=identifier_digest(identifier), created_at=now,
             last_used_at=now, expires_at=now + DEVICE_LIFETIME)
     return Issued(record.pk, record.expires_at, cookie_value(identifier))
 
 
-def _classify(record, digest, username, now):
+def _classify(record, digest, same_account, now):
     if record is None:
         return 'absent'
     if record.current_digest != digest:
         # Superseded identifier: a concurrent tab inside the grace window, otherwise replay.
         if record.rotated_at is not None and now - record.rotated_at <= ROTATION_GRACE:
-            return 'grace' if _username_matches(record.username_key, username) else 'mismatch'
+            return 'grace' if same_account else 'mismatch'
         return 'replayed'
-    return 'trusted' if _username_matches(record.username_key, username) else 'mismatch'
+    return 'trusted' if same_account else 'mismatch'
 
 
 def check(cookie, username, *, now=None):
-    """Classify a presented cookie for a submitted username. Revokes a replayed record."""
+    """Classify a presented cookie for the submitted username (before authentication).
+
+    `username` must be the exact value passed to authenticate() (the form's cleaned,
+    NFKC-normalized username). It matches only if it EQUALS the device owner's stored
+    username, i.e. only if StudentBackend would look up that same account.
+    Revokes a replayed record.
+    """
     now = now or timezone.now()
     identifier = read_cookie(cookie)
     if identifier is None:
         return Check('absent')
     try:
-        _normalized(username)
+        _valid_username(username)
     except DeviceError:
         return Check('absent')
     digest = identifier_digest(identifier)
-    record = _live(now).filter(Q(current_digest=digest) | Q(previous_digest=digest)).first()
-    status = _classify(record, digest, username, now)
+    record = (_live(now).select_related('student')
+              .filter(Q(current_digest=digest) | Q(previous_digest=digest)).first())
+    same = record is not None and record.student.username == username
+    status = _classify(record, digest, same, now)
     if status == 'replayed':
         # Conditional delete: only the record that still lists this superseded digest.
         TrustedDevice.objects.using(ALIAS).filter(pk=record.pk, previous_digest=digest).delete()
     return Check(status, record.pk if record is not None and status != 'absent' else None)
 
 
-def rotate(cookie, username, *, now=None):
+def rotate(cookie, student_id, *, now=None):
     """After a SUCCESSFUL password check (S0-02B): replace the identifier atomically.
+
+    `student_id` is the UUID of the student the backend actually authenticated; the
+    device must belong to exactly that student or nothing changes ('mismatch').
 
     The record row is locked, so two tabs presenting the same identifier are
     serialized: the first rotates and receives a new cookie; the second re-reads the
@@ -222,17 +220,13 @@ def rotate(cookie, username, *, now=None):
     """
     now = now or timezone.now()
     identifier = read_cookie(cookie)
-    if identifier is None:
-        return Rotation('absent')
-    try:
-        _normalized(username)
-    except DeviceError:
+    if identifier is None or not isinstance(student_id, uuid.UUID):
         return Rotation('absent')
     digest = identifier_digest(identifier)
     with transaction.atomic(using=ALIAS):
         record = (_live(now).select_for_update(of=('self',))
                   .filter(Q(current_digest=digest) | Q(previous_digest=digest)).first())
-        status = _classify(record, digest, username, now)
+        status = _classify(record, digest, record is not None and record.student_id == student_id, now)
         if status == 'replayed':
             TrustedDevice.objects.using(ALIAS).filter(pk=record.pk).delete()
             return Rotation('replayed', record.pk)

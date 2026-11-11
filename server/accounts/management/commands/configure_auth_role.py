@@ -54,7 +54,7 @@ class Command(BaseCommand):
                     sql.SQL(', ').join(map(sql.Identifier, fields)), sql.Identifier(table), sql.Identifier(role)))
             # S0-02A trusted-device/login-limit tables (accounts.0003). Granted only when the
             # migration is applied; middleware fails closed if they exist without these grants.
-            # Identity binding (id, student_id, username_key, created_at, bucket, kind) is never updatable.
+            # Identity binding (id, student_id, created_at, bucket, kind) is never updatable.
             for table, fields in (
                 ('accounts_trusteddevice', ['current_digest', 'previous_digest', 'rotated_at', 'last_used_at', 'expires_at']),
                 ('accounts_loginlimit', ['attempts', 'expires_at']),
