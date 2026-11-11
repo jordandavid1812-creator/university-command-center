@@ -1,4 +1,4 @@
-# Milestone 4A — functional student website
+# Student website — Milestones 4A and 4B
 
 The Django student website now provides the core academic capabilities of the local
 Streamlit application, using PostgreSQL-owned records. It uses server-rendered
@@ -207,8 +207,8 @@ python -m pip check
 python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner off -r requirements-lock.txt -r requirements-django-lock.txt
 ```
 
-CI runs the 52 new website tests against PostgreSQL in addition to all 255 existing
-tests and both runtime-lock audits. Tests use synthetic accounts/records and actual
+CI runs the 69 website tests (52 from 4A and 17 polish regressions) against PostgreSQL in addition to all 268 pre-website
+tests (including the 13 S1 source-address regressions) and both runtime-lock audits. Tests use synthetic accounts/records and actual
 separate LOGIN connections, not SQLite or SET ROLE from a privileged session.
 The test-only default migration connection never serves website queries.
 
@@ -218,3 +218,36 @@ backups/restore, monitoring, load/pool testing and account/data lifecycle design
 Milestone 4B can review broader device/screen-reader accessibility, larger-account
 selectors/performance, preferences and additional product polish. No payments,
 subscriptions, social login, mobile app, deployment or automatic merge is included.
+
+
+## Milestone 4B refinement
+
+The dashboard now puts actual results below a compact heading and offers first-time
+semester/course/assignment steps. Overdue workload counts link directly to tasks.
+Course lists search by code/name; assignment lists search by title/course code/name.
+Search is literal, case-insensitive and capped at 80 characters. Combine it with
+semester/status/sort filters; pagination and refresh preserve it. Clear filters
+returns to the complete list. It does not change CGPA scope or any safety limit.
+
+Website/account forms share focusable error summaries. Optional controls are marked,
+parent help explains scoped choices, and hidden-version errors explain reloading.
+JavaScript only focuses feedback and provides existing busy-state support; forms
+and searches submit normally without it. Login includes session-expiry guidance.
+
+Read helpers reuse the verified capability ID inside student_transaction, retaining
+live-session checks, signed context, explicit owner filters and forced RLS. They do
+not cache identities/records or access a migration connection. All role/schema and
+academic calculation contracts remain unchanged.
+
+See [MILESTONE_4B_REVIEW.md](MILESTONE_4B_REVIEW.md) for the file inventory, measured
+query/timing changes, six-width browser checks, axe/manual audit coverage and limits.
+The opt-in benchmark uses the same disposable three-role web_test environment:
+
+```sh
+python server/manage.py test web_tests.benchmark --settings=config.settings.web_test -v 1
+```
+
+It creates/drops a synthetic test database and prints aggregate timing/query/index
+measurements. Never run tests against personal or live application data. Timing is
+local diagnostic evidence, not a production guarantee. Screen-reader and real-device
+validation, deeper search/selector scaling and production operations remain deferred.

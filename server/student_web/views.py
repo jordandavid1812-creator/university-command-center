@@ -75,11 +75,11 @@ def semester_list(request, identity):
 
 @protected()
 def course_list(request, identity):
-    selector = forms.SemesterFilter(request.GET, semesters=queries.options(identity, 'semester'))
+    selector = forms.CourseFilter(request.GET, semesters=queries.options(identity, 'semester'))
     if not selector.is_valid():
         return render(request, 'student_web/courses.html', {'filter': selector}, status=400)
     page = queries.page(identity, 'course', number=selector.cleaned_data['page'] or 1,
-                        semester_id=selector.cleaned_data['semester'])
+                        semester_id=selector.cleaned_data['semester'], search=selector.cleaned_data['q'])
     return render(request, 'student_web/courses.html', {**page_context(page, request.GET), 'filter': selector})
 
 
@@ -91,7 +91,7 @@ def assignment_list(request, identity):
     today = timezone.localdate()
     page = queries.page(identity, 'assignment', number=selector.cleaned_data['page'] or 1,
                         status=selector.cleaned_data['status'] or 'all', sort=selector.cleaned_data['sort'] or 'due',
-                        today=today)
+                        today=today, search=selector.cleaned_data['q'])
     return render(request, 'student_web/assignments.html', {**page_context(page, request.GET), 'filter': selector,
                   'today': today})
 

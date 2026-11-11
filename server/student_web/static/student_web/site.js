@@ -33,3 +33,9 @@ window.addEventListener('pageshow', () => {
   document.querySelectorAll('form[aria-busy]').forEach((form) => form.removeAttribute('aria-busy'));
   document.querySelectorAll('[data-busy-status]').forEach((status) => status.remove());
 });
+
+// Server-rendered errors stay readable without JavaScript. Move keyboard focus
+// only after a failed submission; never move focus on successful GET navigation.
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelector('#error-summary')?.focus();
+});

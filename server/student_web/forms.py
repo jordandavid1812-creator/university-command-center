@@ -7,6 +7,15 @@ from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 
 
 class StrictForm(forms.Form):
+    def __getitem__(self, name):
+        field = super().__getitem__(name)
+        if not field.field.required and not field.field.widget.is_hidden:
+            label = field.field.label or field.label
+            if not label.endswith(' (optional)'):
+                field.field.label = label + ' (optional)'
+                field.label = field.field.label
+        return field
+
     def clean(self):
         values = super().clean()
         if self.is_bound and set(self.data) - set(self.fields) - {'csrfmiddlewaretoken'}:
@@ -25,7 +34,7 @@ class CourseForm(StrictForm):
                                     help_text='Unique across your semesters. Letters, numbers, spaces and _ . / - are supported.')
     credit_units = forms.DecimalField(max_digits=11, decimal_places=4, min_value=Decimal('0.0001'), max_value=Decimal('1000000'),
                                       help_text='0.0001–1,000,000 credits, with at most four decimal places.')
-    semester_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Semester')
+    semester_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Semester', help_text='Only your semesters are available. Create one first if this list is empty.')
     actual_grade = forms.ChoiceField(required=False, choices=[('', 'Ungraded')] + [(g, g) for g in GRADE_POINTS],
                                     help_text='A=5, B=4, C=3, D=2, E=1, F=0. Ungraded is excluded from GPA.')
 
@@ -45,7 +54,7 @@ class CourseForm(StrictForm):
 
 class AssignmentForm(StrictForm):
     title = forms.CharField(max_length=240, label='Assignment title')
-    course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course')
+    course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available. The assignment stays linked if its course code changes.')
     due_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'), input_formats=['%Y-%m-%d'],
                                help_text='Deadlines use the Africa/Lagos calendar date. Overdue tasks stay in your records.')
     completed = forms.BooleanField(required=False, label='This assignment is complete')
@@ -82,7 +91,16 @@ class SemesterFilter(PageForm):
         self.fields['semester'].choices = [('', 'All semesters')] + [(str(s.pk), f'{i}. {s.label}') for i, s in enumerate(semesters, 1)]
 
 
+class CourseFilter(SemesterFilter):
+    q = forms.CharField(required=False, max_length=80, label='Search courses',
+                        help_text='Search course code or name. Up to 80 characters.',
+                        widget=forms.TextInput(attrs={'type': 'search'}))
+
+
 class AssignmentFilter(PageForm):
+    q = forms.CharField(required=False, max_length=80, label='Search assignments',
+                        help_text='Search title, course code or course name. Up to 80 characters.',
+                        widget=forms.TextInput(attrs={'type': 'search'}))
     status = forms.ChoiceField(required=False, choices=[('all', 'All assignments'), ('pending', 'Pending'),
                     ('completed', 'Completed'), ('upcoming', 'Upcoming'), ('overdue', 'Overdue')])
     sort = forms.ChoiceField(required=False, label='Sort by deadline', choices=[('due', 'Earliest first'), ('latest', 'Latest first')])

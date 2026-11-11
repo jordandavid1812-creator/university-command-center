@@ -3,7 +3,7 @@ name: Foundation quality
 on:
   pull_request:
   push:
-    branches: [master, feature/database-foundation, feature/database-security, feature/student-authentication, feature/student-web-app]
+    branches: [master, feature/database-foundation, feature/database-security, feature/student-authentication, feature/student-web-app, feature/student-web-polish]
   schedule:
     - cron: '17 7 * * 1'
   workflow_dispatch:

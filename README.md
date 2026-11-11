@@ -162,3 +162,7 @@ See [student website setup, pages and limits](docs/STUDENT_WEBSITE.md). Run loca
 with `python server/manage.py runserver 127.0.0.1:8000 --settings=config.settings.web_development`
 after the separate role/schema setup, then open `http://127.0.0.1:8000/`.
 No personal JSON import, public deployment or replacement of CLI/Streamlit is included.
+
+Milestone 4B refines the student dashboard, search, form feedback and mobile/keyboard
+experience. See [the quality review](docs/MILESTONE_4B_REVIEW.md) and
+[website guide](docs/STUDENT_WEBSITE.md) for verification and local startup.
