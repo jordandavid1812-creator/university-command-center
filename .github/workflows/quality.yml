@@ -3,7 +3,7 @@ name: Foundation quality
 on:
   pull_request:
   push:
-    branches: [master, feature/database-foundation]
+    branches: [master, feature/database-foundation, feature/database-security]
   schedule:
     - cron: '17 7 * * 1'
   workflow_dispatch:
@@ -69,6 +69,10 @@ jobs:
       PGUSER: ucc_ci
       PGDATABASE: ucc_ci_scratch
       PGTESTDATABASE: test_ucc_ci
+      UCC_MIGRATION_ROLE: ucc_migrator_ci
+      UCC_RUNTIME_ROLE: ucc_runtime_ci
+      UCC_SECURITY_SCRATCH_DATABASE: ucc_security_scratch
+      UCC_DISPOSABLE_TEST_CLUSTER: '1'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -77,8 +81,21 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
-      - name: Generate ephemeral Django key
-        run: python -c "import os, secrets; open(os.environ['GITHUB_ENV'], 'a').write('DJANGO_SECRET_KEY=' + secrets.token_urlsafe(64) + '\n')"
+      - name: Generate and mask ephemeral test secrets
+        run: |
+          python - <<'PY'
+          import os, secrets
+          values = {
+              'DJANGO_SECRET_KEY': secrets.token_urlsafe(64),
+              'UCC_MIGRATION_PASSWORD': secrets.token_urlsafe(32),
+              'UCC_RUNTIME_PASSWORD': secrets.token_urlsafe(32),
+              'UCC_CONTEXT_SIGNING_KEY': secrets.token_hex(32),
+          }
+          with open(os.environ['GITHUB_ENV'], 'a') as target:
+              for name, value in values.items():
+                  print(f'::add-mask::{value}')
+                  target.write(f'{name}={value}\n')
+          PY
       - run: python -m pip install --upgrade pip==26.3
       - run: python -m pip install --require-hashes -r requirements-django-lock.txt
       - run: python -m pip check
@@ -86,3 +103,12 @@ jobs:
       - run: python server/manage.py makemigrations --check --dry-run
       - run: python server/manage.py migrate --noinput
       - run: python server/manage.py test accounts academics --settings=config.settings.test -v 2
+      - name: Create dedicated roles on disposable test cluster
+        run: python tools/prepare_security_test_roles.py
+      - name: Security suite using separate non-superuser migration and runtime logins
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_security
+        run: python server/manage.py test security_tests --settings=config.settings.security_test -v 2

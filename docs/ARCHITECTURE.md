@@ -32,3 +32,13 @@ storage. UUID accounts own semesters, courses and assignments. Database checks
 and composite foreign keys protect data integrity; request-level owner isolation
 is deferred to Milestone 2B. See [DATABASE_FOUNDATION.md](DATABASE_FOUNDATION.md)
 for model relationships, exact numeric storage, migrations and security boundaries.
+
+## Database security (Milestone 2B)
+
+Django academic access now goes through owner-scoped services and forced
+PostgreSQL RLS under a restricted runtime login. Signed ownership context is
+transaction/backend-bound, rather than trusting a user-settable UUID setting.
+Services provide atomic units, compare-and-swap updates and version-checked
+deletes; semesters now also carry record_version. See
+[DATABASE_SECURITY.md](DATABASE_SECURITY.md) for the trust boundary and operational
+role setup. The CLI/Streamlit JSON architecture remains independent.

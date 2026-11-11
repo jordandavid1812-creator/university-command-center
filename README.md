@@ -139,3 +139,8 @@ Streamlit. It has no login/registration routes and is not approved for public
 hosting. See [local setup, schema, testing and security limits](docs/DATABASE_FOUNDATION.md)
 and the [implementation plan](docs/MILESTONE_2A_PLAN.md). Owner isolation must still
 be verified in Milestone 2B.
+
+Milestone 2B adds [database security and student isolation](docs/DATABASE_SECURITY.md):
+owner-scoped services, restricted PostgreSQL roles, forced RLS and optimistic
+concurrency. These controls are tested database foundations; public authentication,
+registration and deployment remain outside scope.
