@@ -1,11 +1,11 @@
 # Stage B: S0-02B/C authentication security implementation plan
 
-**Status: planning only. Revision 2:** B1 is refined per the owner's seven review points (§6). Nothing in this document is implemented or authorized.
+**Status: planning only. Revision 3:** B1 is corrected after Codex's independent review (verdict REQUEST CHANGES on revision 2, `7f438b1`; `docs/security/B1_INDEPENDENT_DESIGN_REVIEW.md`, merged in PR #37). See the correction matrix in §6.0. Nothing in this document is implemented or authorized.
 
 | Item | Value |
 | --- | --- |
 | Prepared | 12 November 2026 (Africa/Lagos) |
-| Baseline | `master` `8295fbd` (includes PR #30) |
+| Baseline | `master` `c19c1a3` (includes PR #30 and PR #37: the independent B1 review and probe appendix) |
 | Analysed tree | A local, never-pushed scratch merge of `master` + PR #29 (`42910ed`) + PR #26 (`44c515f`). Both merged with no conflicts (`docs/AUTHENTICATION.md` auto-merged). That is static evidence only; no tests were run on it. |
 | PR #26 and PR #29 | Read, not modified |
 | Owner decisions so far | B1 accepted as the first candidate, subject to this refinement; timeout values remain **configurable candidates**, not production limits |
@@ -41,7 +41,7 @@ This plan does not repeat that design. It turns it into small, reviewable PRs ag
 | ID | Gap | Location | Severity before activation |
 | --- | --- | --- | --- |
 | G1 | No `lock_timeout`, `statement_timeout` or `idle_in_transaction_session_timeout` on application aliases. A held Student lock stalls login, reset and change without limit. | `config/settings/base.py:36-37` | High (availability) |
-| G2 | Database errors raised **after** the middleware's role checks become a generic **500** in account views. No stage-specific contract. | `accounts/middleware.py`; `config/web_urls.py` handler500 | Medium |
+| G2 | Database errors raised **after** the middleware's role checks become a generic **500** in account views. Session-save database errors become **400** via `SessionInterrupted` (Codex B1-01). The shared error template is unavailable in auth profiles (B1-05), and Django error logs carry token paths and exception text (B1-07). | `accounts/middleware.py`; `config/web_urls.py`; Django session middleware | Medium |
 | G3 | The authenticated session payload is persisted by `SessionMiddleware` **after** the login transaction commits (Codex PR #32, Low). It is safe today, but device issuance cannot be made atomic with the session. | `accounts/views.py` login; Django `SessionMiddleware` | Blocks atomic device finalization |
 | G4 | No account-aware failure tracking. Distributed guessing is limited only per source. | `accounts/views.py` login | High (S0-02, P2) |
 | G5 | The IP login bucket counts **successes**, so many students behind one NAT block each other. | `accounts/throttling.py`, `AUTH_RATE_LIMITS['login']` | Medium (availability) |
@@ -90,7 +90,7 @@ flowchart TD
 
 | Component | New or changed | Responsibility | Security boundary |
 | --- | --- | --- | --- |
-| `accounts/dbsafety.py` (new) | B1 | Per-alias timeout options (merged, application aliases only). SQLSTATE-based `classify_database_failure`. `AuthFailureMiddleware.process_exception` plus a `handler500` classification for response-phase failures (§6.3). | Never retries security work; recoverable errors get 503, defects stay 500; Django's `SessionMiddleware` never saves a session or sets its cookie on 5xx (§6.4) |
+| `accounts/dbsafety.py`, `failure_response.py`, `logging.py` (new) | B1 | Application-alias timers plus `connect_timeout`. A cause/context chain-walking classifier. **Three** catch points: `process_exception`, `handler500`, and `handler400` for the session-save `SessionInterrupted` path. A template-free renderer and Django error-log redaction. | No retry; database-origin failures get 503, a genuine concurrent logout stays 400, defects stay 500. **No claim** that 5xx rolls back writes or revokes pre-existing sessions (§6.2). |
 | `accounts/login_flow.py` (new) | B2, then extended | `finalize_login(request, verified, raw_password)`: one auth transaction holding the Student lock, re-validation, `auth_login`, explicit session save | Replaces only the body of PR #29's finalizer; same lock order |
 | `accounts/security_events.py` (new) | B3 | Allowlisted event names and fields, an independent pseudonym key, dedup by bucket window | No usernames, IPs, tokens, cookies or paths |
 | `accounts/admission.py` (new) | B4 | T1 reservation; T2 settlement helpers over `AuthThrottle` and `LoginLimit` | Auth connection only; sorted lock order; observe/enforce mode |
@@ -117,8 +117,8 @@ Each PR is separately reviewed, gets its own PG17 CI, and is independently verif
 
 | PR | Scope | Depends on | Migration | Live behaviour change | Owner decision |
 | --- | --- | --- | --- | --- | --- |
-| **B0** | Stage A: merge #29, then #26 (Codex sequence) | Owner | `accounts.0003` | None (dormant) | Merge authorizations |
-| **B1** | **Bounded database waits + safe authentication failures** (§6) | #29 merged | No | Recoverable DB failures give a generic 503; defects stay 500; outcome-uncertain wording on recovery and change pages | Timeout candidates; 503/500 classification |
+| **B0** | Stage A: merge #29, then #26 (Codex sequence) | Owner | `accounts.0003` | **Yes:** #29 changes live login finalization (F04b fix: setter-free verification, CAS upgrade, locked revalidation). #26 is dormant. | Merge authorizations |
+| **B1** (B1a–B1d, §6.11) | **Bounded database waits + safe authentication failure handling** (§6, revision 3) | #29 merged | No | Database-origin failures on account routes and the session-save 400 path give a generic template-free 503; defects stay 500; existing handled contracts preserved; Django error-log redaction; uncertain-outcome wording | D-B1-1 to D-B1-5 (§6.13) |
 | B2 | Transactional login finalization: explicit session save inside T2 (closes G3, Codex PR #32 Low) | B1 | No | None visible; session row created atomically | — |
 | B3 | Security-event logging foundation (G6) | B1 | No | Log lines only | Logging key and retention; Stage D sink |
 | B4 | Account-aware admission in **observe** mode: T1/T2 accounting, `account_fail`, `account_success` acquired in T2 | B2, B3, #26 | No (uses `LoginLimit`) | None; logs `would_restrict` only | Thresholds (initial 10/15 min) |
@@ -142,7 +142,7 @@ All tests use PostgreSQL 17 with real distinct migrator, runtime and auth LOGINs
 
 | PR | Negative | Concurrency | Replay | Failure injection | PG17-specific |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Timeouts absent on the migrator alias; values present on auth and runtime (`SHOW`); defects stay 500 | Login, reset and change waiting on a Student lock held by another connection, then 503 within the bound | — | P1–P4 phases (§6.1): before and after server commit, lost acknowledgement, session save in the response phase, client disconnect. Access invariants A1–A6 (§6.8) are asserted **without assuming rollback**. | `lock_timeout` raises 55P03, `statement_timeout` raises 57014, the idle timeout raises 25P03 (`InternalError`) |
+| B1 | No B1 options on the migrator; duplicate or zero overrides rejected; a genuine concurrent logout stays 400; defects stay 500; existing handled contracts preserved | Real 55P03 on the Student and session rows; concurrent logins in the SA/DA cookie states | — | **Flow × phase × initial-cookie** matrix (§6.9), P0–P5 per write unit, real server abort versus commit-then-acknowledgement-loss, the session-save 400 path, log-redaction sentinels; allowed outcome sets, **no rollback assumed** | 55P03 / 57014 / 25P03 (`InternalError`); a deferred-trigger COMMIT exceeds `statement_timeout`; `connect_timeout` per attempt |
 | B2 | No session row if T2 rolls back | Reset racing finalization in **both** orders (Codex probe 3 becomes a regression) | — | Fault after `auth_login`, at session save, at commit | Real row locks |
 | B3 | Sentinel username, IP, token, cookie and password never appear in captured logs; reset paths never logged | Dedup under N threads | — | Logging failure never blocks auth | — |
 | B4 | 20 failures across windows don't consume `account_success`; unknown and known accounts are identical | N+1 admissions, exactly N password checks (backend call counter); finalizations never exceed the success limit | — | T1 rollback consumes nothing; crash between T1 and T2 counts as a failure only | Campus simulation (11/61/601 students) **in observe mode** |
@@ -173,201 +173,418 @@ All tests use PostgreSQL 17 with real distinct migrator, runtime and auth LOGINs
 
 ---
 
-## 6. First implementation proposal: B1 (bounded database waits and safe authentication failures)
+## 6. First implementation proposal: B1 (revision 3: corrected after the independent review)
 
-**Status.** Owner-selected first candidate. This section is a **specification**: it is refined for review and **not implemented**. Every behavioural claim below that cites Django or psycopg was checked against the installed versions (Django 5.2.19, psycopg 3.3.8); file and line references are given.
+**Status.** Specification only, **not implemented**.
 
-**Objective.** Every authentication database interaction is **bounded in time** and, when it fails, **cannot grant or extend access**. The client gets a generic response that never claims more certainty than the system has. B1 does **not** promise that a failed HTTP response means nothing was written: §6.1–6.2 define exactly what may have been persisted.
+Revision 3 replaces revision 2 (`7f438b1`), which Codex reviewed with the verdict **REQUEST CHANGES** (`docs/security/B1_INDEPENDENT_DESIGN_REVIEW.md` and `B1_INDEPENDENT_PROBE_APPENDIX.md`, merged in PR #37). Revision 2 made false framework and database guarantees. This revision withdraws them and narrows B1 to what the evidence supports.
 
-### 6.1 Failure timing taxonomy: before, during and after commit
+**Evidence base for revision 3:**
 
-| Phase | Example failures | Database outcome | Access outcome | Response |
-| --- | --- | --- | --- | --- |
-| **P0** pre-request | Role-boundary check fails; no connection | Nothing written | None granted | Existing middleware 503 (unchanged) |
-| **P1** before first write | `lock_timeout` waiting for the Student row; `statement_timeout`; connection refused | Nothing written in this transaction | None granted | 503 (recoverable, §6.3) |
-| **P2** after writes, before `COMMIT` | Timeout or error on a later statement; `idle_in_transaction_session_timeout` kills the session; client-side connection loss | **Rolled back.** Django's `Atomic.__exit__` rolls back, and the server aborts any transaction whose connection ends without `COMMIT`. | None granted | 503 or 500 per §6.3 |
-| **P3** during `COMMIT` | `COMMIT` raises (connection lost, server shutdown) | **Unknown: committed or rolled back.** Django attempts a rollback and re-raises (`django/db/transaction.py:263-271`). The server may have committed before the acknowledgement was lost. | Must be safe **in both cases** (§6.2) | 503 with **outcome-uncertain** wording on recovery and change pages |
-| **P4** after commit, in the response path | `SessionMiddleware.process_response` save fails; another middleware raises; the WSGI write fails (client gone) | **Committed** | Must be safe with the commit (§6.2, §6.4) | 500 or 503 per §6.3; or no response delivered |
+* All 14 of Codex's probes, rerun **unmodified** against the approved PR #29 code (`42910ed`) with the repository `AuthenticationTestRunner` and real separate migrator, runtime and auth LOGINs: **14/14 reproduce Codex's observations**.
+* Codex's native COMMIT experiment: **reproduces**.
+* Three new probes of mine (§6.12, source in Appendix B1-R): **3/3** as stated.
+* Environment: Django 5.2.19, psycopg 3.3.8. My runs used local **PostgreSQL 16.15**, because PostgreSQL 17 can't be installed in my environment. Codex's runs used **PostgreSQL 17.11**. Every behaviour cited below matched across both. The PostgreSQL 17 hosted run of the eventual B1 tests remains mandatory.
 
-Rules:
+### 6.0 Finding-by-finding correction matrix
 
-* **Atomicity groups**, enforced by putting each group in **one** auth transaction (already true in the current code):
-  * Reset: password change **and** token consumption.
-  * Password change: password change **and** current-session deletion (`auth_logout` → `flush()` inside the same `atomic`).
-  * Login: session-key cycling **and** `last_login`.
-
-  A P3 outcome is therefore "whole group or nothing", never half.
-* `on_commit` email delivery runs **only after a successful commit** (`run_commit_hooks_on_set_autocommit_on` is set only after `_commit()` returns, `django/db/backends/base/base.py:323-330`). A P3 failure never sends mail for an uncommitted token. A token committed under P3 without its email is harmless: the next request issues a fresh link.
-* **No automatic retry** of any security step, in any phase. Retries are user-driven, and each user retry is safe against either P3 outcome (§6.2).
-
-### 6.2 Consumed recovery tokens and password changes when the commit outcome is uncertain (P3/P4)
-
-| Flow | If committed | If not committed | Required B1 behaviour |
-| --- | --- | --- | --- |
-| **Password reset confirm** | New password valid, old invalid, token consumed; existing sessions invalidated by the auth-hash change | Old password valid, token still usable | Group-atomic (already). The 503 page for this route says: *"We could not confirm whether your new password was saved. Try signing in with the new password. If that fails, open your reset link again or request a new one."* Re-opening a consumed link shows the existing generic invalid-link page. No state reveals more than the link holder already knows. |
-| **Authenticated password change** | New password valid; all sessions invalid; this session row deleted | Old password valid; session row still exists server-side | The browser cookie is deleted **in both cases**: `flush()` empties the session, and Django's deletion branch runs even on 5xx (`django/contrib/sessions/middleware.py:35-43`). The 503 page says to sign in with whichever password works. A retry with the old password fails generically if the change committed; that is acceptable and documented. |
-| **Login** | A session row exists, created by `cycle_key()` → `create()` (`contrib/sessions/backends/db.py:68-79`), holding only the **previous anonymous** data; `last_login` updated | Nothing | `auth_login` writes `SESSION_KEY` and `HASH_SESSION_KEY` **in memory after** `cycle_key()` (`contrib/auth/__init__.py:187-193`). They are persisted only by `SessionMiddleware` on a **non-5xx** response, which also sets the cookie (`middleware.py:57-60`). A committed row from a failed login therefore has no `_auth_user_id`, and its random key never reached the client. **No access.** An updated `last_login` is acceptable and is not treated as rollback evidence. |
-| **Email request** (reset or verify) | New token stored; earlier same-purpose tokens revoked; no email sent (the hook is skipped) | Nothing | Unchanged generic response, so the student requests again. (Link-revocation semantics are B7's problem.) |
-| **Email verify confirm** | Verified and token consumed | Unverified, token usable | Group-atomic; outcome-uncertain wording; a retry shows "invalid link" if it committed |
-
-The B2 transactional finalization later strengthens login further: the authenticated payload is saved **inside** T2. B1 must not depend on B2.
-
-### 6.3 Classifying recoverable database errors versus programming defects
-
-Classification uses the **SQLSTATE** on the psycopg cause (`exc.__cause__.sqlstate`), not the Python class alone. Checked against psycopg 3.3.8: `idle_in_transaction_session_timeout` (25P03) is an **`InternalError`**, while `LockNotAvailable` (55P03) and `QueryCanceled` (57014) are **`OperationalError`**.
-
-| Class | SQLSTATE / exception | Meaning | HTTP | Retry-After | Log category |
+| Finding (severity) | Revision 2 error | Reproduced by me | Correction in revision 3 | Section | Status |
 | --- | --- | --- | --- | --- | --- |
-| **Recoverable, availability** | Class `08` (connection), `53` (insufficient resources, e.g. 53300 too many connections), `57P01`–`57P03` (shutdown / cannot connect now), `57014` (query cancelled or statement timeout), `55P03` (lock not available), `40001` and `40P01` (serialization failure, deadlock), `25P03` (idle-in-transaction timeout); Django `InterfaceError`; an `OperationalError` with **no** SQLSTATE (client-side connection loss) | Transient infrastructure condition | **503** | Yes (configurable, initially 5 s) | `db_unavailable` with the SQLSTATE class only |
-| **Configuration or privilege drift** | `42501` (insufficient privilege); `ImproperlyConfigured` from the role guards | The deployment is unsafe | **503** with **no** Retry-After (existing role-boundary semantics) | No | `db_misconfigured` (alert) |
-| **Programming defect** | Every other SQLSTATE, e.g. `42P01`/`42703` (undefined table or column), class `22` (`DataError`), class `23` (`IntegrityError`, unless a view handles it explicitly as today), `XX000`; non-DB exceptions | A bug, never masked as an outage | **500** (generic page; unchanged) | No | `defect` (alert) |
+| **B1-01** (High): a database-origin session-save error becomes a 400 and bypasses handler500 | Claimed `handler500` covers response-phase session failures (§6.4 row 3) and used a single `__cause__` hop | Yes: the chain from `SessionInterrupted` down to `LockNotAvailable` 55P03 returns 400 with 0 handler500 calls; `handler400` receives that exception object (my probe R1); a genuine concurrent logout chain has **no driver error and no SQLSTATE** (R2) | **Three** classification points: view `process_exception`, `handler500` (`sys.exc_info()`), and **`handler400(request, exception)`**. A bounded, cycle-safe walk of cause then context. 400 is reclassified **only** when a driver error with a SQLSTATE, or a connection-loss class, is present. A true concurrent logout stays 400. | 6.3, 6.4 | **Corrected (design)**; needs implementation evidence |
+| **B1-02** (High): 5xx does not guarantee no valid session, no prior access, or no expiry extension | Claimed universal A1–A3 and "cannot extend access" | Yes: a valid authenticated row behind a 500 for a new login; a known same-account session extended and still usable; the different-account case invalidates A, orphans B's key and leaves the browser on the dead A key (R3) | **Guarantees narrowed** to "no **new** authority delivered to a client that did not already hold it" when the failure precedes header emission. Orphaned rows and retention or extension of **pre-existing same-account** authority are documented as **existing behaviour that B1 preserves**. Any stronger contract is an **owner decision** (§6.13) and belongs in B2. | 6.2 | **Corrected (narrowed)**; residual risk RB-1/RB-2 |
+| **B1-03** (High): `statement_timeout` does not bound COMMIT; the Stage C budget is unsupported | Claimed "per statement, including COMMIT" and proposed Gunicorn ≥30 s / Caddy +5 s | Yes: COMMIT took 352 ms under a 100 ms `statement_timeout`, with the row committed; the default psycopg connect budget is 130 s | Claims removed. Each timer is stated with what it does and does **not** bound. An explicit `connect_timeout` is added. Request duration is analysed as a formula, not a promise. **No** worker or proxy values are proposed; those are Stage C decisions with their own evidence. PostgreSQL 17 `transaction_timeout` is **not** adopted (it needs its own review). | 6.5 | **Corrected**; residual risk RB-3 |
+| **B1-04** (Medium): a failed password change does not always flush or delete the cookie | Claimed the browser cookie is deleted "in both cases" | Yes: failure before flush or in the flush DELETE gives 500, no deletion cookie, and the old session stays valid | Split into pre-flush, in-flush, post-flush/pre-COMMIT and uncertain-COMMIT phases with explicit outcomes. B1 **preserves** prior access on failure. Explicit logout-on-failure is an owner decision. | 6.2 (F-CHG) | **Corrected (narrowed)**; decision D-B1-2 |
+| **B1-05** (Medium): the shared error renderer is unavailable in auth profiles and depends on context | Proposed reusing `student_web.views.server_error` | Yes: `TemplateDoesNotExist` in `auth_test` | A new **template-free, database-independent** renderer in `accounts`, with a constant body, no context processors, no URL reversing, no session or user access, and a plain-text last resort | 6.6 | **Corrected (design)** |
+| **B1-06** (Medium): universal A4/A5 and the fault matrix are invalid per flow | A4 "exactly one password" and A5 over all tokens; no verify matrix | Yes: a same-secret reset is legitimate; token issuance revokes older links | A **flow × phase × initial-cookie** matrix with allowed outcome sets. A4 only for distinct secrets. A5 is about the **nominated** token against a before snapshot. Email-hook assertions only at issuance. Checks run on a clean connection after waits. | 6.9 | **Corrected (design)** |
+| **B1-07** (Medium): Django error logs carry the secret path and exception text | Assumed generic bodies plus custom events were enough | Yes: the `django.request` record contains the reset secret and the private exception detail | B1 adds a **minimal logging boundary**: a redaction filter on `django.request` and `django.server` for token-bearing routes and exception text, no `mail_admins`, and tests with sentinels. Proxy and WSGI access logs go to Stage C. Retention goes to Stage D. | 6.7 | **Corrected (scoped)**; residual risk RB-4 |
+| **B1-08** (Medium): classification conflicts with existing handlers | "Defects stay 500 / no status below 500 on any path" | Code read: the role middleware catches all `DatabaseError` (503); registration handles `IntegrityError` (success page); academic wrappers return 503 | A precedence table by stage. Every existing contract is **preserved** and listed. B1 applies only to **unexpected, unhandled** exceptions on account routes and the session-middleware 400 path. Class 28 / 3D000 are misconfiguration. A bare `OperationalError` with no SQLSTATE is "ambiguous unavailable". | 6.3 | **Corrected (design)** |
+| Roadmap B0 description | "No live behaviour change" | — | B0 (merging PR #29) **does** change live login finalization (the F04b fix) | §3 | **Corrected** |
 
-Every class **denies access**. None triggers a retry or fallback. Error bodies are the existing generic templates and contain no SQL, SQLSTATE, role or exception text.
+### 6.1 Failure phases (per transaction or write, not per request)
 
-**Where classification happens.** There are two points, because exceptions raised **inside middleware** (for example a session save in `process_response`) never reach a view's `process_exception`; Django converts them through `handler500`:
+The phases apply **to each write unit separately**. A request contains several of them: the autocommit throttle upsert, the compare-and-swap hash upgrade (PR #29), the finalization transaction, and the response-phase session UPDATE. An earlier unit can commit while a later one fails, so **B1 never claims that a failed request rolled anything back**.
 
-1. `AuthFailureMiddleware.process_exception`, for view exceptions.
-2. A `server_error` wrapper that inspects `sys.exc_info()` inside the existing `handler500` (`config/web_urls.py`), and the same handler registered for `config/auth_urls.py` profiles, for middleware and response-phase exceptions.
-
-Both call one pure function, `classify_database_failure(exc) -> 'recoverable' | 'misconfigured' | 'defect'`, which is unit-testable with synthetic exceptions.
-
-### 6.4 Django session middleware behaviour for 500 and 503 (verified in the source)
-
-| Situation | `SessionMiddleware.process_response` | Consequence |
-| --- | --- | --- |
-| Any status ≥ 500, session modified and not empty | **Skips `save()` and `Set-Cookie`** (`middleware.py:57-60`) | Authentication data set by `auth_login` is never persisted or sent. **Safe.** |
-| Any status (including 5xx), request had a session cookie, session now empty (after `flush()`/`auth_logout`) | **Deletes the cookie** (`middleware.py:35-43`) | A failed password change still logs the browser out. **Safe** (it only removes access). |
-| `process_response` itself raises (session save DB error on a 2xx/3xx) | The exception propagates and Django converts it via `handler500` | Covered by classification point 2. The cookie is not set because `set_cookie` follows `save()`. **Safe.** |
-| `UpdateError` (concurrent logout) | `SessionInterrupted`, i.e. 400 | Existing behaviour, unchanged |
-
-B1 therefore keeps the 5xx status for every failure. It never converts a database failure into a 2xx/3xx page, which would let `SessionMiddleware` persist a half-built session.
-
-### 6.5 PostgreSQL timeout configuration and verification
-
-**Mechanism.** libpq startup `options` on the application aliases only:
-
-```
--c lock_timeout=<L> -c statement_timeout=<S> -c idle_in_transaction_session_timeout=<I>
-```
-
-These are applied through a helper that **merges** into each alias's existing `OPTIONS` and appends to any existing `options` string. It never replaces `sslmode`, `sslrootcert` or other keys. That costs no extra round trip. With `CONN_MAX_AGE=0`, every request's connections receive the values.
-
-**Scope.**
-
-* The `auth` alias, plus the academic alias named by `STUDENT_DB_ALIAS`: `default` in the runtime and web profiles, `runtime` in the test profiles.
-* **Not** the migrator, the test-provisioning `default` alias in test profiles, or the offline `auth_migration` profile, so migrations and provisioning are never killed.
-
-**Candidate values** (configurable starting points, **not** production limits; Stage E measurement decides):
-
-| Setting | Auth | Runtime | Constraint |
+| Phase | Meaning | Server-side outcome of **that** unit | Inspection rule |
 | --- | --- | --- | --- |
-| `lock_timeout` | 3 s | 3 s | Must be < `statement_timeout`, so lock waits report 55P03 rather than 57014 |
-| `statement_timeout` | 5 s | 10 s | Applies per statement, **including `COMMIT`** |
-| `idle_in_transaction_session_timeout` | 15 s | 15 s | Must exceed the longest Python work done **inside** an open transaction. The PR #29 finalizer may run one PBKDF2 check while holding the Student lock, and the reset and change views hash new passwords inside their transactions. A breach **terminates the session** (FATAL 25P03), and the next statement fails as P2. |
+| P0 | Before any write (role check, connect) | Nothing written | — |
+| P1 | A wait or failure before the unit's first write (`lock_timeout`, connect failure) | Nothing written by this unit | — |
+| P2 | Failure after writes, before COMMIT was sent | Rolled back **once the server processes the abort**. A network loss does not necessarily end the server transaction immediately; it may still be in flight. | Never read back through the broken connection |
+| P3 | COMMIT sent, acknowledgement not received | **Unknown** | No speculative reads; no replay; outcome-uncertain wording |
+| P4 | Unit committed, later failure (another unit, middleware, rendering) | Committed | The design must be safe with the commit |
+| P5 | After response headers were handed to the WSGI server | Committed, **and Set-Cookie may already be delivered** | Outside Django's exception lifecycle; untestable by discarding a response object; documented residual risk (RB-2) |
 
-**Validation at settings load (fail closed).** Values must be positive durations, and `lock < statement < idle`. An invalid value raises `ImproperlyConfigured`.
+### 6.2 Actual session and authentication-state guarantees
 
-**Runtime verification.**
+**What B1 guarantees (testable):**
 
-1. A Django system check (`accounts.E101`) in authentication and web profiles fails if either application alias lacks the three options. That catches a later profile, including the Stage C one, that replaces `OPTIONS` wholesale.
-2. Tests read `SHOW lock_timeout` / `SHOW statement_timeout` / `SHOW idle_in_transaction_session_timeout` on the **actual** auth and runtime LOGIN connections, and assert `0` on the migrator connection.
-3. The Stage C lab repeats the `SHOW` checks against the real local server.
+* **SG1:** If a database failure in an authentication flow is converted by B1's boundaries into a ≥500 response **before headers are emitted**, that response carries **no** `Set-Cookie` for a session. Django skips `save()`/`set_cookie` for status ≥500, as verified in `contrib/sessions/middleware.py`. So **no new authenticated session key is delivered** to a client that did not already hold one.
+* **SG2:** B1 never converts a database failure into a 2xx/3xx response, and never retries a security write.
+* **SG3:** Outcome-uncertain flows (reset, verify, change) say the outcome is uncertain and do not claim success or rollback.
+* **SG4:** B1 does not touch privileges, RLS, the signed context, sessions' storage engine or the authentication semantics of successful paths.
 
-**Known limitation.** Any role can `SET` these GUCs on its own session, so this is an availability control, not a security boundary. A transaction-pooling proxy (PgBouncer) would drop startup `options`. If a pooler is ever approved, switch to a `connection_created` `SET` or role-level `ALTER ROLE … SET`, which is a provisioning change needing review. Optional defence in depth (role-level defaults set by `configure_runtime` / `configure_auth_role`) is **deferred**, because those commands are touched by unmerged PR #26.
+**What B1 does *not* guarantee (existing behaviour, preserved, documented):**
 
-### 6.6 Compatibility with Codex's Stage C database configuration (PR #35)
+| Case (initial browser state) | Failure phase | Observed outcome | B1 position |
+| --- | --- | --- | --- |
+| No cookie, or an anonymous cookie, then login | P3/P4 on the response-phase session UPDATE | A **valid authenticated row may exist** whose new key was never delivered (Codex probe; my rerun) | Allowed **orphan**. Random 32-character key, expires under `SESSION_COOKIE_AGE`, removed by `clear_auth_artifacts`. Residual risk RB-1. |
+| Anonymous cookie, rotated by `cycle_key` | P2–P4 | The old anonymous row is deleted or retained; the browser keeps its old anonymous key | No authority either way |
+| Same-account authenticated cookie, then login again | P3/P4 | The **known key stays valid and its expiry may be extended** (Codex probe; my rerun) | **Pre-existing authority retained.** That is not new authority, but it is "renewal on failure". Owner decision D-B1-1: accept (recommended for B1), or move no-renewal/revocation into B2. |
+| Different-account authenticated cookie (A), then login as B | P3/P4 | A's session **invalidated** (flush committed); B's valid row orphaned; the browser holds A's dead key, so it is anonymous (my probe R3) | No retained or new authority for the client |
+| Any | **P5** (headers already handed to the server) | Set-Cookie **may** have reached the client before the write failed | **Not controllable by B1.** Residual risk RB-2; a Stage C proxy/WSGI topic |
 
-| Stage C element | B1 interaction | Agreement needed |
+**Per-flow write units and allowed outcomes** (the test oracle; "≡" means "committed together"):
+
+* **F-LOGIN.** Units:
+  1. The IP throttle upsert (autocommit).
+  2. The CAS hash upgrade (PR #29, autocommit).
+  3. The finalization transaction (≡ `cycle_key` create, old-row delete, `last_login`).
+  4. The response-phase session UPDATE.
+
+  Any of these may persist independently of a later failure. Allowed end states: per the case table above.
+* **F-RESET** (redemption).
+  * Unit: one transaction (≡ password write + **nominated** token consumption).
+  * Allowed: {not committed: password and nominated token unchanged} or {committed: password = submitted secret, nominated token consumed}.
+  * Other tokens are not part of this unit.
+  * "Old password invalid" is asserted **only** when the submitted secret differs from the old one; a same-secret reset is legitimate (Codex probe).
+* **F-VERIFY.**
+  * Unit: one transaction (≡ `email_verified_at` + nominated token consumption).
+  * Allowed: {unverified, token usable} or {verified, token consumed}.
+  * No password involved.
+* **F-CHG** (password change).
+  * Phases:
+    * **pre-flush** (Student lock or validation), where the old session stays valid and no deletion cookie is sent;
+    * **in-flush DELETE failure**, where `clear()` ran but `_session_key` is still set, so `is_empty()` is false, there is no deletion cookie, the transaction rolls back and the old session stays valid;
+    * **post-flush, pre-COMMIT**, where the transaction rolls back and the old session stays valid server-side. **Whether the browser cookie is deleted is not guaranteed** and depends on `is_empty()` at response time; asserted per test, not promised.
+    * **P3**, where {committed: new password, session row deleted, other sessions invalid by hash} or {not committed}.
+  * B1 position: **prior access may be preserved on failure.** Explicit logout-on-failure is D-B1-2.
+* **F-ISSUE** (reset or verify email request).
+  * Unit: one transaction (≡ revoke older same-purpose tokens + insert new).
+  * The `on_commit` email runs only after `_commit()` returns successfully. On P3 with an acknowledgement fault, the token may be committed **without email** (Codex probe), and older links **are revoked**. That is an **availability** cost, not "harmless". It is carried to B7 (RB-5).
+* **F-REGISTER.** The existing handled `IntegrityError` gives the generic success page, **preserved**.
+
+### 6.3 Failure classification: precedence by stage
+
+`classify_database_failure(exc)` is a pure function that walks the exception graph:
+
+* Follow `__cause__` if set, otherwise `__context__`, while respecting `__suppress_context__`.
+* Stop after **16 hops** or on revisiting an object (cycle-safe).
+* At each node, prefer the driver's `sqlstate`, then the Django or psycopg class.
+
+The **first decisive node** wins:
+
+1. A **driver SQLSTATE** in:
+   * the *recoverable* set: class `08`, `53`, `57P01`–`57P03`, `57014`, `55P03`, `40001`, `40P01`, `25P03`;
+   * the *misconfigured* set: `42501`, class `28` (authentication failure), `3D000` (invalid database);
+   * any other SQLSTATE: a *defect*.
+2. A Django or psycopg `InterfaceError`, or an `OperationalError` whose own chain holds a psycopg connection-class error without a SQLSTATE (client-side loss): **ambiguous-unavailable**.
+3. A bare Django `DatabaseError` with **no driver node** in the whole chain (for example Django's "Forced update did not affect any rows", which is how a genuine concurrent session deletion appears, per my probe R2): **not a database outage**. Leave the original handling unchanged.
+4. Anything else: not database-related. Leave unchanged.
+
+**Handling precedence by stage** (existing contracts are listed and preserved):
+
+| Stage / site | Existing behaviour (kept) | B1 behaviour |
 | --- | --- | --- |
-| `server/config/settings/local_staging.py` with `sslmode=verify-full` and a lab CA root on **both** aliases | The B1 helper merges and preserves TLS keys. Stage C must build on `auth_common.configure` (directly or via `web_secure`), or call the same helper. System check `accounts.E101` fails if timeouts are lost. | One composition point: `accounts.dbsafety.apply_db_safety(DATABASES, aliases, timeouts)` is called by `auth_common.configure`. Stage C adds keys **before** or **after** it, but never assigns a fresh `OPTIONS` dict after it without re-calling it. |
-| Direct PostgreSQL connections, `CONN_MAX_AGE=0`, no pooler | Startup `options` work as specified | Any future pooler triggers the §6.5 switch |
-| Gunicorn worker timeout and Caddy upstream timeouts | Must exceed the application's worst case, so PostgreSQL cancels and rolls back **before** the proxy returns a 504 or the worker is killed mid-transaction (a worker kill acts like P2/P3) | Proposal: Gunicorn timeout ≥ 30 s; Caddy upstream read timeout ≥ Gunicorn + 5 s. Both are values for Codex to confirm. |
-| Separate offline migration process | B1 timeouts never reach it (scope rule above) | Codex verifies `SHOW lock_timeout = 0` in the migration job |
-| C21 security-boundary tests and the C22 interrupted-release rehearsal | Rerun the B1 PG17 tests in the lab, including `SHOW` checks over TLS | Added to the Stage C acceptance list |
+| P0 `DatabaseRoleBoundaryMiddleware` (`accounts/middleware.py:13-25`) | Catches **all** `DatabaseError` and `ImproperlyConfigured`; returns 503 "not configured safely" | **Unchanged.** Programming errors at the role check stay 503 there. Documented as an intentional pre-existing exception to "defects are 500". |
+| Registration `IntegrityError` (`accounts/tokens.py`) | Generic success | **Unchanged** |
+| Academic wrappers (`student_web.views.protected`, `accounts.views.academic_errors`) | Turn `DatabaseError` into 503 (and 400/404/409 for service errors) | **Unchanged** |
+| Unhandled exception in an **account view** | Django → `handler500` → 500 | `AuthFailureMiddleware.process_exception` (placed after `SessionMiddleware`) classifies it. Recoverable gives 503 with Retry-After; misconfigured gives 503 without Retry-After; ambiguous-unavailable gives 503 without Retry-After; a defect is not consumed, so Django's 500 path applies. |
+| Unhandled exception in **middleware** (request or response phase, other than the session 400 path) | `handler500` | `handler500` wrapper: `sys.exc_info()` → classify. **No active exception** (manual invocation, `DEBUG`/`DEBUG_PROPAGATE_EXCEPTIONS`) → plain 500. Codex probe: the exception stays active on the tested sync path, and also through the async adapter. Only the **synchronous WSGI path is claimed**. |
+| **Session-save database failure → `SessionInterrupted` → 400** | `handler400` (Django default 400 page) | `handler400(request, exception)`: classify `exception`. Recoverable, misconfigured or ambiguous gives 503; **otherwise the original 400** (true concurrent logout, or any non-database `BadRequest`). Never reclassify a 400 without a driver node. |
+| `SuspiciousOperation`, CSRF 403, 404 | Existing handlers | **Unchanged** |
 
-### 6.7 Exact files expected to change
+All 503 responses carry `Cache-Control: no-store`. Only *recoverable* responses carry `Retry-After` (a configurable candidate value).
+
+### 6.4 Where each exception can surface, and the possible status codes (B1 end state)
+
+| Origin | Catch point | Possible statuses |
+| --- | --- | --- |
+| Role check | Role middleware | 503 |
+| Account view (throttle, CAS, finalizer, reset, verify, change, issue) | `process_exception` → else `handler500` | 503 (recoverable, misconfigured or ambiguous), 500 (defect) |
+| Session load in a view (lazy) | Same as the view | 503 / 500 |
+| Session save in `process_response` | `SessionInterrupted` → `handler400` | 503 (database-origin), 400 (genuine concurrent deletion) |
+| Other middleware `process_response` | `handler500` | 503 / 500 |
+| Error-renderer failure | Last-resort plain response inside the renderer | 503 or 500 with a fixed plain-text body |
+| After the WSGI header handoff | **None** (server or transport) | Whatever the client already received (RB-2) |
+
+### 6.5 Timeout and availability model (realistic, with limits)
+
+| Mechanism | Proposed candidate (configurable, **not** final) | What it bounds | What it does **not** bound |
+| --- | --- | --- | --- |
+| `lock_timeout` | 3 s (auth, runtime) | Each **lock-acquisition wait** within a statement | Lock-free work; COMMIT-time work; the request total |
+| `statement_timeout` | 5 s (auth), 10 s (runtime) | Each statement's **execution** (control: 57014 at about 100 ms in both experiments) | **COMMIT**: a deferred trigger ran 352 ms under 100 ms, and the row committed. Also commit-time waits, network transfer and client-side Python. |
+| `idle_in_transaction_session_timeout` | 15 s | **Idle gaps** inside an open transaction; the server terminates the session (FATAL 25P03, which surfaces as Django `InternalError`) | Total transaction duration; active statements |
+| **`connect_timeout`** (libpq, **new**) | 5 s | Each connection **attempt**. Verified in psycopg 3.3.8 `connection.py:98-110`: the timeout is applied inside the loop over `conninfo_attempts()`, one attempt per resolved host or address. Values below 2 s are raised to 2 s; 0 or less falls back to 130 s. A timeout raises `ConnectionTimeout` (`OperationalError`, no SQLSTATE), which is *ambiguous-unavailable* in §6.3. | The **number** of attempts (multiple DNS records multiply it); name resolution itself; waits on an established connection |
+| PG17 `transaction_timeout` | **Not adopted** | — | Needs its own PostgreSQL 17 behaviour and privilege review (Codex B1-03) |
+| Worker or proxy deadlines | **No values proposed** | — | Stage C decision with lab evidence |
+
+**Request-duration analysis.** This is an upper-bound formula, not a guarantee. For the login POST:
+
+```
+T_req ≲ Σ_aliases(connect ≤ attempts × connect_timeout)
+      + Σ_statements(min(lock_wait, lock_timeout) + exec ≤ statement_timeout)
+      + T_commit(unbounded by statement_timeout)
+      + 1–2 × PBKDF2 (≈ 0.3–1 s each, CPU-dependent)
+      + response-phase session UPDATE (another statement) + transport
+```
+
+About 12–15 statements occur over two aliases on the login path: role checks, the throttle, session load, the user lookup, CAS, the lock, `cycle_key` (create and delete), `last_login`, COMMIT, and the session save. So any worker or proxy deadline that is too short to wait out PostgreSQL's own cancellation **can kill a worker mid-transaction, which is a P2/P3 event**. B1's uncertain-outcome rules must hold in that case too. B1 asserts **no** total request bound.
+
+**Configuration rules:**
+
+* Applied through `apply_db_safety()` to the **application aliases only** (`auth` plus `STUDENT_DB_ALIAS`), merged into `OPTIONS`. It preserves `sslmode`, `sslrootcert` and unrelated libpq options.
+* Duplicate or conflicting `-c` settings for the same GUC in an existing `options` string are **rejected** (`ImproperlyConfigured`), not appended. This defeats a later zero override.
+* Applying it twice is idempotent.
+* Never applied to `auth_migration`, the test-provisioning `default`, or offline commands. B1 also **does not alter** an operator's existing offline-role timeouts.
+
+**Verification:**
+
+1. Settings-load validation: positive durations, and `lock < statement`; `idle` longer than the longest in-transaction Python work.
+2. System check `accounts.E101`. **A registered check does not run under Gunicorn/WSGI**, so Stage C's startup preflight must run `manage.py check --deploy` explicitly (agreement needed).
+3. `SHOW` on the actual auth and runtime connections. The migrator exclusion is asserted structurally ("no B1 option present"); `SHOW = 0` is only a fixture-level check.
+
+**Pooling:** out of B1. Revision 2's "PgBouncer drops options" claim was overbroad and is withdrawn. Pooler behaviour depends on version and configuration, and a `connection_created` SET does not pin settings across transaction-pooled backends. Any pooler needs a separate design.
+
+### 6.6 Error rendering: minimal and database-independent
+
+* `accounts/failure_response.py` (new) builds responses **without the template engine**:
+  * a constant UTF-8 HTML string per status (503-recoverable, 503-misconfigured, 503-uncertain-outcome variant by route name, 500, preserved 400);
+  * no context processors, no `request.user`, no session or messages access, no `reverse()`;
+  * a link to `/accounts/login/` as a **literal path**.
+* Headers: `Cache-Control: no-store`; `Retry-After` only for recoverable; `Content-Type` with charset.
+* **Last resort:** the whole builder is wrapped in `try/except BaseException`-safe logic that returns `HttpResponse('Service temporarily unavailable.', status=503 or 500, content_type='text/plain')`.
+* Registered as `handler400`/`handler500` in **both** `config/auth_urls.py` and `config/web_urls.py`. For non-database 400/500 cases, the web profile delegates to the existing `student_web` handlers **only after classification decides "not a database failure"**, so their DB-touching layout cannot run during a classified outage.
+* Tests run with `DEBUG=False` and `DEBUG_PROPAGATE_EXCEPTIONS=False`, in both the auth-only and web URL roots.
+
+### 6.7 Logging boundary (minimal; the full taxonomy stays in B3)
+
+* **Filter `accounts.logging.RedactSensitiveRequestFilter`**, attached to the `django.request` and `django.server` loggers through `LOGGING` in `auth_common`:
+  * rewrites token-bearing paths (`/accounts/reset/<selector>/<secret>/`, `/accounts/verify/<selector>/<secret>/`) to `/accounts/reset/[redacted]/` in `msg`, `args` and `request`;
+  * strips query strings;
+  * replaces `exc_info` with a sanitized summary (exception class names along the chain, plus SQLSTATE) so the traceback text and exception messages (which can include SQL fragments) are not emitted;
+  * never reads cookies, headers or the body.
+* **`mail_admins`:** none. `ADMINS` is unset in every profile, and B1 adds a check that keeps it empty in authentication profiles unless separately approved.
+* **Scope statement:** B1 covers **Django's own error and request records** for authentication routes. Gunicorn and Caddy access logs (which carry paths) are **Stage C** redaction requirements. Retention and sinks are **Stage D**. Until then, local console logs on a trusted host are the documented limit (RB-4).
+* **Tests:** sentinel reset or verify secrets and a sentinel exception message through every failure route; assert no sentinel appears in any captured record's rendered message, args, `exc_text` or formatted traceback.
+
+### 6.8 Exact files expected to change (B1 PRs, §6.11)
 
 | File | Change |
 | --- | --- |
-| `server/accounts/dbsafety.py` (new) | `apply_db_safety()`, timeout validation, `classify_database_failure()`, `AuthFailureMiddleware` (`process_exception` only), generic 503 response builder (existing template, `never_cache`, `Retry-After` per §6.3) |
-| `server/accounts/checks.py` (new) + `accounts/apps.py` registration | System check `accounts.E101` |
-| `server/config/settings/auth_common.py` | Call `apply_db_safety`; insert `AuthFailureMiddleware` **after** `SessionMiddleware` (so its `process_exception` runs before the response phase); `AUTH_DB_TIMEOUTS` defaults |
-| `server/student_web/views.py` | `server_error` consults `classify_database_failure(sys.exc_info()[1])` and returns 503 for recoverable or misconfigured errors, 500 otherwise. Same templates. |
-| `server/config/auth_urls.py` | Register the same `handler500` for the historical auth profile |
-| `server/accounts/templates/…` | Outcome-uncertain wording on the 503 page for reset-confirm, verify-confirm and password-change (route-name based) |
-| `server/auth_tests/test_db_failure_handling.py` (new) | §6.8 |
-| `docs/AUTHENTICATION.md` | Failure contract, timeout tuning, pooler caveat |
+| `server/accounts/dbsafety.py` (new) | `apply_db_safety()` (merge, reject duplicates, `connect_timeout`), validation, `classify_database_failure()` |
+| `server/accounts/failure_response.py` (new) | Template-free renderer, last resort, `handler400`/`handler500` |
+| `server/accounts/middleware.py` | Add `AuthFailureMiddleware` (`process_exception` only). The existing role middleware is unchanged. |
+| `server/accounts/logging.py` (new) | Redaction filter |
+| `server/accounts/checks.py` (new) + `apps.py` | `accounts.E101` (timeouts present), `accounts.E102` (`ADMINS` empty in auth profiles) |
+| `server/config/settings/auth_common.py` | Call `apply_db_safety`; middleware order; `LOGGING`; candidate defaults |
+| `server/config/auth_urls.py`, `server/config/web_urls.py` | Register `handler400`/`handler500` |
+| `server/auth_tests/test_b1_*.py` (new) | §6.9 |
+| `docs/AUTHENTICATION.md` | Contract, limits, Stage C preflight requirement |
 
-**Not changed:** `config/settings/base.py`, migrations, grants or provisioning commands, RLS, `accounts/devices.py`, the throttle semantics, academic services and calculations, CLI and Streamlit, and the PR #26 and #29 code paths beyond what merging #29 brings in.
+**Not changed:** `base.py`, migrations, grants, provisioning, RLS, devices, throttle semantics, the session engine, successful-path authentication, academic code, CLI and Streamlit.
 
-**Dependencies:** PR #29 merged (B0), since B1 bounds its Student-lock wait. Independent of PR #26.
+### 6.9 PostgreSQL 17 test and failure-injection matrix
 
-### 6.8 Tests: failed authentication cannot grant access, without assuming rollback
+All tests use real separate LOGINs, `TransactionTestCase`, and waits observed through `pg_blocking_pids` with bounded timeouts. Post-failure state is read **on a clean connection** after controlled transactions finish. Hosted CI uses PostgreSQL 17.
 
-Every failure test asserts **access invariants and allowed database states**, never "the request failed, so nothing was written". All use PostgreSQL 17, actual separate migrator, runtime and auth LOGINs, `TransactionTestCase`, and waits observed through `pg_blocking_pids` with bounded timeouts.
+**Rows (flow × phase) × initial cookie state** (N = none, AN = anonymous, SA = same-account authenticated, DA = different-account authenticated). Each cell asserts the **allowed outcome set** from §6.2, the status, no-store and Retry-After policy, body constancy, and the log sentinels.
 
-**Access invariants checked after every injected failure:**
+| Flow | Phases exercised | Cookie states | Key assertions |
+| --- | --- | --- | --- |
+| F-LOGIN | P0, P1 (real 55P03 on the Student lock), P2 (fault inside finalization), P3a (real server abort, **native connection terminated**, so commit raises), P3b (real commit then injected acknowledgement fault), P4 (session UPDATE real 55P03 → **400 path → 503**), P4 (session commit then acknowledgement loss → 500/503) | N, AN, SA, DA | SG1 (no new key delivered); SA known key: retained or extended per D-B1-1, asserted explicitly; DA: A invalidated, browser anonymous; orphan rows enumerated and expiring |
+| F-RESET | P1, P2, P3a, P3b, P4 | N, SA | Nominated-token pair consistency against a before snapshot; distinct-secret old/new exclusivity; same-secret reset allowed; uncertain-outcome body |
+| F-VERIFY | P1, P2 (`email_verified_at` UPDATE fault), P3a, P3b | N | Verified ⇔ nominated token consumed |
+| F-CHG | Pre-flush (55P03 on the Student lock), in-flush DELETE fault, post-flush/pre-COMMIT fault, P3a, P3b | SA | Per-phase outcomes from §6.2; old session validity asserted, not assumed; cookie-deletion presence recorded per phase |
+| F-ISSUE | P1, P3b | N | Token committed and email **not** sent on P3b; older-link revocation recorded |
+| F-REGISTER | Handled `IntegrityError` | N | The generic success page is unchanged |
 
-* **A1:** The response sets no session cookie carrying authentication. The client's cookie jar either holds no session key, or holds one for which `session_student(key)` is `None`.
-* **A2:** A follow-up protected request with whatever cookies the client holds redirects to login and cannot read academic data.
-* **A3:** For every `django_session` row created during the test: either it has no `_auth_user_id`, or its stored hash fails the live auth-hash comparison.
-* **A4:** Exactly one of {old password, new password} is valid. Never both, never neither.
-* **A5:** Token consumed ⇔ password changed (or ⇔ verified, for verify).
-* **A6:** Other students' sessions and data are unaffected (no RLS or role change).
+**Cross-cutting tests:**
 
-**Fault injection points** (each runs with A1–A6):
+| Test | Evidence |
+| --- | --- |
+| `test_session_interrupted_db_origin_becomes_503` | Real 55P03 on the session row; 503, Retry-After, not 400 |
+| `test_genuine_concurrent_logout_stays_400` | Row deleted before save; chain has no driver node; 400 kept |
+| `test_classifier_chain_walk` | Explicit cause beats context; `__suppress_context__`; cycles; depth cap; wrapper-only errors; SQLSTATE vs. class; no-SQLSTATE `InterfaceError`; class 28 / 3D000; unrelated nested exceptions not misread |
+| `test_handler500_no_active_exception_fallback` | Manual call gives a plain 500 |
+| `test_renderer_auth_only_and_web_roots`, `test_renderer_last_resort` | Template-free bodies; renderer failure forced; no DB queries issued (`CaptureQueriesContext` on all aliases is 0) |
+| `test_existing_contracts_preserved` | Role middleware 503 for `ProgrammingError`; registration `IntegrityError`; academic wrappers |
+| `test_logging_redaction_sentinels` | No secret path, query or exception text in `django.request` / `django.server` records; `ADMINS` empty |
+| `test_options_merge_preserves_tls_and_rejects_duplicates` | `sslmode`/`sslrootcert` kept; a duplicate `-c statement_timeout=0` is rejected; idempotent |
+| `test_show_values_on_application_aliases_only` | `SHOW` on auth and runtime; migrator has no B1 option |
+| `test_connect_timeout_bounds_unreachable_host` | An unroutable or blackholed address is bounded by `connect_timeout × attempts` (a bounded local experiment) |
+| `test_commit_not_bounded_by_statement_timeout` | Codex's deferred-trigger experiment kept as a **documentation regression**, proving that the plan's limit statement remains true |
+| `test_idle_timeout_kills_and_classifies` | Real 25P03 → recoverable |
+| `test_normal_paths_unchanged` | All historical suites pass unchanged |
 
-| Test | Phase | Injection |
+**Mutation checks** against valid invariants only. Removing each of the following must make at least one test fail:
+
+* `handler400` classification;
+* the chain walk (reduced to one hop);
+* the 25P03 mapping;
+* duplicate-option rejection;
+* the redaction filter;
+* the renderer's last resort.
+
+### 6.10 Stage C timeout and preflight agreements (for Codex, not values)
+
+1. The Stage C startup preflight **runs `manage.py check --deploy`** under the exact web settings before starting workers (registered checks don't run under WSGI).
+2. Worker, proxy and client deadlines are chosen from **lab measurement** of the §6.5 formula. **No 30/35-second values are proposed or confirmed here.** The lab must show what happens when a worker is killed mid-transaction (expected: a P2/P3 outcome, with the §6.2 rules holding).
+3. Proxy and WSGI access logs must redact token paths and query strings (RB-4).
+4. The C21 lab reruns the §6.9 matrix over TLS with `verify-full`.
+
+### 6.11 Smallest independently reviewable implementation steps
+
+| Step | Content | Depends on | Independent evidence |
+| --- | --- | --- | --- |
+| **B1a** | `apply_db_safety` (timeouts plus `connect_timeout`), validation, duplicate rejection, `E101`, docs | PR #29 merged | `SHOW`, merge and duplicate tests, connect-bound experiment, COMMIT documentation regression |
+| **B1b** | `classify_database_failure`, `AuthFailureMiddleware`, template-free renderer, `handler400`/`handler500` in both URL roots | B1a | The 400-path 503, genuine-logout 400, chain-walk unit tests, renderer tests, existing-contract preservation |
+| **B1c** | Logging redaction filter, `E102` | B1b | Sentinel tests across all failure routes |
+| **B1d** | Uncertain-outcome wording per route, plus the full flow × phase × cookie matrix (§6.9) | B1b, B1c | Per-flow allowed-state oracle on PostgreSQL 17 |
+
+Each step gets its own PR, PostgreSQL 17 CI and Codex review. None changes successful-path authentication.
+
+### 6.12 Evidence from my revision probes (source: Appendix B1-R)
+
+| ID | Probe | Observed (PG16.15, PR #29 `42910ed`) |
 | --- | --- | --- |
-| `test_login_lock_timeout_returns_503_without_access` | P1 | The migrator holds `SELECT … FOR UPDATE` on the Student row; the login finalizer waits and gets 55P03 within `lock_timeout` plus a margin |
-| `test_reset_lock_timeout_leaves_token_and_password_consistent` | P1 | Same, on reset-confirm |
-| `test_password_change_lock_timeout_logs_out_without_change_or_with_complete_change` | P1 | Same, on password change; also asserts the cookie was deleted |
-| `test_statement_timeout_classified_recoverable` | P1/P2 | A short `statement_timeout` override **below** `lock_timeout` plus a held lock gives 57014 → 503 |
-| `test_idle_in_transaction_timeout_kills_session_and_denies_access` | P2 | A short `idle_in_transaction_session_timeout` override; patch the in-transaction password check to sleep past it. The server terminates the session (25P03), giving 503 or 500 per the classification test, with A1–A5. |
-| `test_commit_failure_before_server_commit` | P3a | Patch `DatabaseWrapper._commit` to close the connection **before** the real commit, so the server aborts. Assert A1–A5 and that the state equals "not committed". |
-| `test_commit_acknowledgement_lost_after_server_commit` | P3b | Patch `_commit` to call the real commit **then** raise `OperationalError`. Assert A1–A5, that the state equals "committed" (password changed, token consumed, login row without auth data), that **no email hook ran**, and that the outcome-uncertain wording is shown. |
-| `test_session_save_failure_in_response_phase` | P4 | Fault on the auth connection's `django_session` UPDATE during `process_response` after a successful login. `handler500` classification applies; no cookie; A1–A3 hold even though the login transaction committed. |
-| `test_response_write_failure_after_commit` | P4 | Simulate the client disconnecting after the view commits: drop the response. The session row exists without delivered cookies; A2/A3 hold for every client. |
-| `test_classification_table` | unit | Synthetic psycopg errors for every SQLSTATE in §6.3, plus `InterfaceError`, a bare `OperationalError`, `IntegrityError`, `ProgrammingError(42P01)`, `InsufficientPrivilege` and a non-DB exception, each mapped to the expected class, status and `Retry-After` |
-| `test_programming_defect_is_500_not_503` | defect | An `UndefinedColumn` injected at the login finalizer gives 500 with no access, and no Retry-After |
-| `test_timeouts_apply_only_to_application_aliases` | config | `SHOW` values on auth and runtime equal the configuration; the migrator shows `0`; the system check fails when `OPTIONS` is replaced |
-| `test_invalid_timeout_configuration_fails_closed` | config | Negative values, missing units, or `lock ≥ statement` raise `ImproperlyConfigured` |
-| `test_generic_bodies_reveal_nothing` | all | No SQL, SQLSTATE, role, exception or timing text in any 503 or 500 body |
-| `test_normal_paths_unchanged` | regression | Successful and wrong-password login, reset, change and verify behave exactly as before; the historical suites run unchanged |
+| R1 | `handler400` during a real session-UPDATE `lock_timeout` | 400; `handler400` received the exception with the chain `SessionInterrupted → UpdateError → OperationalError → LockNotAvailable(55P03)`; `handler500` called 0 times |
+| R2 | Genuine concurrent session deletion before save | 400; chain `SessionInterrupted → UpdateError → DatabaseError`; **no driver node and no SQLSTATE** |
+| R3 | Login as B from a browser holding A's session; session commit then acknowledgement loss | 500; `response_sets_session_cookie=false`; A's session **invalid**; 1 valid authenticated row whose key is **not** the client's (`valid_row_key_is_client_key=false`); the browser still holds A's (now dead) key |
+| Rerun | Codex's 14 probes, unmodified | 14/14 reproduce (same booleans and classes as the review) |
+| Rerun | Codex's native COMMIT experiment | Control 57014 at about 100 ms; COMMIT succeeded at about 352 ms; row count 1 |
+| — | psycopg `conninfo.timeout_from_conninfo({})` | 130 s |
 
-**Mutation checks required in the B1 PR:**
+### 6.13 Residual risks requiring owner acceptance
 
-* Remove `AuthFailureMiddleware`.
-* Remove the `handler500` classification.
-* Drop the options merge.
-* Swap the `25P03` classification.
-* Remove the system check.
+| ID | Risk | Severity | Why B1 cannot remove it | Where it can be addressed |
+| --- | --- | --- | --- | --- |
+| RB-1 | **Orphaned valid authenticated session rows** after a P3/P4 session-save failure (key never delivered) | Low (an attacker would need the random key) | Django persists the session after the view; the outcome is ambiguous | B2: create the authenticated session inside the finalization transaction, plus cleanup |
+| RB-2 | **P5:** Set-Cookie may be delivered before a write or transport failure | Low–Medium | Outside Django's lifecycle | Stage C proxy and worker behaviour; accept |
+| RB-3 | **No total request or COMMIT bound**; a worker kill mid-transaction gives an uncertain outcome | Medium (availability) | `statement_timeout` does not bound COMMIT; other waits add up | Stage C deadlines from measurement; possible PG17 `transaction_timeout` review |
+| RB-4 | **Proxy and WSGI access logs** carry token paths until Stage C redaction | Medium (privacy) | Outside Django | Stage C configuration; Stage D retention |
+| RB-5 | **An issued token without delivered email revokes older links** (F-ISSUE P3) | Medium (availability of recovery) | Existing revocation semantics | B7 (non-invalidating coalesced issuance) |
+| RB-6 | **Same-account session renewal or retention on failure** (SA case) | Low–Medium | Existing Django behaviour | Decision D-B1-1 (B2 if changed) |
+| RB-7 | Local verification on PostgreSQL 16 | Process | Environment | Hosted PostgreSQL 17 CI and the Stage C lab are mandatory |
+| RB-8 | `handler500` relies on `sys.exc_info()`: not a documented Django API | Low | Framework design | Tested fallback; re-verify on Django upgrades |
 
-Each must make at least one test fail.
+**Decisions for the owner:**
 
-### 6.9 Security acceptance criteria for B1
-
-1. Invariants A1–A6 hold for every injection in §6.8, on hosted PostgreSQL 17 CI and in the Stage C lab.
-2. No automatic retry, no permissive fallback, and no status code below 500 on any database failure path.
-3. Recoverable, misconfigured and defect failures are distinguishable in the HTTP status and Retry-After header, and in sanitized logs (the SQLSTATE class only), but never in the response body.
-4. The migrator, test-provisioning and offline profiles have no B1 timeouts. Every application alias does, verified by `SHOW`.
-5. Historical tests are unchanged and passing. No migration, grant, RLS or device change.
-6. Codex independent review, plus a rerun of the PR #32 lock-timeout and post-login-failure probes as regressions.
+* **D-B1-1:** Accept retention or extension of **pre-existing same-account** authority on failed logins (recommended for B1, documented), or require no-renewal/revocation (moves to B2 and changes login and session policy).
+* **D-B1-2:** Accept that a **failed password change may leave the prior session valid** (recommended), or require explicit cookie expiry on failure. Note that this affects only the browser cookie, not server-side copies.
+* **D-B1-3:** Approve the candidate timer values, now including `connect_timeout` 5 s, **with the stated limits** (no COMMIT or request bound).
+* **D-B1-4:** Approve the minimal logging boundary inside B1 (§6.7), with the broader taxonomy left to B3.
+* **D-B1-5:** Approve the B1a–B1d split.
 
 ---
 
 ## 7. Decisions requested from the owner
 
-1. **Stage A:** authorize merging PR #29, then PR #26 (Codex sequence). B1 depends on #29 being on `master`.
-2. **Approve B1 implementation** exactly as specified in §6 (still not started).
-3. **Timeout candidates:** 3 s / 5–10 s / 15 s as configurable starting points, final values from Stage E measurement.
-4. **HTTP contract:**
-   * Recoverable database failures get 503 with Retry-After.
-   * Configuration and privilege drift gets 503 without Retry-After.
-   * Programming defects stay 500.
-   * Recovery and change pages say the outcome is uncertain.
-5. **Stage C coordination:** one composition point (`apply_db_safety`) and proxy and worker timeouts longer than the application worst case (§6.6). Values to be agreed with Codex.
-6. **Later, at B6:** whether the IP login bucket should count failures only.
-7. **Later, at B7:** whether multiple live recovery links may coexist. This changes a historical test's contract, so it needs explicit approval or a feature-flagged profile.
-8. **Later, at B3:** the logging pseudonym key, retention and sink (with Codex Stage D).
-9. **Out of Stage B:** MFA or breached-password checks for credential stuffing (RD-7). Adaptive mode and the daily cap remain deferred.
+1. **Stage A:** authorize merging PR #29, then PR #26 (Codex sequence). This is a live behaviour change for #29. B1 depends on #29 being on `master`.
+2. **B1 policy decisions D-B1-1 to D-B1-5** (§6.13): same-account session retention on failure; password-change failure behaviour; candidate timers with stated limits; the minimal logging boundary; the B1a–B1d split.
+3. **Request another independent Codex review** of this revision 3 before any B1 implementation is authorized.
+4. **Stage C coordination** (§6.10): a preflight that runs `check --deploy`; deadlines from lab measurement only; proxy and WSGI log redaction.
+5. **Later, at B6:** whether the IP login bucket should count failures only.
+6. **Later, at B7:** non-invalidating recovery links (also addresses RB-5). This is a historical-test contract change.
+7. **Later, at B3:** the logging pseudonym key, retention and sink (with Codex Stage D).
+8. **Out of Stage B:** MFA or breached-password checks for credential stuffing (RD-7). Adaptive mode and the daily cap remain deferred.
+
+---
+
+## Appendix B1-R: revision-3 observation probes (not application code)
+
+Three probes supporting §6.12 R1–R3. Observation only: no B1 implementation and no fix. Synthetic identities and disposable PostgreSQL only. **Do not add them to application test discovery.** Run them like Codex's appendix, against the approved PR #29 code (`42910ed`), with the repository `AuthenticationTestRunner` and real separate LOGINs:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/probe/directory PGTESTDATABASE=test_b1_revision python server/manage.py test b1_revision_probes --settings=config.settings.auth_test -v 2
+```
+
+My runs used local PostgreSQL 16.15 (PostgreSQL 17 can't be installed in my environment). The behaviour relied on (Django session and exception routing, the psycopg error classes) does not depend on the server version, and the corresponding Codex observations were on 17.11. Evidence lines carry booleans, classes and SQLSTATEs only.
+
+```python
+"""Claude B1 revision probes (observation only; no B1 implementation). Synthetic data."""
+import json, sys, types
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+from django.contrib.auth import SESSION_KEY
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.models import Session
+from django.db import connections, OperationalError, transaction
+from django.http import HttpResponse
+from django.test import Client, override_settings
+from django.urls import include, path, reverse
+from accounts.principals import session_student
+from auth_tests.base import AuthenticationCase
+
+seen = {'400': [], '500': []}
+mod = types.ModuleType('b1_revision_urls')
+mod.urlpatterns = [path('', include('config.auth_urls'))]
+def h400(request, exception=None):
+    seen['400'].append(exception); return HttpResponse('synthetic 400', status=400)
+def h500(request):
+    seen['500'].append(sys.exc_info()[1]); return HttpResponse('synthetic 500', status=500)
+mod.handler400, mod.handler500 = h400, h500
+sys.modules[mod.__name__] = mod
+
+def chain(exc):
+    out, ids = [], set()
+    while exc is not None and id(exc) not in ids:
+        ids.add(id(exc)); out.append((type(exc).__name__, getattr(exc, 'sqlstate', None)))
+        exc = exc.__cause__ if exc.__cause__ is not None else exc.__context__
+    return out
+
+def emit(name, **v): print('B1R_EVIDENCE=' + json.dumps(dict(name=name, **v), sort_keys=True))
+
+@override_settings(ROOT_URLCONF='b1_revision_urls')
+class RevisionProbes(AuthenticationCase):
+    def setUp(self):
+        super().setUp(); seen['400'].clear(); seen['500'].clear()
+
+    def test_handler400_receives_db_origin_session_interrupted(self):
+        client = Client(raise_request_exception=False)
+        self.assertEqual(self.login(client).status_code, 302)
+        key = client.cookies['sessionid'].value
+        def worker():
+            try:
+                with connections['auth'].cursor() as c: c.execute("SET lock_timeout='100ms'")
+                return self.login(client).status_code
+            finally: connections.close_all()
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            with transaction.atomic(using='default'):
+                Session.objects.using('default').select_for_update().get(session_key=key)
+                status = ex.submit(worker).result(timeout=15)
+        self.assertEqual(status, 400)
+        self.assertEqual(len(seen['400']), 1)
+        emit('handler400_db_origin', status=status, handler400_exception_chain=chain(seen['400'][0]), handler500_calls=len(seen['500']))
+
+    def test_genuine_concurrent_logout_chain_has_no_driver_sqlstate(self):
+        client = Client(raise_request_exception=False)
+        self.login(client); key = client.cookies['sessionid'].value
+        real = SessionStore.save
+        def delete_then_save(store, must_create=False):
+            if not must_create and store.get(SESSION_KEY):
+                Session.objects.using('default').filter(session_key=store.session_key).delete()
+            return real(store, must_create=must_create)
+        with patch.object(SessionStore, 'save', delete_then_save):
+            status = self.login(client).status_code
+        self.assertEqual(status, 400)
+        c = chain(seen['400'][0])
+        self.assertFalse(any(sql for _, sql in c))
+        emit('genuine_concurrent_logout', status=status, handler400_exception_chain=c)
+
+    def test_different_account_browser_login_commit_then_ack_lost(self):
+        client = Client(raise_request_exception=False)
+        self.login(client); key_a = client.cookies['sessionid'].value
+        real = SessionStore.save
+        def committed_then_lost(store, must_create=False):
+            real(store, must_create=must_create)
+            if not must_create and store.get(SESSION_KEY):
+                raise OperationalError('synthetic ack lost')
+        with patch.object(SessionStore, 'save', committed_then_lost):
+            response = self.login(client, 'bravo')
+        valid = [s.session_key for s in Session.objects.using('auth').all()
+                 if s.get_decoded().get(SESSION_KEY) and session_student(s.session_key)]
+        emit('different_account_ack_lost', status=response.status_code,
+             a_session_still_valid=session_student(key_a) is not None, valid_auth_rows=len(valid),
+             response_sets_session_cookie='sessionid' in response.cookies,
+             client_cookie_is_old_key=client.cookies['sessionid'].value == key_a,
+             valid_row_key_is_client_key=key_a in valid)
+```
