@@ -87,3 +87,17 @@ Additional corrections: inverse focus and shadow colors are semantic tokens; red
 Review the shared CSS across pages, focus evidence and the small shared-base diff before acceptance. Real VoiceOver/NVDA, physical mobile devices, Safari/Firefox, actual browser zoom and a full axe/WCAG 2.2 audit were **not tested** here; root-text resizing and 320px reflow are specific automated evidence, not a substitute for all zoom/assistive-tech checks. Do not infer WCAG certification or launch readiness.
 
 PR #26/#29 security integration and B1 remain security-owned. This branch neither merges those changes nor resolves the B1 review findings. UI1 must be regression-tested again against their eventual accepted integrated head, and any template conflict independently reviewed. Account task composition, richer errors, navigation regrouping, icons, dark mode and dashboard/list redesigns remain later slices. No service purchase or deployment is included.
+
+## Pre-merge conditions (independent review of 76308a8: APPROVE WITH CONDITIONS)
+
+Documentation-only record of the conditions. The reviewed CSS, frontend behaviour and tests are unchanged.
+
+1. **Temporary 12px metadata exception (design decision).** Several supporting texts remain at `.75rem` (12px) in UI1: metric labels and notes, helptext, deadline details, the sidebar footer, captions and the mobile user chip. The approved design system specifies 13–14px for supporting metadata and reserves 12px for eyebrows and captions. This is **accepted temporarily for UI1 only**. Aligning those texts to the approved 14px metadata token (`--type-meta`, 0.875rem) is **scheduled for UI2**, with the usual browser reflow, focus and contrast regression evidence. UI2 has not started; this records the commitment only.
+2. **Browser test tooling is test-only and not hermetic.** See [browser dependency policy](BROWSER_TEST_DEPENDENCIES.md). The Python lock hashes Playwright and greenlet. The Chromium download and the `--with-deps` Ubuntu packages are **not** independently hash-locked or snapshotted, and pip-audit does not cover Chromium, Node or OS advisories. None of this tooling is installed in, or used by, the application.
+3. **The browser-test lock changes only through a reviewed change.** `requirements-browser-test-lock.txt` may be regenerated only by the documented pip-tools command, in a pull request that shows the complete lock diff, passes the strict hashed `dependency-audit` job, and gets independent review. Never edit hashes by hand, install Playwright from an unpinned expression, or regenerate during a CI run.
+4. **Mandatory rerun after security integration.** After Stage A (PR #29, then PR #26) and each B1 increment merges, rerun on the **combined head**:
+   * `tools/test_frontend_foundation_browser.py`;
+   * `web_tests` under `config.settings.web_test`;
+   * `auth_tests` under `config.settings.auth_test`, on real PostgreSQL 17 with separate roles.
+
+   Independently review any conflict in `accounts/templates/accounts/base.html` or other account templates. UI1 does not claim compatibility with unmerged security code until that rerun passes.
