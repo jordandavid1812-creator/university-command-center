@@ -1,9 +1,12 @@
 # UNIVERSITY COMMAND CENTER
 ## Remaining Engineering and Launch Execution Plan
 
-**Status:** Planning only  
-**Target:** Secure private synthetic-data staging, followed by a separately approved public launch  
-**Baseline:** Master includes merged PR #30  
+**Status:** Planning only
+
+**Target:** Secure private synthetic-data staging, followed by a separately approved public launch
+
+**Baseline:** Master includes merged PR #30
+
 **Restriction:** No PR merges, purchases, deployments or new implementation authorized by this plan
 
 ### STAGE A — CLOSE EXISTING SECURITY WORK
