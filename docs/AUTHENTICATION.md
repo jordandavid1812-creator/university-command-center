@@ -250,6 +250,14 @@ These commands provision the DB key/runtime grants and THEN separate auth grants
 No application role owns objects or has role membership. Do not add ad hoc grants.
 Re-run the offline provisioning commands after adding reviewed tables/columns.
 
+**S0-02A (dormant):** migration `accounts.0003_trusted_device_foundation` adds
+`accounts_trusteddevice` and `accounts_loginlimit`. After migrating, re-run
+`configure_runtime` and `configure_auth_role`. Until then, every web request
+fails closed with a generic 503: the auth role must hold exactly SELECT, INSERT,
+DELETE and column-limited UPDATE on both tables, and runtime must hold nothing.
+Login does not use these tables yet. The design is in
+`docs/security/S1_PROPOSALS.md` section A.
+
 Start a NEW process environment containing ONLY application credentials:
 
 - PGDATABASE/PGHOST/PGPORT and PGUSER/PGPASSWORD for the restricted ACADEMIC runtime.

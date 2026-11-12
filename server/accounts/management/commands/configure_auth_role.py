@@ -52,4 +52,20 @@ class Command(BaseCommand):
             ):
                 cursor.execute(sql.SQL('GRANT UPDATE ({}) ON {} TO {}').format(
                     sql.SQL(', ').join(map(sql.Identifier, fields)), sql.Identifier(table), sql.Identifier(role)))
+            # S0-02A trusted-device/login-limit tables (accounts.0003). Granted only when the
+            # migration is applied; middleware fails closed if they exist without these grants.
+            # Identity binding (id, student_id, created_at, bucket, kind) is never updatable.
+            # accounts_devicegeneration: no DELETE, so the revocation epoch can never restart.
+            for table, privileges, fields in (
+                ('accounts_trusteddevice', 'SELECT, INSERT, DELETE',
+                 ['current_digest', 'previous_digest', 'rotated_at', 'last_used_at', 'expires_at']),
+                ('accounts_loginlimit', 'SELECT, INSERT, DELETE', ['attempts', 'expires_at']),
+                ('accounts_devicegeneration', 'SELECT, INSERT', ['generation']),
+            ):
+                cursor.execute('SELECT to_regclass(%s) IS NOT NULL', ['public.' + table])
+                if cursor.fetchone()[0]:
+                    cursor.execute(sql.SQL('GRANT {} ON {} TO {}').format(
+                        sql.SQL(privileges), sql.Identifier(table), sql.Identifier(role)))
+                    cursor.execute(sql.SQL('GRANT UPDATE ({}) ON {} TO {}').format(
+                        sql.SQL(', ').join(map(sql.Identifier, fields)), sql.Identifier(table), sql.Identifier(role)))
         self.stdout.write('Separate authentication role configured; academic runtime privileges unchanged.')
