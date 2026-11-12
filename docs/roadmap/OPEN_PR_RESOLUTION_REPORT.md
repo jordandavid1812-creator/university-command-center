@@ -8,7 +8,7 @@ Current fetched master: **`4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`**. It conta
 
 Queried GitHub open PRs (per_page100;15 returned), individual PR details, complete changed-file lists (each below100 files), reviews, issue comments, exact-head workflow runs and every latest-run job. Recorded base means the **base SHA reported by the PR API**, not an assertion that a stale branch is based on today's master. Every PR targets `master`; actual merge-base is listed separately. All heads were fetched locally. Independent approval may exist outside GitHub's formal review API: the source and limits are stated explicitly below.
 
-Static checks on all15 candidates: `git merge-base --is-ancestor`, changed-path blob comparisons and `git merge-tree --write-tree <master> <head>`. **All15 merge cleanly**; none of their heads is an ancestor of master, and none has every changed path already byte-identical in master. GitHub initially returned unknown mergeability for #27/#32/#33; local tree checks resolve textual-conflict uncertainty only. No branches were merged or rebased. This does **not** establish runtime compatibility.
+Static checks on all15 candidates: `git merge-base --is-ancestor`, changed-path blob comparisons and `git merge-tree --write-tree <master> <head>`. **All15 have clean textual merges**; none of their heads is an ancestor of master, and none has every changed path already byte-identical in master. GitHub initially returned unknown mergeability for #27/#32/#33; local tree checks resolve textual-conflict uncertainty only. No branches were merged or rebased. This does **not** establish runtime compatibility.
 
 A sequential #29→#26 conflict rehearsal used an unreferenced commit object made from #29's clean synthetic merge tree, then `merge-tree` with #26. It was also clean; no branch/ref, working implementation or application database was changed, and no request/tests were run on that candidate. Shared documentation overlap is `docs/AUTHENTICATION.md`; manually preserve both security descriptions. #18/#19 overlap `.github/workflows/quality.yml`. Their clean merged trees retain **all three browser-suite commands**, even though directly comparing their old head files to master shows missing newer commands. Never confuse that direct comparison with a merge-result regression.
 
@@ -28,7 +28,7 @@ A = ready for owner merge decision; B = needs independent review; C = needs corr
 | [#34](https://github.com/jordandavid1812-creator/university-command-center/pull/34) | docs: Milestone 5A backlog, PG17 provider tests and readiness gates | **C** | Detailed backlog/provider/acceptance plans exist but retain older base/counts and conditional security references. Update integration dependencies before adopting as executable release backlog. |
 | [#33](https://github.com/jordandavid1812-creator/university-command-center/pull/33) | docs: final independent verification of PR #26 at e262442 | **B** | Independent #26 report is pinned to e262442 and conditional; later #35 records carry-forward to44c515f. No GitHub documentation review is recorded. |
 | [#32](https://github.com/jordandavid1812-creator/university-command-center/pull/32) | docs: independent security audit of PR #29 at bec0a44 | **B** | Independent #29 APPROVE report is pinned to bec0a44; later #35 carries it forward to42910ed. No GitHub documentation review is recorded. |
-| [#31](https://github.com/jordandavid1812-creator/university-command-center/pull/31) | Make onboarding polish test independent of the current date | **D** | Date-independence purpose is superseded by merged #30 and UI2 owner-approved deterministic assertions. Its commits are not ancestors of master and file content differs; this is outcome redundancy, not byte-identical inclusion. |
+| [#31](https://github.com/jordandavid1812-creator/university-command-center/pull/31) | Make onboarding polish test independent of the current date | **D** | Clean textual merge, but **unsafe to merge into current master**: the reviewer reproduced an existing UI2 test failure when its frozen zero-overdue response is expected to contain `?status=overdue`. Recommend closing without merging, subject to separate owner authorization. The date issue is only partially hardened; see the dedicated entry. |
 | [#29](https://github.com/jordandavid1812-creator/university-command-center/pull/29) | F04b: stop stale password-hash upgrades from undoing resets and changes | **C** | Independent security approval is preserved in #32 and the later #35 reconciliation, but the branch CI predates current master and has only three jobs. No new code defect is confirmed. Refresh integration evidence before treating it as ready. |
 | [#28](https://github.com/jordandavid1812-creator/university-command-center/pull/28) | Plan Milestone 5A private staging, costs and readiness gates | **C** | Roadmap/cost research is planning, not qualified infrastructure. Refresh current project dependencies and label price estimates/quote requirements before an owner adoption decision. |
 | [#27](https://github.com/jordandavid1812-creator/university-command-center/pull/27) | Document independent S0-02 design and PR 26 implementation reviews | **B** | Original S0-02 design/implementation findings are unique historical evidence, not a statement that current44c515f still has every old defect. No GitHub documentation review is recorded. |
@@ -36,7 +36,7 @@ A = ready for owner merge decision; B = needs independent review; C = needs corr
 | [#19](https://github.com/jordandavid1812-creator/university-command-center/pull/19) | Bump actions/checkout from 6.1.0 to 7.0.1 | **C** | Pinned checkout major update has four green jobs on its old branch. Current three-way tree preserves all three browser commands; no current-master action runtime/integration proof is claimed. |
 | [#18](https://github.com/jordandavid1812-creator/university-command-center/pull/18) | Bump actions/setup-python from 6.3.0 to 7.1.0 | **C** | Pinned setup-python major update has four green jobs on its old branch. Current three-way tree preserves all three browser commands, but current-master runtime/action compatibility and combined workflow evidence remain unexecuted. |
 
-**Ready now: #46 only.** The owner explicitly reports independent approval and its exact head is unchanged. **Next security priority: #29**, requiring current integration evidence, not an unreviewed rewrite. **Closure recommendation: #31 only.** Historical review documents #27/#32/#33/#38/#40 are not duplicates merely because their reviewed implementation has since changed; preserve useful evidence and disposition context.
+**Ready now: #46 only.** The owner explicitly reports independent approval and its exact head is unchanged. **Next security priority: #29**, requiring current integration evidence, not an unreviewed rewrite. **Closure recommendation: #31 only, without merging, subject to separate owner authorization. Its clean textual merge fails an existing UI2 test in the reviewer's integration experiment; do not merge it as a date fix.** Historical review documents #27/#32/#33/#38/#40 are not duplicates merely because their reviewed implementation has since changed; preserve useful evidence and disposition context.
 
 ## Complete exact-head inventory and changed files
 
@@ -47,7 +47,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **A**; draft. Target: `master`.
 - Exact head: `8fa83a39e89476a48ecd913dce7e9ea6e8c795bf`.
 - API-recorded base: `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`. Actual merge-base with current master: `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43233498507](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43233498507), exact head match, **success**. Jobs: database-tests=success, frontend-browser=success, dependency-audit=success, tests=success.
 - Independent review: owner reports approval of this unchanged exact head; no formal GitHub review object.
 - Dependency / acceptance: No prerequisite beyond owner decision; this report does not merge it.
@@ -60,7 +60,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `642df7909afc882e5ed61a62f232113c560a5e08`.
 - API-recorded base: `0983f6f144cfd39a744b915e89d648740d1187d2`. Actual merge-base with current master: `0983f6f144cfd39a744b915e89d648740d1187d2`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43174278727](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43174278727), exact head match, **success**. Jobs: tests=success, dependency-audit=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Preserve R5-T1 real-COMMIT fault placement and R5-T2 unsafe-logging fixture placement as implementation-test conditions; obtain owner B1 decisions separately.
@@ -74,7 +74,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `e713a1e0f83ee06ea931f34326afbf3c09ddbb3b`.
 - API-recorded base: `0983f6f144cfd39a744b915e89d648740d1187d2`. Actual merge-base with current master: `c19c1a335c6817e9eb2b359e5944a63eea3f3189`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43148243615](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43148243615), exact head match, **success**. Jobs: database-tests=success, tests=success, dependency-audit=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Accept/archive as historical evidence with #42 disposition context; do not apply its verdict to merged revision5.
@@ -88,7 +88,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `a908e12cd43c9e7574818091dcd48f027bb9502c`.
 - API-recorded base: `c19c1a335c6817e9eb2b359e5944a63eea3f3189`. Actual merge-base with current master: `c19c1a335c6817e9eb2b359e5944a63eea3f3189`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43141315989](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43141315989), exact head match, **success**. Jobs: dependency-audit=success, tests=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Review as historical record; point readers to revision5/#42 before treating old findings as outstanding.
@@ -102,7 +102,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; open, non-draft. Target: `master`.
 - Exact head: `e3da0bfa268b26e420f004d9eaabd06f69ccadc4`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43133095308](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43133095308), exact head match, **success**. Jobs: dependency-audit=success, database-tests=success, tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Reconcile with merged B1rev5 and UI2; retain no intermediate B1 staging, explicit tool approvals and #29→#26 sequence. Independent review after documentation corrections.
@@ -117,7 +117,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; open, non-draft. Target: `master`.
 - Exact head: `9de431c271b85585c2b5972bcf0b0f6533e5b10e`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43122737311](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43122737311), exact head match, **success**. Jobs: database-tests=success, tests=success, dependency-audit=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Use #35/current B1rev5/#42 and current UI2 counts; provider compatibility and owner decisions are unverified/unimplemented. Review corrected docs.
@@ -132,7 +132,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `e2d6f811ffa64b6d6b4d7addc6febe566c233956`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43122659048](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43122659048), exact head match, **success**. Jobs: database-tests=success, dependency-audit=success, tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Publish as historical audit evidence with explicit later-head disposition; no device activation or owner risk acceptance inferred.
@@ -146,7 +146,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `3949c8c3a29c8c9cba231f38de5f9324272c1d61`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43121636404](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43121636404), exact head match, **success**. Jobs: tests=success, dependency-audit=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Review the documentation as a preserved audit; current integration tests remain required for #29.
@@ -157,13 +157,15 @@ Each CI link below is the latest run returned for the specified head, and every 
 
 ### PR #31 — Make onboarding polish test independent of the current date
 
-- Class: **D**; open, non-draft. Target: `master`.
+- Class: **D — unsafe integration; recommend closure without merging**; open, non-draft. Target: `master`.
 - Exact head: `9f09c0c72d11d7d4f20a993f8db1f697c31453f4`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43121276490](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43121276490), exact head match, **success**. Jobs: dependency-audit=success, database-tests=success, tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
-- Dependency / acceptance: Recommend owner-authorized closure. Keep current master date-boundary and owner-approved U2 assertions; no test removal or closure performed.
+- Runtime integration evidence: Claude's independent review, as supplied by the owner, used **disposable PostgreSQL 16**. Current-master `web_tests.test_polish` passed **17/17**; the synthetic master + PR31 candidate failed `test_existing_workspace_does_not_repeat_first_time_onboarding`. PR31 freezes its first dashboard request before the seeded deadline, then expects `?status=overdue`, while UI2 correctly hides that link when the overdue count is zero. This is **reported PG16 evidence**, not a new local reproduction or PostgreSQL 17 verification by this documentation correction.
+- Safety disposition: **PR31 is unsafe to merge into current master despite its clean textual merge. Recommend closing PR31 without merging, subject to separate owner authorization.** No closure, merge or test change is performed here.
+- Date-independence correction: PR30 and UI2 made the relevant overdue-boundary assertions deterministic, but **the first dashboard request remains unfrozen** in current master. Its overdue-link assertion currently succeeds only when the actual local date is **after November 11, 2026**. Thus the entire test is not fully date-independent. Further hardening belongs in a **separate narrowly scoped test correction**, preserving the owner-approved U2 expectations; merging PR31 is not that correction.
 - Complete changed-file list:
 
   - `server/web_tests/test_polish.py`
@@ -173,7 +175,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; draft. Target: `master`.
 - Exact head: `42910ed09ed1a20aee556e77666cf6e347c724cd`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43129590527](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43129590527), exact head match, **success**. Jobs: database-tests=success, dependency-audit=success, tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: First security implementation to resolve; current-master PG17 race/auth/isolation/website and all three browser suites, then exact-candidate independent verification and owner decision.
@@ -189,7 +191,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; open, non-draft. Target: `master`.
 - Exact head: `48d96ca5cc344da13fe12d441fdf017178950fbe`.
 - API-recorded base: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`. Actual merge-base with current master: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43105418737](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43105418737), exact head match, **success**. Jobs: tests=success, database-tests=success, dependency-audit=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: No services selected or purchased. Coordinate with #34/#35 instead of parallel competing staging implementations.
@@ -203,7 +205,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **B**; open, non-draft. Target: `master`.
 - Exact head: `058220391e74ae9b3e23619fe0aaabfd78957dc4`.
 - API-recorded base: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`. Actual merge-base with current master: `64fe8743fa1d3b1c2b1f9e833dca9e5e4fd982bb`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43105416209](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43105416209), exact head match, **success**. Jobs: tests=success, dependency-audit=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Independent historical-publication review with #33/#35 correction context; keep design findings and implementation status distinct.
@@ -217,7 +219,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **E**; draft. Target: `master`.
 - Exact head: `44c515f903cc35f1dfdd3d1c2b777a8d1a873222`.
 - API-recorded base: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`. Actual merge-base with current master: `8295fbdcf5db84342a46e4ecc7dcf6a4e813e6a5`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43129781953](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43129781953), exact head match, **success**. Jobs: tests=success, dependency-audit=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: After owner-authorized #29 integration, verify accounts.0003 history, actual restricted LOGIN grants, device tests/generation limitations and dormant imports. No device activation.
@@ -240,7 +242,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; open, non-draft. Target: `master`.
 - Exact head: `8759c8cb7cb2f29332e682dd93b38ddb2ee4459f`.
 - API-recorded base: `13c8cc10aa8c4a7b2a2e08c16778f5a9697364ef`. Actual merge-base with current master: `13c8cc10aa8c4a7b2a2e08c16778f5a9697364ef`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43176454130](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43176454130), exact head match, **success**. Jobs: frontend-browser=success, database-tests=success, tests=success, dependency-audit=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Same workflow file as #18: resolve sequentially, preserve pinned SHAs/permissions/credential handling and all current tests; no blind source-file replacement.
@@ -253,7 +255,7 @@ Each CI link below is the latest run returned for the specified head, and every 
 - Class: **C**; open, non-draft. Target: `master`.
 - Exact head: `d83d58797410970351d6cdcf4ad7e49c8f4aca34`.
 - API-recorded base: `13c8cc10aa8c4a7b2a2e08c16778f5a9697364ef`. Actual merge-base with current master: `13c8cc10aa8c4a7b2a2e08c16778f5a9697364ef`.
-- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**. #31's purpose is nevertheless superseded as explained above.
+- Textual merge conflict: **none** (local tree check); head included in master: **no**. Changed files byte-identical to master: **none**.
 - CI: [run43176445957](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43176445957), exact head match, **success**. Jobs: tests=success, dependency-audit=success, frontend-browser=success, database-tests=success.
 - Independent review: no formal GitHub review object; see evidence/disposition in the classification table.
 - Dependency / acceptance: Review upstream major-version/runner requirements, keep read-only permissions and persist-credentials:false; integrate/test separately from #19 and recheck the second candidate.
@@ -319,7 +321,7 @@ Optional visual work (new dashboard polish, broad dark theme or every remaining 
 
 ## Security and launch blockers / owner decisions
 
-- **Owner resolution:** authorize #46 at its approved exact head; decide #31 closure. No automatic draft promotion, merge or closure. Other documentary publications need their independent-review disposition; their age or green CI does not authorize acceptance.
+- **Owner resolution:** authorize #46 at its approved exact head; decide closure of unsafe #31 without merging. No automatic draft promotion, merge or closure. Other documentary publications need their independent-review disposition; their age or green CI does not authorize acceptance.
 - **Unintegrated authentication:** #29 race fix and #26 dormant foundation are still absent from master. Clean trees and historical approvals are insufficient combined-runtime evidence. Owner chooses exact source/merge sequence after independent candidate verification.
 - **B1 scope/policy:** D1/D2 prior-session survival/renewal and failed password-change behavior, D3 timers and their limits, D4 privacy/logging diagnostics tradeoff, D5 increment gates, D6 classification policy. Preserve RB-1…RB-13 and #42 R5-T1/R5-T2 test-placement conditions. Neither statement timeout nor HTTP500/503 proves total request/COMMIT bounds or rollback. No new security implementation starts without its required approval.
 - **Active restrictions:** S0-02B/C need separate design/implementation/recovery acceptance; do not issue device cookies, activate account restrictions, add trusted-device UX or the optional daily100 cap through this cleanup. Owner/security review must decide an acceptable private-MVP abuse/recovery baseline. Reliable verified email and accessible independent recovery are prerequisites to any hard account restriction, not promises from a local console backend.
