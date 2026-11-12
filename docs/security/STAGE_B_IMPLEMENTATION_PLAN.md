@@ -1,11 +1,11 @@
 # Stage B: S0-02B/C authentication security implementation plan
 
-**Status: planning only. Revision 4:** B1 is corrected after Codex's second independent review. That review gave the verdict REQUEST CHANGES on revision 3 (`e308a9a`) and raised findings R3-01 to R3-06. It is in `docs/security/B1_REVISION_3_INDEPENDENT_REVIEW.md` and `B1_REVISION_3_REVIEW_PROBES.md`, on PR #38 (`a908e12`). The first review (PR #37) is also addressed. See the correction matrices in §6.0. Nothing in this document is implemented or authorized.
+**Status: planning only. Revision 5:** B1 is corrected after Codex's third independent review. That review gave the verdict REQUEST CHANGES on revision 4 (`e9178135`) and raised R4-01 to R4-06. It is on PR #40 (`e713a1e`, unmerged): `docs/security/B1_REVISION_4_INDEPENDENT_REVIEW.md` and `B1_REVISION_4_REVIEW_PROBES.md`. The earlier reviews (PR #37; PR #38 R3-01 to R3-06) remain addressed. See the correction matrices in §6.0. Nothing in this document is implemented or authorized. Documentation CI does not validate any B1 behaviour.
 
 | Item | Value |
 | --- | --- |
 | Prepared | 12 November 2026 (Africa/Lagos) |
-| Baseline | `master` `c19c1a3` (includes PR #30 and PR #37). The revision-3 review documents are read from PR #38 `a908e12`, which is unmerged; this branch does not include them. |
+| Baseline | Branched from `master` `c19c1a3` (includes PR #30 and PR #37). Current `master` `0983f6f` adds only `docs/design/` files. The review documents are read from PR #38 `a908e12` and PR #40 `e713a1e`, both unmerged; this branch does not include them. |
 | Analysed tree | A local, never-pushed scratch merge of `master` + PR #29 (`42910ed`) + PR #26 (`44c515f`). Both merged with no conflicts (`docs/AUTHENTICATION.md` auto-merged). That is static evidence only; no tests were run on it. |
 | PR #26 and PR #29 | Read, not modified |
 | Owner decisions so far | B1 accepted as the first candidate, subject to this refinement; timeout values remain **configurable candidates**, not production limits; D-B1-1 to D-B1-6 pending (§6.14) |
@@ -64,7 +64,7 @@ This plan does not repeat that design. It turns it into small, reviewable PRs ag
 
 ### 2.1 Login data flow (end state; every enforcement switch default off)
 
-Failure edges show **per-unit** outcomes (§6.1). A failure response carries no new session key (§6.2 CK1). A deletion header is allowed, and a prior session may remain valid (§6.3). Statuses come from the classifier (§6.4): 503 for proven outage, connection or configuration states; 500 for defects; 400 kept for a genuine concurrent deletion. **No edge promises that a database failure rolled back, deleted sessions or produced a 503.**
+Failure edges show **per-unit** outcomes (§6.1). Implicit autocommit statements (the throttle upsert and the CAS upgrade today) **persist once executed**, whatever happens later. A missing COMMIT proves rollback only for an explicit block. A failure response carries no new session key (§6.2 CK1). A deletion header is allowed, and a prior session may remain valid (§6.3). Statuses come from the classifier (§6.4): 503 for proven outage, connection or configuration states; 500 for defects; 400 kept for a genuine concurrent deletion. **No edge promises that a database failure rolled back, deleted sessions or produced a 503.**
 
 ```mermaid
 flowchart TD
@@ -120,7 +120,7 @@ Each PR is separately reviewed, gets its own PG17 CI, and is independently verif
 | PR | Scope | Depends on | Migration | Live behaviour change | Owner decision |
 | --- | --- | --- | --- | --- | --- |
 | **B0** | Stage A: merge #29, then #26 (Codex sequence) | Owner | `accounts.0003` | **Yes:** #29 changes live login finalization (F04b fix: setter-free verification, CAS upgrade, locked revalidation). #26 is dormant. | Merge authorizations |
-| **B1** (B1a–B1d, §6.11) | **Bounded database waits, log sanitisation and safe authentication failure handling** (§6, revision 4) | #29 merged | No | Proven outage, connection or configuration failures on account routes and the session-save path give a template-free 503. Driver defects and unproven database errors give a minimal 500. A genuine concurrent deletion stays 400. Existing handled contracts preserved. Sink-level sanitisation of Django and application logs. Uncertain-outcome wording. Intermediates are trusted synthetic development only. | D-B1-1 to D-B1-6 (§6.14) |
+| **B1** (B1a–B1d, §6.11) | **Bounded database waits, log sanitisation and safe authentication failure handling** (§6, revision 5) | #29 merged | No | Proven outage, connection or configuration failures on account routes and the session-save path give a template-free 503. Driver defects and unproven database errors give a minimal 500. A genuine concurrent deletion stays 400. Existing handled contracts preserved. Sink-level sanitisation of Django and application logs in the protected web profiles; offline, migration and foundation profiles unchanged. Uncertain-outcome wording. Intermediates are trusted synthetic development only. | D-B1-1 to D-B1-6 (§6.14) |
 | B2 | Transactional login finalization: explicit session save inside T2 (closes G3, Codex PR #32 Low) | B1 | No | None visible; session row created atomically | — |
 | B3 | Security-event logging foundation (G6) | B1 | No | Log lines only | Logging key and retention; Stage D sink |
 | B4 | Account-aware admission in **observe** mode: T1/T2 accounting, `account_fail`, `account_success` acquired in T2 | B2, B3, #26 | No (uses `LoginLimit`) | None; logs `would_restrict` only | Thresholds (initial 10/15 min) |
@@ -144,7 +144,7 @@ All tests use PostgreSQL 17 with real distinct migrator, runtime and auth LOGINs
 
 | PR | Negative | Concurrency | Replay | Failure injection | PG17-specific |
 | --- | --- | --- | --- | --- | --- |
-| B1 | No B1 options on the migrator; duplicate or zero overrides rejected; a genuine concurrent deletion stays 400; driver defects give 500 at every catch point, including `handler400`; existing handled contracts preserved | Real 55P03 on the Student and session rows; logins in the N/AN/SA/DA states | — | **Flow × phase × initial-cookie** matrix (§6.10 A): O1–O4 recorded; CK1–CK4; DA A-valid on rollback; allowed deletion headers; no new key. Classification (B): 42703/42P01, 55P03, real and no-SQLSTATE connection loss. Sink-level logging sentinels (D). | 55P03 / 57014 / 25P03 (`InternalError`); a deferred-trigger COMMIT exceeds `statement_timeout`; `connect_timeout` with a stalled handshake |
+| B1 | No B1 options on the migrator; duplicate or zero overrides rejected; a genuine concurrent deletion stays 400; driver defects give 500 at every catch point, including `handler400`; existing handled contracts preserved | Real 55P03 on the Student and session rows; logins in the N/AN/SA/DA states | — | **Flow × phase × initial-cookie** matrix (§6.10 A): O1–O4 recorded; CK1–CK4; DA A-valid on rollback; allowed deletion headers; no new key. Classification (B): 42703/42P01, 55P03, real and no-SQLSTATE connection loss, DA INSERT → `handler500`. Login lifecycle observation (A1: SA neither flushes nor cycles; DA has no row inside the finalizer). Implicit versus explicit units (H). Sink-level logging sentinels and label trust (D). Fresh-subprocess profile scope (G). | 55P03 / 57014 / 25P03 (`InternalError`); a deferred-trigger COMMIT exceeds `statement_timeout`; `connect_timeout` with a stalled handshake |
 | B2 | No session row if T2 rolls back | Reset racing finalization in **both** orders (Codex probe 3 becomes a regression) | — | Fault after `auth_login`, at session save, at commit | Real row locks |
 | B3 | Sentinel username, IP, token, cookie and password never appear in captured logs; reset paths never logged | Dedup under N threads | — | Logging failure never blocks auth | — |
 | B4 | 20 failures across windows don't consume `account_success`; unknown and known accounts are identical | N+1 admissions, exactly N password checks (backend call counter); finalizations never exceed the success limit | — | T1 rollback consumes nothing; crash between T1 and T2 counts as a failure only | Campus simulation (11/61/601 students) **in observe mode** |
@@ -175,22 +175,46 @@ All tests use PostgreSQL 17 with real distinct migrator, runtime and auth LOGINs
 
 ---
 
-## 6. First implementation proposal: B1 (revision 4: corrected after the second independent review)
+## 6. First implementation proposal: B1 (revision 5: corrected after the third independent review)
 
 **Status.** Specification only, **not implemented**, not authorized.
 
-Revision 4 corrects revision 3 (`e308a9a`). Codex reviewed revision 3 with the verdict **REQUEST CHANGES**. The review is on PR #38 (`a908e12`): `docs/security/B1_REVISION_3_INDEPENDENT_REVIEW.md` and `B1_REVISION_3_REVIEW_PROBES.md`. It accepted the B1-03 timeout correction and most of revision 3. It raised six new findings, **R3-01 to R3-06** (five Medium, one Low). Revision 4 fixes those six and makes the rest of the document agree with them (§2, §3, §4, §7).
+**Review history:**
 
-**Evidence base for revision 4.** Every claim below is labelled as one of:
+* **Revision 5** corrects revision 4 (`e9178135`). Codex's review of revision 4 gave **REQUEST CHANGES** (PR #40, commit `e713a1e`, **unmerged**). It is in `docs/security/B1_REVISION_4_INDEPENDENT_REVIEW.md` and `B1_REVISION_4_REVIEW_PROBES.md`, read at that exact commit. It raised:
+  * three Medium findings: **R4-01** session lifecycle, **R4-02** offline profiles and the logging guard, **R4-03** implicit autocommit;
+  * three Low findings: **R4-04** label trust, **R4-05** walker sequencing and category transport, **R4-06** the Stage C profile flag.
+* **Revision 4** corrected revision 3 (`e308a9a`) after PR #38 (`a908e12`), findings R3-01 to R3-06.
+* **Revision 3** corrected revision 2 after PR #37.
 
-* **Probe (PG17.11, Codex):** Codex's seven revision-3 probes. They ran on Django 5.2.19, psycopg 3.3.8 and PostgreSQL 17.11 against the post-PR #29 code, with real separate LOGINs and synthetic data. I read the probe source in full. **I did not rerun them for this revision.**
-* **Probe (PG16.15, mine):** my R1–R3 probes and my reruns of Codex's earlier probes (§6.13). They are unchanged since revision 3.
-* **Source:** a reading of Django 5.2.19 or CPython 3.12 code, cited by file and line. **These still need the tests in §6.10 to prove them.**
+Revision 5 keeps every R3-01 to R3-06 design decision unless §6.0.0 says otherwise. The corrections are made throughout the document (§2, §3, §4, §6, §7), not only in the sections the review names.
+
+**Documentation CI is not B1 evidence.** CI on this PR runs the **existing** code only. It does not show that any unimplemented B1 classifier, sanitizer, profile guard or test passes.
+
+**Evidence labels.** Every claim below is labelled as one of:
+
+* **Probe (PG17.11, Codex R4):** Codex's revision-4 observation tests: four login entry states, two response-save failures, implicit autocommit and offline logging. They ran on Django 5.2.19, psycopg 3.3.8 and PostgreSQL 17.11 against post-PR #29 code (`bec0a44`, identical to `42910ed` in `accounts`, `config` and `auth_tests`). I read the source in full. **I did not rerun them.**
+* **Probe (PG17.11, Codex R3):** Codex's seven revision-3 probes (PR #38). Not rerun by me.
+* **Probe (PG16.15, mine):** my R1–R3 probes and my reruns of Codex's earlier probes (§6.13).
+* **Source:** a reading of Django 5.2.19, psycopg 3.3.8, CPython 3.12 or repository code, cited by file and line. **These still need the tests in §6.10 to prove them.**
 * **Design:** a requirement for the future implementation, not an observation.
 
 ### 6.0 Correction matrices
 
+#### 6.0.0 Revision-4 findings (Codex PR #40, `e713a1e`)
+
+| Finding (severity) | Revision 4 error | Evidence | Correction in revision 5 | Sections | Test evidence required | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| **R4-01** (Medium): the session lifecycle and acceptance oracle were wrong | Said all four entry states run `cycle_key()`. Showed SA L4 as "K deleted, authenticated orphan". Showed DA L4 as "anonymous B row". Treated the response save as always an UPDATE through the `handler400` path. | Source: `contrib/auth/__init__.py:175-187`. A session holding a user takes the `flush()` branch only when the user or hash differs; otherwise **nothing** happens. `cycle_key()` runs only in the `else` branch (no user in the session). `db.py:114-138`: with the key set to None, `save()` calls `create()`. Probe (PG17.11, Codex R4): cycle calls are N 1, AN 1, **SA 0, DA 0**. Rows inside the finalizer: N 1, AN 1, SA 1 (existing), **DA 0** (key None). SA keeps the same key. A response save that is not applied gives SA 500 with the old key valid and 1 row; DA 500 with **0 rows**. | §6.3.1 rewritten from source. Four separate login lifecycles (N, AN, SA, DA), plus **SX** (same user, stale hash, which takes the flush branch). Response-save phases are split into **UPDATE** (N, AN, SA: `UpdateError` → `SessionInterrupted` → `handler400`) and **INSERT** (DA and SX: key generation `exists()` SELECT, then the INSERT; errors reach `handler500` directly; key collisions are Django's own `CreateError` retry). SA keeps its key and its renewal risk is on **this** path. The replacement row for an account switch is created **only** by the response-phase INSERT. RB-1 corrected (no SA orphan at L4). | 6.3.1–6.3.3, 6.5, 6.10 A, 6.11 (B1a), 6.13, 6.14 RB-1/RB-6, 2.1 | §6.10 A1 (lifecycle observation assertions in **B1a**): cycle counts, finalizer row counts, key retention for N, AN, SA, DA and SX. A2 for each response-save sub-phase. | **Corrected (design)**; evidence in B1a |
+| **R4-02** (Medium): the startup logging guard had no profile boundary | `AccountsConfig.ready()` rejected every non-sanitizing handler. `accounts` is installed in `base`, so `auth_migration` (`LOGGING={}`; `StreamHandler` and `AdminEmailHandler` on `django`) would fail to start. | Probe (PG17.11 environment, Codex R4): a fresh `auth_migration` process has `accounts` installed, empty `LOGGING`, and `django` handlers `[StreamHandler, AdminEmailHandler]`. Source: `config/settings/*.py` import graph. | An explicit policy setting, **`UCC_LOG_PRIVACY = "enforce"`**, set **only** by `accounts.log_privacy.configure()`. That function is called from `auth_common.configure` (so it reaches the auth and web profiles) and must be called by Stage C's staging profile. Everything (`LOGGING`, `lastResort` replacement, `ready()` guard, E102 and E103) is active **only** when the setting is `"enforce"`. The default is absent, meaning off. Profile table in §6.8.1. Excluded profiles keep Django's default graph unchanged. | 6.8.1, 6.8.2, 6.9, 6.10 G, 6.11 (B1b) | §6.10 G: one **fresh subprocess per profile**. Protected profiles have exactly the sanitized graph; a raw handler stops startup. Excluded profiles have Django's default graph, and `check`, migration and provisioning commands start. Historical suites pass unchanged. | **Corrected (design)** |
+| **R4-03** (Medium): implicit autocommit was omitted | P2 said "a transaction never commits without COMMIT" for every unit, including autocommit throttle and CAS writes | Probe (PG17.11, Codex R4): an INSERT on the auth alias in autocommit mode was visible to another connection with **0** `_commit()` calls. Source: `throttling.py:82-92` (raw cursor upsert, no atomic block); `backends.py:29` (`QuerySet.update`, no atomic block); session save uses `transaction.atomic` (`db.py:126`). | §6.1 separates **implicit statement units** (phases S0–S3: not dispatched; a statement-level error response; the driver returned success, so committed; dispatched with no result, so uncertain) from **explicit atomic units** (E0–E4). "No COMMIT sent" proves rollback **only** for an explicit block. A later finalizer rollback never implies a throttle or CAS rollback. No automatic retry of either kind. | 6.1, 6.3, 6.10 H, 6.11, 6.14 | §6.10 H: real autocommit persistence after a later failure (throttle and CAS); a real statement-level 55P03 on the throttle row gives no change; an **injected** post-execute lost acknowledgement is labelled as such; explicit-block known rollback versus an uncertain COMMIT. | **Corrected (design)** |
+| R4-04 (Low): labels need a trust policy | Regex on logger names, exception qualnames and `levelname` | Probe (Codex R4): sentinel-bearing names pass the regex | Logger names map to **fixed labels from a code table**; unknown names become `other`. Levels use a numeric table. Exception labels come from an identity-keyed table of known classes; unknown classes become `OTHER`. A SQLSTATE is emitted only if `psycopg.errors.lookup()` knows it. Route labels come from a fixed tuple. The guard is a **startup snapshot**: runtime logging reconfiguration is prohibited by rule and by a source-scan test (RB-12). | 6.8.3, 6.10 D | Sentinel logger name, sentinel exception class, sentinel `levelname`, unknown SQLSTATE: none reach the sink | **Corrected (design)** |
+| R4-05 (Low): walker sequencing and category transport | B1b used the §6.4 walker that B1c delivers; the output template had no category field | Review | The shared bounded walker is in `accounts/exception_chain.py`, **delivered and tested in B1b**; the B1c classifier imports it. A typed `FailureEvent` (enum category, validated SQLSTATE) is the **only** extra the sanitizer accepts. The output template gains `event` and `category` fields. | 6.4, 6.8.3, 6.9, 6.11 | Walker unit tests in B1b; the `accounts.failures` line shows the category at the sink (B1c) | **Corrected (design)** |
+| R4-06 (Low): Stage C profile flag | E104 keyed on the `*_secure` filename | Review | Explicit **`UCC_SECURE_PROFILE = True`** in `auth_secure`, `web_secure`, and (by agreement) Stage C `local_staging`. E101–E104 are evaluated under that exact module in the Stage C preflight. | 6.7, 6.8.1, 6.12 | E104 fires on `DEBUG` or `DEBUG_PROPAGATE_EXCEPTIONS` when the flag is set, and is silent when it is unset | **Corrected (design)**; Stage C integration check |
+
 #### 6.0.1 Revision-3 findings (Codex PR #38)
+
+The statuses below are as revision 4 left them. Codex's PR #40 disposition: R3-01, R3-03 and R3-06 are **addressed at design level**. R3-02, R3-04 and R3-05 were **partly open** and are completed by R4-01 to R4-05 in §6.0.0. Their R3 design decisions (classification, cookie rules, renderer, increment order) are preserved unchanged.
 
 | Finding (severity) | Revision 3 error | Evidence | Correction in revision 4 | Section | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -216,27 +240,54 @@ Revision 4 corrects revision 3 (`e308a9a`). Codex reviewed revision 3 with the v
 
 "Corrected (design)" means the specification is technically supportable. It does **not** mean implemented, tested in CI or authorized.
 
-### 6.1 Failure phases (per write unit, not per request)
+### 6.1 Write units and failure phases (per unit, not per request)
 
-These phases apply **to each write unit separately**. A login request contains several units:
+A request contains several write units. **Each unit has its own outcome.** A later failure never undoes an earlier unit that already committed, so **B1 never claims that a failed request rolled anything back**.
 
-* the autocommit throttle upsert;
-* the PR #29 compare-and-swap hash upgrade;
-* the finalization transaction;
-* the response-phase session UPDATE. Django runs it in its own `transaction.atomic` (`contrib/sessions/backends/db.py:114-136`).
+#### 6.1.1 Unit inventory (source: PR #29 `42910ed` plus Django 5.2.19)
 
-An earlier unit can commit while a later one fails. **B1 never claims that a failed request rolled anything back.**
+| Unit | Kind | Where |
+| --- | --- | --- |
+| IP throttle upsert (`INSERT … ON CONFLICT … RETURNING`) | **Implicit** (autocommit single statement; no atomic block) | `accounts/throttling.py:82-92` |
+| CAS hash upgrade (`QuerySet.update`) | **Implicit** (autocommit; `update()` opens no atomic block) | `accounts/backends.py:29` |
+| Login finalization (Student lock, revalidation, `auth_login` session writes, `last_login`) | **Explicit** `transaction.atomic(using='auth')` | `accounts/views.py` login |
+| Response-phase session save: UPDATE (N, AN, SA) or `create()` → INSERT (DA, SX) | **Explicit**: each `save()` runs in its own `transaction.atomic` | `sessions/backends/db.py:114-138` |
+| Reset redemption, verify, issue, register, password change | **Explicit** atomic blocks | `accounts/views.py`, `accounts/tokens.py` |
 
-| Phase | Meaning | Server-side outcome of **that** unit | Known or uncertain |
+#### 6.1.2 Phases for implicit statement units (autocommit)
+
+PostgreSQL commits a successful standalone statement **implicitly**. No client COMMIT is sent (Probe, PG17.11, Codex R4: persisted with 0 `_commit()` calls).
+
+| Phase | Meaning | Outcome of the unit | Known? |
 | --- | --- | --- | --- |
-| P0 | Before any write (role check, connect) | Nothing written | Known |
-| P1 | A wait or failure before the unit's first write (`lock_timeout`, connect failure) | Nothing written by this unit | Known |
-| P2 | Failure after writes, before COMMIT was sent | **Not committed**: a transaction never commits without COMMIT. If the connection is lost, the server may hold the transaction and its locks until it notices. | Known (not committed) |
-| P3 | COMMIT sent, acknowledgement not received | Committed **or** not | **Uncertain** |
-| P4 | Unit committed, later failure (another unit, middleware, rendering) | Committed | Known (committed) |
-| P5 | After response headers were handed to the WSGI server | Committed, and **Set-Cookie may already have been delivered** | Outside Django; RB-2 |
+| S0 | Not dispatched: the connection was unavailable before sending, or a client-side error occurred before execute | Not executed | Known (only when the test controls the point of failure) |
+| S1 | The server returned a **statement-level ERROR** for this statement (for example 55P03, 57014, 23505). The connection stays usable. | The implicit transaction was aborted, so **not persisted** | Known |
+| S2 | The driver **returned success** for the statement | **Persisted.** A later failure in the request (finalizer, middleware, rendering) does not undo it. | Known |
+| S3 | Dispatched, then the connection failed before a result came back: no-SQLSTATE driver error, class `08`, a FATAL such as 57P01, or a worker kill | **Persisted or not** | **Uncertain** |
 
-Post-failure state is never read back through a broken connection.
+Consequences:
+
+* The throttle and CAS units are **S2 in every login that reached the finalizer**, whatever happens afterwards.
+* The plan never infers their rollback from a finalizer rollback or from the absence of a COMMIT.
+* A connection-class or no-SQLSTATE error is treated as S3 unless the test proves S0.
+
+#### 6.1.3 Phases for explicit atomic units
+
+| Phase | Meaning | Outcome | Known? |
+| --- | --- | --- | --- |
+| E0 | Failure before the first statement of the block | Nothing written | Known |
+| E1 | A statement-level ERROR, or a Python exception inside the block, before COMMIT is dispatched; Django's `Atomic.__exit__` rolls back | **Not committed.** An explicit transaction cannot commit without COMMIT. If the connection was lost, the server aborts it when it notices; locks may linger until then. | Known (not committed) |
+| E2 | The connection failed inside the block before COMMIT was dispatched | Not committed (as E1) | Known |
+| E3 | COMMIT dispatched, no confirmation (`_commit` raised a connection-class or no-SQLSTATE error, or the worker was killed) | Committed **or** not | **Uncertain** |
+| E4 | COMMIT confirmed; a later failure happened elsewhere | Committed | Known |
+
+"No COMMIT sent, therefore rolled back" applies **only** to E0–E2 of an explicit block.
+
+The general labels P0–P5 used in earlier revisions map as follows: P0 and P1 → S0, S1 or E0; P2 → E1 or E2; P3 → S3 or E3; P4 → S2 or E4; P5 is after the header handoff (RB-2).
+
+Post-failure state is always read on a **clean connection** after all controlled transactions end, never through the failed one.
+
+**No automatic retries.** B1 never retries an implicit or explicit security write. Django's built-in `create()` loop, which retries a **session-key collision** (`CreateError`, an `IntegrityError` on the INSERT), is existing framework behaviour that inserts no duplicate authority. It is listed so that it is not mistaken for a B1 retry.
 
 ### 6.2 Cookie and session observables, and the invariants B1 guarantees
 
@@ -253,7 +304,7 @@ Each test records four observables separately:
 
 **Invariants for a B1-handled failure produced before headers are emitted** (any response produced inside Django's exception lifecycle, including B1's handlers):
 
-* **CK1 (no new key issued).** O1 contains **no issue/renew** header for the session cookie. **Delete/expire headers are allowed. B1 must not remove them, and tests never require them to be absent.** Source: `contrib/sessions/middleware.py:36-42` (deletion when the session is empty, whatever the status) and `58-77` (save and set only below 500). After `handler400`, the new response is built after the session middleware has raised, so the session middleware adds no issue header to it.
+* **CK1 (no new key issued).** O1 contains **no issue/renew** header for the session cookie. **Delete/expire headers are allowed. B1 must not remove them, and tests never require them to be absent.** Source: `contrib/sessions/middleware.py:36-42` (deletion when the session is empty, whatever the status) and `58-77` (save and set only below 500). A failed response-phase save raises **before** `set_cookie` (`contrib/sessions/middleware.py:58-77`: the save call precedes `set_cookie`). For N, AN and SA the error is an UPDATE → `handler400`; for DA and SX it is a `create()` error → `handler500` (§6.3.1). Either way the replacement response is built after the session middleware has raised, so it gets no issue header from the session middleware.
 * **CK2 (no new authority).** After receipt, O2 holds no key outside `K_prev`. Any authority the client still has is **prior** authority: a `K_prev` key that is still valid.
 * **CK3 (prior state asserted, not assumed).** Each `K_prev` key's validity is asserted against the per-flow phase tables (§6.3). Tests never assume a rollback invalidated it, and never assume it survived a committed flush.
 * **CK4 (orphans recorded).** Valid rows whose key is in neither O2 nor `K_prev` are enumerated. They are permitted only in the phases the §6.3 tables list. They expire within `SESSION_COOKIE_AGE` (1800 s server side) and are removed by cleanup.
@@ -264,59 +315,89 @@ Each test records four observables separately:
 
 ### 6.3 Flow-specific authentication, session and cookie invariants
 
-#### 6.3.1 Login internals (source, PR #29 `42910ed` plus Django 5.2.19)
+#### 6.3.1 Login lifecycle (source: PR #29 `42910ed`, Django 5.2.19 `contrib/auth/__init__.py:153-196`, `sessions/backends/base.py`, `db.py`)
 
-1. Role check, then the throttle upsert (autocommit), then form authentication, including the PR #29 CAS hash upgrade (autocommit).
-2. Finalization transaction on the `auth` alias. It locks the Student row and revalidates. Then `auth_login` runs:
-   * If the session already holds a **different** user (or a hash mismatch), it calls `flush()`: clear, **DELETE A's row**, key set to None (`contrib/auth/__init__.py:175-185`, `sessions/backends/base.py:412-419`).
-   * `cycle_key()` follows. It **INSERTs** a new row carrying the in-memory data at that moment, then DELETEs the old key if there is one (`base.py:426-435`, `db.py:68-78`). For a different-account (DA) session the inserted data is empty after the flush. For a same-account (SA) session it is the **existing authenticated data**. For no cookie (N) or an anonymous cookie (AN) it is anonymous.
-   * The authentication keys are set **in memory only**.
-   * `user_logged_in` updates `last_login`, then `set_expiry(0)`.
-3. COMMIT, then the 302 redirect.
-4. The response-phase session UPDATE: autocommit, its own atomic block, carrying the authentication data. Then `Set-Cookie` with the new key.
+**Before the finalizer:**
 
-Login phases used in the tables below:
+1. Role check (read).
+2. Throttle upsert (**implicit**, §6.1.2).
+3. Form authentication (reads), including the CAS upgrade when needed (**implicit**).
 
-| Label | Meaning |
-| --- | --- |
-| L0 | Before finalization (role check, throttle, form, CAS) |
-| L1 | Inside finalization, before the flush or `cycle_key` (Student lock wait, revalidation) |
-| L2 | Inside finalization, after flush and/or `cycle_key` writes, before COMMIT is sent (known not committed) |
-| L3 | Finalization COMMIT uncertain |
-| L4 | Finalization committed; the response-phase session UPDATE known not applied (55P03, connection lost before sending, genuine deletion) |
-| L5 | Session UPDATE committed, acknowledgement lost (or uncertain) |
-| L6 | After headers (P5) |
+**Finalizer** (explicit `transaction.atomic(using='auth')`): lock the Student row and revalidate, then `auth_login(request, user)`, which branches **exactly once**:
+
+| Entry state | Branch in `auth_login` | Session writes **inside the finalizer** | In-memory session after `auth_login` |
+| --- | --- | --- | --- |
+| **N** (no cookie) | `SESSION_KEY` absent → `cycle_key()` → `create()`: `exists()` SELECT, then INSERT of the current (empty) data | 1 INSERT (anonymous row, new key K′) | Key K′, authentication data **in memory only** |
+| **AN** (known anonymous key K) | `SESSION_KEY` absent → `cycle_key()`: INSERT of K's anonymous data under K′, then DELETE of K | INSERT K′, DELETE K | Key K′, authentication data in memory |
+| **SA** (key K holding the same user with a matching hash) | `SESSION_KEY` present, same user, hash equal → **neither flush nor cycle** | **None.** K is kept (same key). | Key K, authentication keys rewritten in memory (same values) |
+| **SX** (key K holding the same user with a **stale** hash, for example after a password change elsewhere) | Hash differs → `flush()` | DELETE K; key set to **None** | Key None, authentication data in memory |
+| **DA** (key K holding a different user A) | Different user → `flush()`: clear, DELETE K, key None. **No `cycle_key()`** (that call is in the `else` branch). | DELETE K only. **No replacement row exists inside the finalizer** (Probe, PG17.11, Codex R4: 0 rows). | Key None, B's authentication data in memory |
+
+After the branch, every state continues the same way inside the finalizer:
+
+* `rotate_token`;
+* `user_logged_in` updates `last_login`;
+* `request.session.set_expiry(0)` (in memory).
+
+**COMMIT** closes the finalizer. The view then returns a 302 redirect.
+
+**Response phase:** `SessionMiddleware.process_response`. For any status below 500 with a modified, non-empty session, it calls `save()`:
+
+| Entry state | Response save | Error path if the save fails |
+| --- | --- | --- |
+| N, AN | **UPDATE** of K′ with the authentication data and new expiry (explicit atomic) | `DatabaseError` → `UpdateError` → `SessionInterrupted` → **`handler400`** |
+| SA | **UPDATE of the existing K** (authentication data, new `expire_date` = now + `SESSION_COOKIE_AGE`): this **renews K** | Same `handler400` path |
+| DA, SX | Key is None, so `save()` → **`create()`**: the `exists()` SELECT for a new key, then **INSERT** of the authenticated data under the new key K_B (explicit atomic per attempt). **This is the only point at which the replacement session for B is created.** | `exists()` error → the raw `DatabaseError` propagates. INSERT `IntegrityError` → `CreateError`, which Django retries with a new key. Any other INSERT `DatabaseError` is re-raised (`must_create` skips `UpdateError`). All reach **`handler500`**, not `handler400`. |
+
+Then `Set-Cookie` carries the session key.
+
+Login phases used below:
+
+| Label | Unit | Meaning |
+| --- | --- | --- |
+| L0 | Implicit units | Failure before the finalizer. Throttle and CAS are S1, S2 or S3 independently. |
+| L1 | Finalizer E0/E1 | Before any session write: Student lock wait, revalidation |
+| L2 | Finalizer E1/E2 | After the session writes in the table above (and/or `last_login`), before COMMIT: **known not committed** |
+| L3 | Finalizer E3 | COMMIT uncertain |
+| L4u | Response UPDATE E0–E2 | UPDATE known not applied (N, AN, SA) |
+| L4i | Response INSERT E0–E2 | `exists()` or INSERT known not applied (DA, SX) |
+| L5u / L5i | Response UPDATE or INSERT E3 | Commit uncertain (including commit followed by a lost acknowledgement) |
+| L6 | — | After the header handoff (P5) |
+
+The finalizer commit is E4 in L4u–L5i.
 
 #### 6.3.2 Account switch: browser authenticated as A logs in as B
 
-| Phase | A's row (O3) | B rows (O3) | O1 | O2 after | Authority after | Evidence |
+| Phase | A's row K (O3) | B rows (O3) | O1 | O2 after | Authority after | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| L0, L1 | **Valid**, unchanged | None | None | A's key | **Prior A retained** | Probe (PG17.11, Codex): Student lock 55P03, 500 today, A valid, protected follow-up 200 |
-| L2 | **Valid** (the DELETE rolled back) | None (the INSERT rolled back) | None if the session is non-empty at response time. **Deletion allowed** if it is empty (for example a failure after `flush()` but before `create()` assigned a key). | A's key, or none if deleted | Prior A retained, **or** the browser is anonymous while A's server row is still valid | Probe (PG17.11, Codex): fault at `_commit`, A valid, 1 row, follow-up 200. Deletion sub-case: source (`is_empty`, `base.py:185-190`), test required. |
-| L3 | L2 set **or** L4 set | L2 set or L4 set | As L2 or L4 | — | Either | Union of both; asserted as an allowed set |
-| L4 | **Invalid** (DELETE committed) | One B row with **anonymous** data (the INSERT ran after the flush; authentication keys never persisted) | None (response built by `handler400` or `process_exception`) | A's key (dead) | Anonymous; no authenticated orphan | Source; test required |
-| L5 | Invalid | One **valid authenticated** B row, key never delivered (**orphan**) | None | A's key (dead) | Anonymous; orphan recorded | Probe (PG16.15, mine) R3 |
-| L6 | Invalid | B valid | Issue header **may** have been delivered | **May** be B | Equivalent to a successful login | Outside B1 (RB-2) |
+| L0, L1 | **Valid**, unchanged | None | None | K | **Prior A retained** | Probe (PG17.11, Codex R3): Student 55P03, 500 today, A valid, follow-up 200 |
+| L2 | **Valid** (the DELETE rolled back) | **None** (none was ever inserted in the finalizer) | None. The in-memory session holds B's authentication data, so it is non-empty and no deletion header is sent (source); a deletion header would still be allowed by CK1. | K | **Prior A retained** | Probe (PG17.11, Codex R3): `_commit` fault, A valid, 1 row, follow-up 200 |
+| L3 | L2 state **or** invalid | None | None | K | Prior A retained, or anonymous | Allowed union |
+| L4i | **Invalid** (DELETE committed) | **None.** The `exists()` or INSERT failed and was not applied. | None | K (dead) | Anonymous | Probe (PG17.11, Codex R4): injected before save, 500, **0 rows**, no cookie |
+| L5i | Invalid | **0 or 1** valid authenticated B row (K_B), key never delivered (**orphan** if committed) | None | K (dead) | Anonymous; orphan possible | Probe (PG16.15, mine) R3 (the real INSERT ran, then the error was injected): 500, 1 valid row not equal to the client's key |
+| L6 | Invalid | B valid | Issue header **may** have been delivered | **May** be K_B | Equivalent to a successful login | Outside B1 (RB-2) |
 
 **Universal oracle for every pre-header row:**
 
-* **no authority for B in O2** (CK2);
-* A's validity is **asserted per row**;
-* B orphans only in L5 (or the committed side of L3 combined with L5).
+* **no B key in O2** (CK2);
+* A's validity is asserted per row;
+* a B row exists **only** in L5i (committed side) or L6;
+* the DA response-save error reaches **`handler500`** (§6.5).
 
-Status codes come from §6.5. **A B1 status conversion cannot change these states**: the rows above are the same whether the status is 500 or 503.
+**A status conversion cannot change these states.**
 
 #### 6.3.3 Other initial states for login
 
-| Initial state | L0–L2 (known not committed) | L3 | L4 | L5 |
+| Initial state | L0–L2 (finalizer known not committed) | L3 | L4u / L4i (response save known not applied) | L5u / L5i (response save uncertain) |
 | --- | --- | --- | --- | --- |
-| **N** (no cookie) | Nothing persisted by finalization | Either | Anonymous new row committed; not delivered | Valid authenticated orphan |
-| **AN** (known anonymous key) | Old anonymous key valid | Either | Old anonymous key deleted; new anonymous row; jar holds the dead anonymous key | Authenticated orphan; jar holds the dead anonymous key |
-| **SA** (same-account key K) | **K valid**, expiry unchanged | Either | **K deleted**; the new row holds **A's authenticated data** (copied by `cycle_key`), so it is a **valid authenticated orphan for A**; jar holds dead K | Valid authenticated orphan for A; jar holds dead K |
+| **N** | No session row persisted by the finalizer | Either | L4u: anonymous K′ committed in the finalizer, never delivered; no authority | L5u: K′ authenticated if the UPDATE committed (**orphan**); otherwise anonymous |
+| **AN** (K) | K valid (anonymous) | Either | L4u: K deleted; K′ anonymous; the jar holds dead K; no authority | L5u: K′ authenticated orphan or anonymous; the jar holds dead K |
+| **SA** (K) | **K valid**, expiry unchanged | Either (the finalizer wrote no session row for SA, so K is unaffected by either outcome) | L4u: **K valid, expiry unchanged**, 1 row, **no orphan**, no cookie (Probe, PG17.11, Codex R4) | L5u: **K valid; expiry renewed if the UPDATE committed** (prior authority **renewed**, RB-6; Probe PR #37 `test_session_update_ack_lost_can_extend_known_existing_session`). No orphan, because the key is the client's own. |
+| **SX** (K, stale hash) | K row restored by the rollback, but already **invalid** (stale hash), so no authority | Either | L4i: K deleted; no new row; anonymous | L5i: 0 or 1 authenticated orphan; the jar holds dead K |
 
-The SA L4 and L5 cells are source-derived and need tests. Codex's earlier probe (PR #37, `test_session_update_ack_lost_can_extend_known_existing_session`) shows a different effect: **a known key can stay valid with its expiry extended** when that key's own UPDATE commits and the acknowledgement is lost. That applies to any request that saves an existing session **without cycling it**, not only to login. RB-6 covers it.
+**Successful-path note (existing behaviour, unchanged by B1):** a successful SA login **keeps** the same session key K. The other entry states end with a new key.
 
-No pre-header row ever delivers a key outside `K_prev` (CK1, CK2).
+No pre-header row delivers a key outside `K_prev` (CK1, CK2).
 
 #### 6.3.4 Password change (F-CHG; initial state SA)
 
@@ -339,7 +420,7 @@ The **C2** row shows the R3-03 distinction. The browser copy is deleted, but **t
   * "Old password invalid" is asserted **only** when the submitted secret differs from the old one.
   * Session observables: no issue header (CK1). For SA, a prior key's validity follows the hash rule (an unchanged hash keeps it valid; a committed change invalidates it).
 * **F-VERIFY.** Unit: `email_verified_at` written together with consumption of the nominated token. Allowed outcomes: {unverified, token usable} or {verified, token consumed}. CK1 applies.
-* **F-ISSUE.** Unit: older same-purpose tokens are revoked and a new one inserted, together. On P3 with an acknowledgement fault, the token may be committed **without email**, and the older links are still revoked (RB-5).
+* **F-ISSUE.** Unit: older same-purpose tokens are revoked and a new one inserted, together. On E3 (COMMIT sent, acknowledgement lost), the token may be committed **without email**, and the older links are still revoked (RB-5).
 * **F-REGISTER.** The existing handled `IntegrityError` gives the generic success page; **preserved**.
 
 ### 6.4 Failure classification: one deterministic algorithm
@@ -395,7 +476,9 @@ The **C2** row shows the R3-03 distinction. The browser copy is deleted, but **t
 | Academic wrappers (`student_web.views.protected`, `accounts.views.academic_errors`) | `DatabaseError` → 503; service errors → 400/404/409 |
 | `SuspiciousOperation`, CSRF 403, 404 | Existing Django handling (logging covered by §6.8) |
 
-**Logging of consumed exceptions.** When `process_exception` returns a response, Django does **not** call `log_response` for the exception (`core/handlers/base.py:356-366`). B1 therefore emits one sanitized event on logger `accounts.failures` with the category, SQLSTATE and route label, through the §6.8 sink.
+**Logging of consumed exceptions.** When `process_exception` returns a response, Django does **not** call `log_response` for the exception (`core/handlers/base.py:356-366`). B1c therefore emits one event on logger `accounts.failures`, carrying a typed `FailureEvent` (enum event and category, validated SQLSTATE; §6.8.3). The sink prints its fixed fields with the route label.
+
+**Shared walker.** The bounded walk below is implemented **once**, in `accounts/exception_chain.py`, delivered and tested in B1b (where the log sanitizer uses it). The B1c classifier imports it; there is no second traversal.
 
 **Retry-After and caching.** Every B1 response carries `Cache-Control: no-store`. Only `OUTAGE` carries `Retry-After` (a configurable candidate value).
 
@@ -428,7 +511,8 @@ The **C2** row shows the R3-03 distinction. The browser copy is deleted, but **t
 | Role check | Role middleware (existing) | 503 |
 | Account view (throttle, CAS, finalizer, reset, verify, change, issue) | `process_exception`, otherwise `handler500` | 503 (`OUTAGE`, `CONNECTION_UNAVAILABLE`, `CONFIGURATION`); 500 minimal (`DEFECT`, `DATABASE_UNPROVEN`); 500 existing (`NOT_DATABASE`) |
 | Lazy session load in a view | Same as the view | Same |
-| Session save in `SessionMiddleware.process_response` | `SessionInterrupted` → `handler400` | 503 (driver outage, connection or configuration); **500 minimal (driver defect)**; 400 (`DATABASE_UNPROVEN` or `NOT_DATABASE`) |
+| Session save UPDATE in `SessionMiddleware.process_response` (N, AN, SA; §6.3.1) | `UpdateError` → `SessionInterrupted` → `handler400` | 503 (driver outage, connection or configuration); **500 minimal (driver defect)**; 400 (`DATABASE_UNPROVEN` or `NOT_DATABASE`) |
+| Session save `create()` in `process_response` (DA, SX): the `exists()` SELECT or the INSERT | Raw `DatabaseError` → **`handler500`** (not `handler400`; `must_create` skips `UpdateError`) | 503 / 500 minimal by category; `DATABASE_UNPROVEN` → 500 minimal |
 | Other middleware `process_response` | `handler500` | 503 / 500 |
 | Error-renderer failure (`Exception`) | Last resort inside the renderer | A fixed plain-text response with the status already chosen |
 | `handler400` raises | Django `get_exception_response` → `handle_uncaught_exception` → `handler500` (`exception.py:162-170`) | As `handler500` |
@@ -499,18 +583,18 @@ Pooling is out of scope for B1.
   | `DEBUG=True` | `technical_500_response(status_code=400)`; **`handler400` is not called** (lines 96-101) | Technical page with status 400 (119-122) | `technical_500_response`; **`handler500` is not called** (181-182) | **Still runs** (middleware), so view-level 503s still apply |
   | `DEBUG_PROPAGATE_EXCEPTIONS=True` (with `DEBUG=False`) | `handler400` **is** called (only the uncaught path checks this flag) | `handler400` is called | **Re-raised** to the WSGI server; **`handler500` is not called** (178-179) | Still runs |
 
-  Neither flag makes `handler500` run without an active exception. **Calling `handler500` with no active exception** (a manual call, or a future framework change) is a **separate supported case**: it returns a minimal plain 500, tested by a direct call. B1 tests run with both flags False. A system check (`accounts.E104`) requires both flags to be False in the `*_secure` profiles. Development profiles keep Django's technical pages; they are local only (RB-11).
+  Neither flag makes `handler500` run without an active exception. **Calling `handler500` with no active exception** (a manual call, or a future framework change) is a **separate supported case**: it returns a minimal plain 500, tested by a direct call. B1 tests run with both flags False. A system check (`accounts.E104`) requires both flags to be False whenever the explicit flag `UCC_SECURE_PROFILE` is True (`auth_secure`, `web_secure`, and Stage C `local_staging` by agreement; §6.8.1). It does not depend on the filename. Development profiles keep Django's technical pages; they are local only (RB-11).
 * **Registration.** Registered as `handler400` and `handler500` in **both** `config/auth_urls.py` and `config/web_urls.py`. The web profile delegates to the existing `student_web` handlers **only for `NOT_DATABASE`**.
 
-### 6.8 Logging privacy: sink-level sanitisation (R3-04)
+### 6.8 Logging privacy: sink-level sanitisation in protected profiles (R3-04, R4-02, R4-04, R4-05)
 
 **Inventory.** These are the Django 5.2.19 namespaces that emit records in the application process (source: every `getLogger` call in the package):
 
 | Namespace | What it can carry |
 | --- | --- |
 | `django.request` (`core/handlers/base.py`, `exception.py`, `utils/log.py`, `views/generic/base.py`) | `log_response` records: the path in the args, the live request in `record.request`, `exc_info` |
-| `django.security.<ExceptionClass>` (`exception.py:113-137`) | Every `SuspiciousOperation` subclass (`DisallowedHost`, `SuspiciousSession`, `RequestDataTooBig`, …): the message, the live request |
-| `django.security.csrf` (`middleware/csrf.py:209-219`) | "Forbidden (reason): path", including token-bearing reset and verify paths (Probe, PG17.11, Codex) |
+| `django.security.<ExceptionClass>` (`exception.py:113-137`) | Every `SuspiciousOperation` subclass: the message, the live request |
+| `django.security.csrf` (`middleware/csrf.py:209-219`) | "Forbidden (reason): path", including token-bearing reset and verify paths (Probe, PG17.11, Codex R3) |
 | `django.security.SuspiciousSession` (`sessions/backends/base.py`, `db.py`) | Session decode failures |
 | `django.server` (`core/servers/basehttp.py`) | runserver request lines (development only) |
 | `django.db.backends` (`db/backends/utils.py`) | SQL **with parameters** at DEBUG level when the debug cursor is on |
@@ -520,90 +604,162 @@ Pooling is out of scope for B1.
 **Current state on master** (source):
 
 * `LOGGING` is unset, so Django applies `DEFAULT_LOGGING` (`utils/log.py:18-64`, `67-76`).
-* With `DEBUG=True` (development profiles), `django.*` records, including token paths, reach the console.
+* With `DEBUG=True`, `django.*` records reach the console.
 * With `DEBUG=False`:
   * the console handler is filtered out;
   * `AdminEmailHandler` returns early when `ADMINS` is empty (`utils/log.py:95-101`);
   * `django.server` has its own handler.
-* So today no Django-configured sink receives the records when `DEBUG=False`. **But** any handler an operator, Gunicorn configuration or test adds receives the raw `LogRecord`, including its live request.
+* Any handler an operator or test adds receives the raw `LogRecord`, including its live request.
 
-**Design.** Sanitisation happens at the final sink, never in logger filters:
+#### 6.8.1 Profile scope: which processes enforce the policy (R4-02, R4-06)
 
-1. **One handler class.** `accounts.logging.SanitizingHandler(logging.Handler)` writes to a stream (stderr by default). B1's `LOGGING` (in `auth_common.configure`, so it applies to the auth and web profiles) has these properties:
-   * It attaches `SanitizingHandler` **only to the root logger**.
-   * It sets `django` and `django.server` to `handlers: []` with `propagate: True`. `dictConfig` removes their existing handlers, including `mail_admins` and the default `django.server` handler.
-   * It defines **no filters or formatters**.
-   * Because every propagating record reaches the root handler, a handler-level policy covers child loggers. The PR #38 probe showed that logger-level filters do not.
-2. **No raw fallback sinks.**
-   * `AccountsConfig.ready()` replaces `logging.lastResort` with a `SanitizingHandler(level=WARNING)`. `lastResort` fires for loggers that have no handlers anywhere in their chain.
-   * `ready()` then **fails closed** with `ImproperlyConfigured` if any handler on the root logger, or on any logger named `django*`, `psycopg*`, `py.warnings`, `accounts*`, `academics*` or `student_web*`, is not a `SanitizingHandler` (`NullHandler` is allowed).
-   * The same rule is a system check, `accounts.E103`.
-   * `gunicorn.*` loggers are outside this tree. They belong to Stage C (RB-4).
-3. **A safe copy, never mutation.** `emit(record)` builds a **new** `LogRecord` with an explicit allowlist:
-   * **Copied:**
-     * logger `name`, if it matches `[A-Za-z0-9_.]{1,100}`; otherwise `"?"`;
-     * `levelno` and `levelname`;
-     * `created` and `msecs`, if they are floats;
-     * `process` and `thread` ids.
-   * **Derived, read-only:**
-     * `ucc_status`: `record.status_code`, only if it is an `int` from 100 to 599;
-     * `ucc_method`: `request.method`, only if it is in an allowlist of HTTP methods, otherwise `"OTHER"`;
-     * `ucc_route`: `request.resolver_match.view_name` if it is set and matches `[a-z0-9_:-]{1,64}`, otherwise `"[unresolved]"`. Paths and URL arguments are **never** emitted, so token segments, malformed or percent-encoded paths and query strings never appear.
-     * `request` is used only if `isinstance(record.__dict__.get('request'), HttpRequest)`. Only `method` and `resolver_match`, both plain attributes, are read. **Never** `user`, `session`, `COOKIES`, `META`, `GET`, `POST`, body, headers or `path`.
-   * **Exception summary:** `ucc_exc` is built from `record.exc_info`, only when it is a valid three-tuple containing a `BaseException` instance. It uses the §6.4 walk and keeps at most 16 entries, each a class `__qualname__` matching `[A-Za-z0-9_.]{1,64}` plus a well-formed SQLSTATE. It **never** calls `str()` or `repr()` on an exception.
-   * **Set to valid empty values:** `msg` is a fixed template string, `args=None`, `exc_info=None`, `exc_text=None`, `stack_info=None`. So a cached `exc_text` produced by any earlier formatter is never copied.
-   * **Not copied:** `msg` text, `args`, `request`, any extras (arbitrary `extra=` keys), `pathname`, `funcName`, `stack_info`, `exc_text`.
-   * The original record and the request object are **never written to**.
-4. **Output.** The handler formats with its own fixed code, not a configurable `Formatter`:
+The policy is controlled by **one explicit setting**, `UCC_LOG_PRIVACY`:
 
-   ```
-   ucc-log name=<name> level=<levelname> status=<ucc_status> method=<ucc_method> route=<ucc_route> exc=<ucc_exc>
-   ```
+* It is set to `"enforce"` **only** by `accounts.log_privacy.configure(namespace)`. That function also installs `LOGGING`.
+* `auth_common.configure` calls it. So does any future web-serving profile, such as Stage C `local_staging`, which must call it explicitly.
+* The setting is absent from `base`. Absent means **off**.
 
-   One line per record. The free text of Django and application messages is **not** emitted in B1. The structured event taxonomy with pseudonymous fields is B3.
-5. **Failure handling, all inside `emit`.**
-   * Any `Exception` during sanitisation or formatting writes the constant line `ucc-log record suppressed (sanitizer error) name=<safe name or ?>`.
-   * If the stream write fails, `handleError` is **overridden** to write nothing derived from the record. The default `handleError` prints `record.msg` and `record.args` to stderr (CPython 3.12 `logging/__init__.py:1066-1112`).
-   * `SystemExit`, `KeyboardInterrupt` and `GeneratorExit` propagate.
-   * Handler-level and logger-level filters are **forbidden** in the covered tree (E103), because a filter that raises escapes `Logger.handle` into the caller.
-6. **`ADMINS`.** Check `accounts.E102` keeps it empty in authentication profiles. Removing `mail_admins` from the handler graph (point 1) is the actual control; an empty `ADMINS` is defence in depth.
+**Everything** below is conditional on `settings.UCC_LOG_PRIVACY == "enforce"`:
+
+* the `LOGGING` graph;
+* the `lastResort` replacement;
+* the fail-closed `ready()` guard;
+* the registration of checks E102 and E103.
+
+The setting is never inferred from a filename, from `DEBUG`, or from the installed apps.
+
+A second explicit flag, **`UCC_SECURE_PROFILE = True`**, marks profiles meant for non-developer serving. It is set in `auth_secure` and `web_secure`, and must be set in Stage C `local_staging`. E104 (`DEBUG` and `DEBUG_PROPAGATE_EXCEPTIONS` both False) is evaluated only when it is True, replacing revision 4's `*_secure` filename rule.
+
+| Profile (`config/settings/…`) | Imports | Serves | `UCC_LOG_PRIVACY` | `UCC_SECURE_PROFILE` | Why |
+| --- | --- | --- | --- | --- | --- |
+| `auth_development` | `runtime` + `auth_common` | Auth URL root (local) | **enforce** | — | Serves token-bearing auth routes |
+| `auth_secure` | `runtime` + `auth_common` | Auth URL root | **enforce** | **True** | Same, for non-developer serving |
+| `auth_test` | `security_test` + `auth_common` | Test client (auth root) | **enforce** | — | Historical `auth_tests` and B1 tests run under the real policy |
+| `web_development` | `auth_development` + `web_common` | Website root (local) | **enforce** (inherited) | — | Serves auth and website routes |
+| `web_secure` | `auth_secure` + `web_common` | Website root | **enforce** (inherited) | **True** (inherited) | Same |
+| `web_test` | `auth_test` + `web_common` | Test client (website root) | **enforce** (inherited) | — | Historical `web_tests` |
+| Stage C `local_staging` (future) | Per PR #35 | Staging | **enforce** (must call `log_privacy.configure`) | **True** (must set) | Integration gate (§6.12) |
+| `base` | — | `config.urls` (`urlpatterns = []`) | off | — | Serves no endpoint |
+| `development` | `base` | `config.urls` (empty); default for `manage.py` and `wsgi.py` | off | — | Foundation and offline tooling |
+| `production` | Raises `ImproperlyConfigured` on import (deliberately disabled) | Nothing | off (never loads) | — | Unchanged |
+| `runtime` | `base` | `config.urls` (empty) | off | — | Milestone 2B runtime base; no auth routes |
+| `test` | `base` | Test client (empty URLs) | off | — | Historical `accounts`/`academics` suites |
+| `security_test` | `test` | Test client (empty URLs) | off | — | Historical restricted-role suite |
+| `auth_migration` | `base` | None (offline migrations and provisioning) | **off** | — | Must keep `LOGGING={}` and Django's default graph (Probe, Codex R4) |
+
+**Excluded profiles are unchanged:**
+
+* no `LOGGING`;
+* no `lastResort` change;
+* no guard and no E102/E103.
+
+They serve no authentication route, because their `ROOT_URLCONF` has an empty `urlpatterns`. Their privacy limit is recorded as RB-13.
+
+**No runtime credentials or runtime policy are added to `auth_migration`**, and no migration or DBA credentials are added to protected profiles. The role separation is unchanged.
+
+#### 6.8.2 Enforcement mechanics (protected profiles only)
+
+1. **One handler class.** `accounts.logging.SanitizingHandler(logging.Handler)` writes to a stream (stderr by default). `log_privacy.configure()` installs this `LOGGING`:
+   * `disable_existing_loggers: False`;
+   * `SanitizingHandler` **only on the root logger**;
+   * `django` and `django.server` set to `handlers: []`, `propagate: True`. `dictConfig` removes their existing handlers, including `mail_admins`.
+   * **No filters or formatters.**
+
+   Every propagating record reaches the root handler, so the policy covers child loggers. Logger-level filters do not (Probe, Codex R3).
+2. **No raw fallback sinks, startup snapshot.**
+   * `AccountsConfig.ready()` returns immediately unless the policy is `"enforce"`.
+   * In enforce mode it replaces `logging.lastResort` with `SanitizingHandler(level=WARNING)`.
+   * It then raises `ImproperlyConfigured` if:
+     * any handler on the root logger, or on any existing logger named `django*`, `psycopg*`, `py.warnings`, `accounts*`, `academics*` or `student_web*`, is not a `SanitizingHandler` (`NullHandler` is allowed);
+     * any of those loggers or handlers has a filter.
+   * The same predicate is check `accounts.E103`, registered only in enforce mode.
+   * `gunicorn.*` loggers are outside the named tree (RB-4).
+   * **This guard is a snapshot taken at startup.** Code that adds a raw handler to a child logger later would emit before the record reaches the root sink. Runtime logging reconfiguration (`addHandler`, `dictConfig`, `fileConfig`, `basicConfig`, `captureWarnings` toggling) is **prohibited** in application packages. A source-scan test (§6.10 D) enforces that outside `accounts/logging.py` and `accounts/log_privacy.py`. Trusted reconfiguration after startup is unsupported (RB-12).
+
+#### 6.8.3 The safe record and label trust policy (R4-04, R4-05)
+
+`emit(record)` builds a **new** `LogRecord`. Every emitted label comes from a **fixed table in code**, never from the input string:
+
+| Output field | Source | Rule |
+| --- | --- | --- |
+| `logger` | `record.name` | Mapped to a fixed label by an exact or prefix table, for example `django.request`→`django.request`, `django.security.csrf`→`django.security.csrf`, `django.security.<known SuspiciousOperation subclass>`→that constant, other `django.security.*`→`django.security`, `django.db.backends*`→`django.db`, other `django.*`→`django`, `psycopg*`→`psycopg`, `py.warnings`→`py.warnings`, `accounts.failures`→`accounts.failures`, other `accounts.*`→`accounts`, `academics.*`→`academics`, `student_web.*`→`student_web`. **Anything else → `other`.** |
+| `level` | `record.levelno` | `{10:DEBUG, 20:INFO, 30:WARNING, 40:ERROR, 50:CRITICAL}`, otherwise `OTHER`. `record.levelname` is **never** read. |
+| `status` | `record.__dict__.get('status_code')` | Only if `type(x) is int` and 100 ≤ x ≤ 599, otherwise `-` |
+| `method` | `request.method` (only if `record.__dict__.get('request')` is an `HttpRequest`) | Membership in a fixed method tuple, emitting the tuple's constant; otherwise `OTHER` |
+| `route` | `request.resolver_match.view_name` | Membership in a **fixed tuple of the project's view names** (accounts and student_web URLconfs, maintained with them and checked by a test against both URL roots), emitting the constant; otherwise `other`. Paths, URL arguments, queries, headers, cookies, `META`, `user`, `session` and the body are **never** read. |
+| `exc` | `record.exc_info`, only if it is a valid three-tuple whose second item is a `BaseException` | The shared walker (`accounts/exception_chain.py`, §6.4; delivered in **B1b**). Each node maps to a label from an identity-keyed table of known classes (Django session and DB error classes, psycopg base classes). A psycopg.errors subclass is emitted as `psycopg.errors[<SQLSTATE>]`. Unknown classes → `OTHER`. A SQLSTATE is emitted only if `psycopg.errors.lookup(code)` succeeds; otherwise `XXXXX`. At most 16 entries. `str()` and `repr()` are never called on exceptions. |
+| `event`, `category`, `sqlstate` | `record.__dict__.get('ucc_event')` | Only if `type(x) is FailureEvent`: a frozen dataclass with `event` and `category` drawn from **enums**, and `sqlstate` validated as above. The emitted values are the enum constants. This is the **only** extra the sanitizer accepts. B1c's consumed-exception emission uses it (`logger.error('b1.failure', extra={'ucc_event': FailureEvent(...)})`). |
+
+**Never copied:**
+
+* `msg` and `args`;
+* `request`;
+* any other extras;
+* `pathname`, `funcName`, `stack_info`, `exc_text` (so a cached traceback text from an earlier formatter is never copied);
+* `levelname` and `name` text.
+
+The new record has `msg` set to a fixed template, `args=None`, `exc_info=None`, `exc_text=None` and `stack_info=None`. **Neither the original record nor the request is ever written to.**
+
+**Output**, one line per record, formatted by the handler's own code:
+
+```
+ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label> event=<enum|-> category=<enum|-> sqlstate=<code|-> exc=<labels>
+```
+
+**Failure handling, inside `emit`:**
+
+* Any `Exception` writes the constant line `ucc-log record suppressed (sanitizer error) logger=<label or other>`, where the label is computed by the same table. If computing it fails too, the line uses `other`.
+* A stream failure goes to the **overridden** `handleError`, which writes nothing derived from the record. CPython's default writes `record.msg` and `args` (`logging/__init__.py:1066-1112`).
+* `SystemExit`, `KeyboardInterrupt` and `GeneratorExit` propagate.
+
+**`ADMINS`.** E102 (enforce mode only) keeps it empty. Removing `mail_admins` from the graph is the actual control.
 
 **Scope statement.**
 
-* **Covered:** every record that passes through Python `logging` in the Django process after `configure_logging`, for the loggers listed in point 2, under both URL roots.
+* **Covered:** in protected profiles, every record that passes through Python `logging` after `configure_logging`, for the named logger tree, under both URL roots.
 * **Not covered:**
-  * Gunicorn's own `gunicorn.error` and `gunicorn.access` logs. Gunicorn logs an exception that escapes the WSGI application together with the request path.
+  * Gunicorn's `gunicorn.error` and `gunicorn.access`. Gunicorn may share the OS process and the Python logging system with Django; the exclusion is a **named-logger and configuration boundary**, not a separate-process guarantee.
   * Caddy and proxy logs.
-  * Raw stderr writes outside `logging` (unraisable-exception hooks, warnings when `captureWarnings` is off, crash dumps).
+  * Raw stderr writes outside `logging`.
   * Retention and export.
 
-  These are **RB-4** (Stage C configuration, Stage D retention). The Django security loggers are **inside** B1's scope and are not deferred.
-* **Diagnosability cost.** Operators see only the status, route name, category and SQLSTATE until B3 (RB-9, D-B1-4).
-* **New visibility.** In `DEBUG=False` profiles, B1 starts emitting sanitized lines to stderr where Django emitted nothing before. That is an owner decision (D-B1-4).
+  These are RB-4. Handlers added after startup are RB-12. Excluded profiles are RB-13.
+* **Trade-offs (D-B1-4):**
+  * free text is dropped;
+  * new sanitized stderr lines appear in `DEBUG=False` protected profiles;
+  * runserver request lines are lost in `auth_development` and `web_development`.
 
 ### 6.9 Exact files expected to change (B1 PRs, §6.11)
 
 | File | Change | Increment |
 | --- | --- | --- |
 | `server/accounts/dbsafety.py` (new) | `apply_db_safety()` (merge, reject duplicates, `connect_timeout`), validation | B1a |
-| `server/accounts/checks.py` (new), `apps.py` | E101 (timers); E102 (`ADMINS`); E103 (sanitized handler tree, no filters); E104 (DEBUG flags in secure profiles); `ready()` installs `lastResort` and runs the fail-closed handler check | B1a (E101); B1b (E102–E104) |
-| `server/accounts/logging.py` (new) | `SanitizingHandler`, the safe-record builder, the `handleError` override | B1b |
-| `server/config/settings/auth_common.py` | Call `apply_db_safety` (B1a); `LOGGING` (B1b); middleware order (B1c) | B1a–B1c |
-| `server/accounts/failure_classification.py` (new) | `classify_database_failure()`, the wrapper allowlist, the `Classification` dataclass | B1c |
+| `server/config/settings/auth_common.py` | Call `apply_db_safety` (B1a); call `log_privacy.configure` (B1b); middleware order (B1c) | B1a–B1c |
+| `server/config/settings/auth_secure.py` | `UCC_SECURE_PROFILE = True` (`web_secure` inherits it) | B1b |
+| `server/accounts/checks.py` (new), `apps.py` | E101 (timers, always registered for profiles calling `apply_db_safety`); E102 and E103 (registered only when `UCC_LOG_PRIVACY == "enforce"`); E104 (evaluated only when `UCC_SECURE_PROFILE`). `ready()` installs `lastResort` and runs the guard **only in enforce mode**. | B1a (E101); B1b (E102–E104) |
+| `server/accounts/exception_chain.py` (new) | Shared bounded cause/context walker and wrapper allowlist (§6.4), used by the sanitizer (B1b) and the classifier (B1c) | **B1b** |
+| `server/accounts/log_privacy.py` (new) | `configure(namespace)`: sets `UCC_LOG_PRIVACY="enforce"` and `LOGGING` | B1b |
+| `server/accounts/logging.py` (new) | `SanitizingHandler`, label tables, `FailureEvent`, the `handleError` override | B1b (`FailureEvent` enum values extended in B1c) |
+| `server/accounts/failure_classification.py` (new) | `classify_database_failure()` built on `exception_chain`; the `Classification` dataclass | B1c |
 | `server/accounts/failure_response.py` (new) | Template-free renderer, last resort, `handler400` and `handler500` | B1c |
 | `server/accounts/middleware.py` | Add `AuthFailureMiddleware` (`process_exception` only). Role middleware unchanged. | B1c |
 | `server/config/auth_urls.py`, `server/config/web_urls.py` | Register `handler400` and `handler500` | B1c |
 | `server/accounts/views.py`, account templates | Uncertain-outcome wording for reset, verify and change; **no** change to successful-path logic | B1d |
-| `server/auth_tests/test_b1_*.py` (new) | §6.10 | B1a–B1d |
-| `docs/AUTHENTICATION.md` | Contract, limits, Stage C preflight requirement | Each increment updates its own part |
+| `server/auth_tests/test_b1_*.py` (new), plus test-only settings modules under `server/auth_tests/` for the subprocess profile tests | §6.10 | B1a–B1d |
+| `docs/AUTHENTICATION.md` | Contract, limits, profile scope, Stage C preflight requirement | Each increment updates its own part |
 
-**Not changed:** `base.py`, migrations, grants, provisioning, RLS, devices, throttle semantics, the session engine, successful-path authentication, academic code, CLI and Streamlit.
+**Not changed:**
+
+* `base.py`, `auth_migration.py`, `test.py`, `security_test.py`, `runtime.py`, `development.py`, `production.py`;
+* migrations, grants, roles, provisioning, RLS, devices, throttle semantics;
+* the session engine and successful-path authentication;
+* academic code, CLI and Streamlit.
 
 ### 6.10 Revised PostgreSQL 17 regression matrix
 
 **Common rules:**
 
-* Real separate migrator, runtime and auth LOGINs.
+* Real separate migrator, runtime and auth LOGINs, with forced RLS present.
 * `TransactionTestCase`, with waits observed through `pg_blocking_pids` and bounded timeouts.
 * Post-failure state read on a **clean connection** after all controlled transactions end.
 * `DEBUG=False` and `DEBUG_PROPAGATE_EXCEPTIONS=False` unless the test is about those flags.
@@ -611,168 +767,228 @@ Pooling is out of scope for B1.
 * Hosted CI on PostgreSQL 17.
 * Fault-injection kinds are labelled:
   * **real**: an actual PostgreSQL lock, timeout or termination;
-  * **injected-driver**: a psycopg error raised inside an `execute_wrapper` and wrapped exactly as Django's `DatabaseErrorWrapper` does;
-  * **injected-commit**: a patched `_commit` or acknowledgement fault.
+  * **injected-driver**: a psycopg error raised inside an `execute_wrapper`, wrapped exactly as Django's `DatabaseErrorWrapper` does;
+  * **injected-commit**: a patched `_commit` (an explicit unit);
+  * **injected-post-execute**: the real statement runs, then an error is raised before the result is returned (an implicit unit, or an explicit unit's statement).
 
-**A. Flow × phase × initial cookie.** Every cell records O1–O4 and asserts CK1–CK4 against the §6.3 tables (an allowed set, not a single assumed outcome), plus the status, `no-store` and `Retry-After` policy, the body variant, and the §6.8 sink sentinels.
+**Documentation CI is not B1 evidence.** These tests do not exist until their increment is implemented.
 
-| Flow | Phases (injection kind) | Initial states | Key assertions |
-| --- | --- | --- | --- |
-| F-LOGIN | L0: throttle 55P03 (real). L1: Student 55P03 (real). L2: fault after flush (injected-commit at `_commit`; injected-driver at the `last_login` UPDATE); empty-session sub-case (injected-driver at the `exists()` SELECT after flush). L3a: server abort (real backend termination before COMMIT). L3b: commit then lost acknowledgement (injected-commit). L4: session UPDATE 55P03 (real, `handler400` → 503); session UPDATE 42703 (injected-driver, `handler400` → **500**). L5: session commit then lost acknowledgement (injected-commit). | N, AN, SA, DA | §6.3.2 and §6.3.3 per row. **DA L1 and L2: A asserted valid.** DA L4: A invalid, B row anonymous. DA L5: A invalid, B orphan. No B key in O2 anywhere. A deletion header is allowed and recorded, never required absent. |
-| F-RESET | P1 (real 55P03), P2 (injected-driver), P3a (real), P3b (injected-commit), P4 | N, SA | Nominated-token pair consistency against a before snapshot; distinct-secret exclusivity; same-secret allowed; SA prior-key validity per the hash rule; uncertain-outcome body |
-| F-VERIFY | P1, P2 (`email_verified_at` injected-driver), P3a, P3b | N | Verified ⇔ nominated token consumed |
-| F-CHG | C0 (real 55P03), C1 (injected-driver on the flush DELETE), C2 (injected-commit), C3a/C3b, C4 | SA | §6.3.4: **C2 asserts a deletion header present AND K valid server-side** (the R3-03 regression) |
-| F-ISSUE | P1, P3b | N | Token committed, email **not** sent on P3b; older-link revocation recorded |
-| F-REGISTER | Handled `IntegrityError` | N | Generic success page unchanged |
+**A. Login, password change and other flows × phase × initial state.** Every cell records O1–O4 and asserts CK1–CK4 against §6.3 (an allowed set, never a single assumed outcome), plus the status, `no-store` and `Retry-After` policy (B1c and later), the body variant, and the §6.8 sink sentinels (B1b and later).
 
-**B. Classification and routing.**
+| ID | Flow | Phases (injection kind) | Initial states | Key assertions |
+| --- | --- | --- | --- | --- |
+| **A1** | Login lifecycle observation (**B1a**, successful paths) | None; spies that delegate to the real `cycle_key` and `auth_login` (Codex R4 shape) | N, AN, SA, SX, DA | `cycle_key` calls: N 1, AN 1, **SA 0, SX 0, DA 0**. Rows inside the finalizer: N 1, AN 1 (K deleted), SA 1 (K), **SX 0, DA 0** (key None). SA keeps the same key; the others get a new key. Response save is an UPDATE for N, AN and SA and an INSERT for SX and DA. |
+| **A2** | F-LOGIN failures | L0: throttle 55P03 (real, statement-level S1) and post-execute lost acknowledgement (injected-post-execute, S3). L1: Student 55P03 (real). L2: `last_login` UPDATE (injected-driver) and `_commit` before COMMIT (injected-commit, E1/E2). L3: real backend termination as COMMIT is issued, and injected-commit after a real COMMIT (E3). **L4u:** session-row 55P03 (real) and 42703 (injected-driver). **L4i:** `exists()` SELECT failure (injected-driver) and INSERT failure before commit (injected-driver). **L5u / L5i:** real save, then lost acknowledgement (injected-post-execute). | N, AN, SA, SX, DA | §6.3.2 and §6.3.3 per row. **SA L4u: K valid, expiry unchanged, 1 row, no orphan.** **SA L5u: K valid, expiry snapshot compared (renewal allowed and recorded).** **DA L1–L2: A valid, 0 B rows.** **DA L4i: A invalid, 0 rows.** DA L5i: 0 or 1 B orphan. DA and SX save errors reach `handler500`; N, AN and SA save errors reach `handler400`. **No new non-empty key in O1 or O2 anywhere.** Throttle and CAS units asserted **persisted** in every A2 row after L0 (§6.1.2). A deletion header is allowed and recorded, never required absent. |
+| A3 | F-RESET | S1/E1 (real 55P03), E1 (injected-driver), E3 (real and injected-commit), E4 | N, SA | Nominated-token pair consistency against a before snapshot. Distinct-secret exclusivity; a same-plaintext reset is legitimate and tested separately. SA prior-key validity follows the hash rule (a committed change invalidates it). Deletion header allowed. Uncertain-outcome body (B1d). |
+| A4 | F-VERIFY | E1, E1 (`email_verified_at`, injected-driver), E3 | N | Verified ⇔ nominated token consumed |
+| A5 | F-CHG | C0 (real 55P03), C1 (injected-driver on the flush DELETE), C2 (injected-commit), C3 (real and injected-commit), C4 | SA | §6.3.4. **C2 asserts that the deletion header is present AND K is valid server-side.** |
+| A6 | F-ISSUE | E1, E3 (injected-commit after a real COMMIT) | N | Token committed and email **not** sent on E3; older-link revocation recorded |
+| A7 | F-REGISTER | Handled `IntegrityError` | N | Generic success page unchanged |
+
+**B. Classification and routing (B1c).**
 
 | Test | Evidence required |
 | --- | --- |
-| `test_session_update_undefined_column_is_500` | Injected-driver `UndefinedColumn(42703)` at the session UPDATE → `handler400` → **500 minimal**, not 400; no issue header |
+| `test_session_update_undefined_column_is_500` | Injected-driver `UndefinedColumn(42703)` on the SA/N **UPDATE** → `handler400` → **500 minimal**; no issue header |
 | `test_session_update_undefined_table_is_500` | Same with `UndefinedTable(42P01)` |
+| `test_session_insert_failure_routes_handler500` | DA **INSERT** or `exists()` failure (injected-driver 55P03, 42703, and no-SQLSTATE) → `handler500` → 503 or 500 by category; 0 B rows |
 | `test_real_undefined_column_in_view_is_500` | **Real** 42703: the migrator renames a `django_session` column in setup; the session load in the view fails; 500 minimal through `handler500`; column restored in teardown |
-| `test_session_update_lock_timeout_is_503` | **Real** 55P03 on the session row → 503 with `Retry-After` |
-| `test_connection_loss_real_termination_is_503` | **Real** `pg_terminate_backend` of the auth backend just before the session UPDATE. Category is in {`OUTAGE` 57P01, `CONNECTION_UNAVAILABLE`} (the driver may or may not read the FATAL message); status 503 either way |
-| `test_connection_loss_without_sqlstate_is_503` | A local TCP relay inside the test closes the socket mid-request, giving a psycopg error with **no SQLSTATE** → `CONNECTION_UNAVAILABLE` → 503 without `Retry-After` |
-| `test_genuine_concurrent_session_deletion_stays_400` | Row deleted before save (R2 shape) → `DATABASE_UNPROVEN` → **original 400** |
-| `test_non_database_bad_request_stays_400` | A synthetic `BadRequest` outside the allowlist → `NOT_DATABASE` → 400 |
+| `test_session_update_lock_timeout_is_503` | **Real** 55P03 on the SA session row → 503 with `Retry-After` |
+| `test_connection_loss_real_termination_is_503` | **Real** `pg_terminate_backend` of the auth backend before the session UPDATE. Category is in {`OUTAGE` 57P01, `CONNECTION_UNAVAILABLE`}; 503. The exact driver exception class is recorded. |
+| `test_connection_loss_without_sqlstate_is_503` | A local TCP relay closes the socket mid-request → no SQLSTATE → `CONNECTION_UNAVAILABLE` → 503 without `Retry-After` |
+| `test_genuine_concurrent_session_deletion_stays_400` | Row deleted before the SA save (R2 shape) → `DATABASE_UNPROVEN` → **original 400** |
+| `test_non_database_bad_request_stays_400` | A synthetic `BadRequest` → `NOT_DATABASE` → 400 |
 | `test_configuration_class_is_503_without_retry_after` | Injected-driver 42501 and 28000 → 503, no `Retry-After` |
-| `test_classifier_synthetic_chains` | Every row of the §6.4 chain table, asserting the exact `Classification` |
+| `test_classifier_synthetic_chains` | Every row of the §6.4 chain table, plus opaque wrappers, suppression, cause versus context, mixed driver nodes, malformed states, truncation and cycles. Constructed instances prove the traversal only. |
+| `test_view_versus_middleware_routing` | View exception → `process_exception`; middleware or response exception → `handler500`; session UPDATE → `handler400` |
 | `test_existing_contracts_preserved` | Role middleware 503 for `ProgrammingError`; registration `IntegrityError`; academic wrappers |
-| `test_consumed_exception_emits_sanitized_event` | `process_exception` 503 → one `accounts.failures` line at the sink |
+| `test_consumed_exception_emits_typed_event` | `process_exception` 503 → exactly one `accounts.failures` sink line with `event`, `category` and `sqlstate` |
 
-**C. Rendering.**
+**C. Rendering (B1c).**
 
 | Test | Evidence required |
 | --- | --- |
-| `test_renderer_both_roots_no_db_no_templates` | `CaptureQueriesContext` on all aliases is 0; template loader not called |
-| `test_renderer_last_resort_on_exception` | Builder forced to raise `RuntimeError` → fixed plain body, chosen status |
-| `test_renderer_propagates_process_control` | Builder forced to raise `KeyboardInterrupt` and `SystemExit` → propagates |
+| `test_renderer_both_roots_no_db_no_templates` | `CaptureQueriesContext` on all aliases is 0; template loader not called; no `reverse`, user or session access |
+| `test_renderer_last_resort_and_recursive_failure` | Builder raises `RuntimeError` → fixed plain body. The fallback also raises → Django's `handler500` path. |
+| `test_renderer_propagates_process_control` | `KeyboardInterrupt`, `SystemExit` and `GeneratorExit` propagate |
 | `test_handler500_without_active_exception` | Direct call → minimal plain 500 |
-| `test_debug_flags_documented_behaviour` | With `DEBUG=True`, `handler400` and `handler500` are not called and `process_exception` 503 still applies. With `DEBUG_PROPAGATE_EXCEPTIONS=True`, an uncaught exception is re-raised. E104 rejects either flag in secure profiles. |
-| `test_body_variants_constant` | Identical bytes within a variant across known and unknown accounts. Different variants are **not** asserted equal. |
+| `test_debug_flags_documented_behaviour` | With `DEBUG=True`, `handler400` and `handler500` are not called and `process_exception` 503 still applies. With `DEBUG_PROPAGATE_EXCEPTIONS=True`, an uncaught exception is re-raised. E104 fires on either flag when `UCC_SECURE_PROFILE` is set, and is silent when it is unset. |
+| `test_body_variants_constant_and_enumeration_comparison` | Identical bytes within a variant across known and unknown accounts. Status and timing distributions are compared separately; no claim that constant bodies alone prove enumeration resistance. |
 
-**D. Logging (assertions at the sink).** Evidence comes from the bytes written to the `SanitizingHandler` stream, **not** from `assertLogs`, which installs its own capture handler and skips the configured sink.
+**D. Logging (B1b; extended in B1c). Assertions are at the sink.** Evidence comes from the bytes written to the `SanitizingHandler` stream, **not** from `assertLogs`.
 
 | Test | Evidence required |
 | --- | --- |
-| `test_sink_no_sentinels_all_failure_routes` | Sentinels carried by the request: reset and verify secret; percent-encoded secret; malformed token path; query string; `HTTP_COOKIE`; `HTTP_AUTHORIZATION`; `REMOTE_ADDR` 192.0.2.x; User-Agent; an exception message; a SQL fragment. Routes: 503, 500, 400 genuine, CSRF 403 to a reset URL (`django.security.csrf`), 404 to a malformed token URL, `SuspiciousSession`, consumed-exception events. **No sentinel in the sink bytes.** |
-| `test_sink_drops_extras_cached_exc_text_and_stack_info` | `logger.error(..., extra={'ucc_probe': S}, stack_info=True)` with `exc_text` pre-set to S → no S in the sink |
-| `test_request_and_record_not_mutated` | After logging, the request's `path`, `META` (identity and values) and `COOKIES` are unchanged; the original `record.request is request`; `record.msg` and `args` are unchanged |
-| `test_child_logger_propagation_sanitized` | `django.b1probe.child` (no handlers, propagates) → sanitized line |
-| `test_last_resort_replaced` | A logger with `propagate=False` and no handlers emits a WARNING → sanitized line, no raw text on stderr |
-| `test_sanitizer_and_stream_failures_never_leak` | Sanitizer patched to raise `RuntimeError` → constant line; stream `write` patched to raise → overridden `handleError`, captured stderr holds no sentinel; the caller sees no exception |
-| `test_sanitizer_process_control_propagates` | Sanitizer patched to raise `KeyboardInterrupt` → propagates |
-| `test_raw_handler_fails_closed` | A `StreamHandler` added to `django.security` → E103 error and `ready()` raises `ImproperlyConfigured` |
-| `test_admins_empty_and_no_admin_email_handler` | E102; no `AdminEmailHandler` anywhere in the tree |
+| `test_sink_no_sentinels_all_failure_routes` | Sentinels carried by the request: reset and verify secret; percent-encoded secret; malformed token path; query string; `HTTP_COOKIE`; `HTTP_AUTHORIZATION`; `REMOTE_ADDR` 192.0.2.x; User-Agent; an exception message; a SQL fragment. Routes: 500, 400 genuine, CSRF 403 to a reset URL, 404 to a malformed token URL, `SuspiciousSession`, the B1a timeout paths; from B1c also 503, minimal 500 and `accounts.failures`. No sentinel reaches the sink. |
+| `test_sink_label_trust` | Logger named `accounts.SENTINEL`, an allowlisted-base exception subclass named `SENTINEL`, a custom `levelname='SENTINEL'`, an unknown SQLSTATE, and an unknown `view_name`. The sink shows `other`, `OTHER` or `XXXXX`; no sentinel. |
+| `test_sink_drops_extras_cached_exc_text_and_stack_info` | `extra={'ucc_probe': S}`, `stack_info=True`, `exc_text` pre-set to S, and a `ucc_event` that is **not** a `FailureEvent` → no S, no event fields |
+| `test_request_and_record_not_mutated` | Request `path`, `META` and `COOKIES` unchanged; `record.request is request`; `msg` and `args` unchanged |
+| `test_child_logger_propagation_sanitized` | `django.b1probe.child` (no handlers) → sanitized line |
+| `test_last_resort_replaced` | A logger with `propagate=False` and no handlers → sanitized line; no raw text on stderr |
+| `test_sanitizer_and_stream_failures_never_leak` | Sanitizer raises `RuntimeError` → constant line; label computation raises → `other`; stream `write` raises → overridden `handleError`, captured stderr holds no sentinel; the caller sees no exception |
+| `test_sanitizer_process_control_propagates` | `KeyboardInterrupt` propagates |
+| `test_no_runtime_logging_reconfiguration_in_app_code` | Source scan of `accounts`, `academics`, `student_web` and `config`: no `addHandler`, `dictConfig`, `fileConfig`, `basicConfig` or `captureWarnings` outside `accounts/logging.py` and `accounts/log_privacy.py` |
+| `test_admins_empty_and_no_admin_email_handler` | E102; no `AdminEmailHandler` in the tree (enforce mode) |
+| `test_walker_shared_and_bounded` (B1b) | `exception_chain` unit tests: cause before context, suppression, the 16-node cap, cycles, an opaque stop |
 
 **E. Settings and timers (B1a).**
 
 | Test | Evidence required |
 | --- | --- |
 | `test_options_merge_preserves_tls_and_rejects_duplicates` | `sslmode` and `sslrootcert` kept; duplicate or conflicting `-c` rejected; identical re-application idempotent |
-| `test_show_values_on_application_aliases_only` | `SHOW` on auth and runtime; migrator and offline configuration carry no B1 option |
-| `test_connect_timeout_with_stalled_handshake` | A local listener that **accepts TCP and never answers** the startup packet. Failure after ≈ `connect_timeout` × the known number of attempts (one address). An immediately-refused or unreachable address is **not** accepted as evidence. |
+| `test_show_values_on_application_aliases_only` | `SHOW` on `auth` and the `STUDENT_DB_ALIAS` alias, for fresh and reused connections. The test-provisioning `default` (migrator) in `auth_test` carries no B1 option. |
+| `test_offline_profiles_have_no_b1_options` | Fresh subprocess per excluded profile (`auth_migration`, `test`, `security_test`, `development`, `runtime`): `DATABASES` options carry no B1 timers. `manage.py check` starts. |
+| `test_e101_via_check_command` | `manage.py check --deploy` under `web_secure` (synthetic environment) reports E101 when the timers are removed |
+| `test_connect_timeout_with_stalled_handshake` | A local listener that accepts TCP and never answers. Failure after ≈ `connect_timeout` × the known number of attempts (one address). No DNS, multi-host, request or COMMIT bound is claimed. |
 | `test_commit_not_bounded_by_statement_timeout` | Deferred-trigger documentation regression |
-| `test_idle_timeout_kills_and_classifies` | Real 25P03 → `OUTAGE` (B1c), or the existing 500 path (B1a) |
-| `test_real_lock_timeouts_existing_behaviour` | B1a: real 55P03 on the Student lock and the session row give **today's** 500 and 400. Session states asserted per §6.3 (DA: A valid at L1). |
+| `test_idle_timeout_kills_and_reconnects` | Real 25P03; the next request reconnects. Existing 500 status in B1a; `OUTAGE` in B1c. |
+| `test_statement_timeout_with_restricted_roles` | `pg_sleep` beyond `statement_timeout` as the auth and runtime roles → 57014 |
 
-**F. Historical suites.** All historical suites (legacy, 2A database, restricted-role security, `auth_tests`, `web_tests`) pass **unchanged** on PostgreSQL 17 for every increment.
+**F. Historical suites.** These pass **unchanged** on PostgreSQL 17 for every increment:
+
+* legacy;
+* `accounts`/`academics` under `test`;
+* `security_tests` under `security_test`;
+* `auth_tests` under `auth_test` (enforce mode from B1b);
+* `web_tests` under `web_test` (enforce mode from B1b).
+
+The historical `assertLogs('accounts.tokens')` test (`auth_tests/test_accounts.py:284`) attaches its own handler after startup and must keep passing. **If any historical test fails under enforce mode, B1b stops. Historical tests are never edited to make it pass.**
+
+**G. Profile scope (B1b; each case in a fresh subprocess, because the global logging state cannot be reset in-process).**
+
+| Test | Evidence required |
+| --- | --- |
+| `test_protected_profiles_have_sanitized_graph` | For `auth_development`, `auth_secure`, `auth_test`, `web_development`, `web_secure` and `web_test`, with a synthetic environment: `UCC_LOG_PRIVACY == "enforce"`; the root handlers are exactly `[SanitizingHandler]`; `django` and `django.server` have no handlers; `lastResort` is a `SanitizingHandler`; E102 and E103 pass. |
+| `test_protected_profile_with_raw_handler_fails_startup` | A test-only settings module per protected profile (in `auth_tests/`, importing that profile and adding one `StreamHandler` to `django.security`, or a filter to root) → `django.setup()` raises `ImproperlyConfigured` and the process exits non-zero |
+| `test_excluded_profiles_keep_default_graph` | For `auth_migration`, `development`, `runtime`, `test` and `security_test`: the policy setting is absent; the `django` handlers are Django's defaults (`StreamHandler`, `AdminEmailHandler`); `lastResort` is unchanged; E102 and E103 are not registered |
+| `test_excluded_profiles_commands_start` | `manage.py check` under each excluded profile. `manage.py migrate --plan` under `auth_migration` against the disposable test database. The provisioning commands (`accounts` `configure_auth_role` and `academics` `configure_runtime`) run under `auth_migration` against the disposable database, as in the existing test runners. |
+| `test_secure_flag_scope` | `UCC_SECURE_PROFILE` is True only in `auth_secure` and `web_secure`. E104 is evaluated there and not in the development or test profiles. |
+
+**H. Implicit versus explicit units (B1a).**
+
+| Test | Evidence required |
+| --- | --- |
+| `test_autocommit_statement_persists_without_commit` | Real throttle upsert and real CAS upgrade on the auth alias: a clean connection sees both persisted; `_commit` spy count is 0 (Codex R4 shape) |
+| `test_implicit_units_survive_finalizer_failure` | Login with an old-hasher password; the finalizer fails at the Student lock (real 55P03). The throttle attempt and the **CAS-upgraded hash are persisted**. |
+| `test_statement_error_means_not_persisted` | Hold the throttle row lock from another connection; real 55P03 on the upsert (S1); attempts unchanged on a clean connection |
+| `test_post_execute_lost_ack_is_uncertain_label` | **Injected-post-execute** on the throttle upsert: the real statement runs, then the error is raised. The row is persisted. The test documents S3 as "persisted or not" and asserts the code does not retry. |
+| `test_explicit_block_known_rollback_vs_uncertain_commit` | Finalizer `_commit` replaced before dispatch (E1/E2) → not committed. A real COMMIT followed by an injected error (E3) → committed. Both are allowed states of an uncertain unit; neither is inferred from the status. |
+| `test_no_security_write_retry` | Spies on the throttle, CAS, finalizer and session save count exactly one dispatch per request under each injected fault. The only multiple INSERT attempts allowed are Django's `CreateError` key-collision loop, exercised by a forced collision. |
 
 **Mutation checks.** Removing or weakening each of these must make at least one test fail:
 
 * the `handler400` defect → 500 rule;
 * the outer gate;
 * pass 1 running before pass 2;
-* the wrapper allowlist (accepting any class);
+* the wrapper allowlist;
 * the 16-node bound;
 * the 25P03 mapping;
 * duplicate-option rejection;
-* removing the root `SanitizingHandler`;
+* the root `SanitizingHandler`;
 * the `lastResort` replacement;
 * the `handleError` override;
-* copying extras;
-* copying `exc_text`;
+* copying extras, `exc_text`, `levelname` or the raw logger name;
+* the enforce-mode condition (an unconditional guard must fail G `test_excluded_profiles_commands_start`; a missing guard must fail G `test_protected_profile_with_raw_handler_fails_startup`);
 * the renderer's last resort;
-* catching `BaseException` in the renderer (must fail the process-control test);
-* stripping a deletion header (must fail F-CHG C2).
+* catching `BaseException` in the renderer;
+* stripping a deletion header (must fail A5 C2);
+* asserting an SA key change, or a DA row inside the finalizer (must fail A1);
+* treating throttle or CAS writes as rolled back (must fail H).
 
-### 6.11 Increments and their minimum evidence gates (R3-05)
+### 6.11 Increments and their minimum evidence gates (boundaries unchanged: B1a → B1b → B1c → B1d)
 
-**Ordering change.** Privacy moves **before** the new error handling, so no increment adds new failure paths without the sink protection already in place for them.
-
-| Increment | Content | Minimum regression evidence **before its own acceptance** | Must not claim |
+| Increment | Content | Minimum regression evidence **before its own acceptance** (real PostgreSQL 17, restricted roles, forced RLS) | Must not claim or include |
 | --- | --- | --- | --- |
-| **B1a** settings and timers | `apply_db_safety`, validation, E101, docs | Matrix E in full. **Matrix A rows L0, L1, L4 (55P03), C0 and P1 run against existing behaviour**: today's 500 and 400 statuses, CK1, CK2, and DA A-valid at L1. These are the new timeout failure paths B1a creates. Matrix F. | No status change; no privacy claim; no "B1 complete" |
-| **B1b** logging privacy | `SanitizingHandler`, `LOGGING`, `lastResort`, E102–E104 | Matrix D in full over the **existing** failure routes: 500, 400, CSRF 403, 404, `SuspiciousSession`, and the B1a timeout paths. Matrix F. | Coverage of B1c event lines until B1c adds them to the D matrix |
-| **B1c** classification and rendering | Classifier, `AuthFailureMiddleware`, renderer, `handler400` and `handler500` in both roots | Matrices B and C in full. **Matrix A rows that change status** (L1, L2, L4 for 55P03 and 42703, L5; C0–C3; P1–P3 for reset and verify), with CK1–CK4 and known-cookie rollback cases including the **allowed-deletion** and **no-new-key** assertions. Matrix D extended to the new 503 and 500 routes and to `accounts.failures` events. Matrix F. | Uncertain-outcome wording; "B1 complete" |
-| **B1d** wording and full matrix | Uncertain-outcome wording; every remaining A cell | Matrix A complete (all flows × phases × initial states); the full mutation list; Matrix F; independent implementation review | Production readiness (Stage C, D and E remain) |
+| **B1a** settings and timers | `apply_db_safety` (auth and `STUDENT_DB_ALIAS` aliases only; applied through `auth_common.configure`, so it reaches the auth and web profiles); validation; E101; docs | **E** in full, including the offline-profile exclusions. **H** in full. **A1** (lifecycle observation). **A2 rows L0, L1, L4u (55P03), L4i, L5u and L5i** against **existing** behaviour: today's 500 and 400 statuses; CK1 and CK2; SA K valid with expiry snapshots; DA A valid at L1; DA 0 rows at L4i. **A5 C0.** **F.** | No status, cookie or session lifecycle change; no classifier; no privacy claim; no "B1 complete" |
+| **B1b** logging privacy | `exception_chain` (shared walker), `log_privacy.configure`, `SanitizingHandler`, label tables, `FailureEvent` type, `lastResort`, E102–E104, `UCC_SECURE_PROFILE` | **D** in full over the existing failure routes and the B1a timeout paths. **G** in full (fresh-subprocess profile tests). **F** with enforce mode on in `auth_test` and `web_test`. | Coverage of B1c event lines until B1c adds them to D |
+| **B1c** classification and rendering | Classifier on `exception_chain`, `AuthFailureMiddleware`, renderer, `handler400` and `handler500` in both roots, `accounts.failures` emission | **B** and **C** in full. **A2 and A5** rows that change status (L1, L2, L3, L4u for 55P03 and 42703, L4i, L5u, L5i; C0–C3), with CK1–CK4, allowed-deletion and no-new-key assertions. **A3 and A4** S1/E1 to E3. **D** extended to the new routes and to typed `FailureEvent` lines. **F.** | Uncertain-outcome wording; "B1 complete" |
+| **B1d** wording and full matrix | Uncertain-outcome wording; every remaining A cell | **A** complete (all flows × phases × initial states, N, AN, SA, SX and DA); the full mutation list; **F**; independent implementation review | Production readiness (Stages C, D and E remain) |
 
-**Release rule.**
+**Release rule:**
 
-* No intermediate branch or build (B1a, B1b or B1c) is labelled "B1 complete", merged as a staging release, or used to build an accepted Stage C staging environment.
-* Until B1d passes independent review, any B1 build runs **only in trusted synthetic development** (local, synthetic identities, disposable PostgreSQL).
-* Each increment needs **separate owner authorization** and its own Codex review.
-* None changes successful-path authentication.
+* No intermediate branch or build (B1a, B1b or B1c) is labelled "B1 complete", merged as a staging release, or used to build an accepted Stage C environment.
+* Until B1d passes independent review, B1 builds run **only in trusted synthetic development**.
+* Each increment needs separate owner authorization and its own Codex review.
+* None changes successful-path authentication or the session lifecycle.
 
 ### 6.12 Stage C agreements (for Codex; no values proposed)
 
-1. The Stage C startup preflight **runs `manage.py check --deploy`** under the exact web settings (E101–E104).
-2. Worker, proxy and client deadlines come from **lab measurement** of the §6.6 formula. The lab shows that a worker killed mid-transaction gives a P2 or P3 outcome, with the §6.3 rules holding.
-3. Gunicorn error and access logs and Caddy logs must redact paths and query strings, and must not log request bodies (RB-4). Gunicorn's "Error handling request <path>" line is included.
-4. The C21 lab reruns §6.10 over TLS with `verify-full`.
-5. No Stage C environment is built from an intermediate B1 increment (§6.11).
+1. The Stage C startup preflight **runs `manage.py check --deploy`** under the exact `local_staging` module (E101–E104).
+2. `local_staging` must call `accounts.log_privacy.configure` (so `UCC_LOG_PRIVACY == "enforce"`) and set `UCC_SECURE_PROFILE = True`. The integration check verifies both, and that a raw handler stops startup (§6.10 G run against that module).
+3. Worker, proxy and client deadlines come from **lab measurement** of the §6.6 formula. The lab shows that a worker killed mid-transaction gives an S3 or E3 outcome, with the §6.1 and §6.3 rules holding.
+4. Gunicorn error and access logs and Caddy logs must redact paths and query strings, and must not log request bodies (RB-4). Gunicorn's "Error handling request <path>" line is included. Gunicorn's loggers are excluded from the B1 named tree **by configuration**, not because of process separation.
+5. The C21 lab reruns §6.10 over TLS with `verify-full`.
+6. No Stage C environment is built from an intermediate B1 increment (§6.11).
 
 ### 6.13 Evidence register
 
 | ID | Probe | Observed | Source |
 | --- | --- | --- | --- |
-| R1 | `handler400` during a real session-UPDATE `lock_timeout` | 400; chain `SessionInterrupted → UpdateError → OperationalError → LockNotAvailable(55P03)`; `handler500` called 0 times | Mine, PG16.15, Appendix B1-R |
-| R2 | Genuine concurrent session deletion | 400; chain `SessionInterrupted → UpdateError → DatabaseError`; no driver node | Mine, PG16.15 |
-| R3 | DA login; session commit then lost acknowledgement | 500; no session cookie on the response; A invalid; one valid row whose key is not the client's | Mine, PG16.15 |
-| CX-1 | DA login, Student lock 55P03 before flush | 500; **A valid**; follow-up 200; no session cookie | Codex, PG17.11, PR #38 |
-| CX-2 | DA login, `_commit` fault after flush | 500; **A valid**; 1 row; follow-up 200 | Codex, PG17.11 |
-| CX-3 | Password change, `_commit` fault after flush | 500; **deletion header** `Max-Age=0`; old session valid | Codex, PG17.11 |
-| CX-4 | Session-UPDATE `UndefinedColumn` (injected-driver) | **400** at `handler400`; chain contains `('UndefinedColumn','42703')` | Codex, PG17.11 |
-| CX-5 | `log_response` record | `record.request is request`; Cookie, Authorization, query and IP reachable | Codex, PG17.11 |
-| CX-6 | Logger filter on a parent | Not applied to a propagated child record | Codex, PG17.11 |
-| CX-7 | CSRF-rejected POST to a reset URL | 403; secret in a `django.security.csrf` message | Codex, PG17.11 |
+| R1 | `handler400` during a real **SA** session-UPDATE `lock_timeout` | 400; chain `SessionInterrupted → UpdateError → OperationalError → LockNotAvailable(55P03)`; `handler500` called 0 times | Mine, PG16.15, Appendix B1-R |
+| R2 | Genuine concurrent session deletion before the SA save | 400; chain `SessionInterrupted → UpdateError → DatabaseError`; no driver node | Mine, PG16.15 |
+| R3 | DA login: the real response-phase **INSERT** ran (`create()`), then an error was injected | 500 (via `handler500`, because the injected error is not an `UpdateError`); no session cookie; A invalid; one valid row whose key is not the client's | Mine, PG16.15. **Reinterpreted in revision 5**: the probe's patched `save()` wrapped Django's real `create()` → INSERT. This is L5i, not an UPDATE. |
+| CX-1 | DA login, Student lock 55P03 before flush | 500; **A valid**; follow-up 200; no session cookie | Codex R3, PG17.11, PR #38 |
+| CX-2 | DA login, `_commit` fault after flush | 500; **A valid**; 1 row; follow-up 200 | Codex R3, PG17.11 |
+| CX-3 | Password change, `_commit` fault after flush | 500; **deletion header** `Max-Age=0`; old session valid | Codex R3, PG17.11 |
+| CX-4 | Session-UPDATE `UndefinedColumn` (injected-driver) | **400** at `handler400`; chain contains `('UndefinedColumn','42703')` | Codex R3, PG17.11 |
+| CX-5 | `log_response` record | `record.request is request`; Cookie, Authorization, query and IP reachable | Codex R3, PG17.11 |
+| CX-6 | Logger filter on a parent | Not applied to a propagated child record | Codex R3, PG17.11 |
+| CX-7 | CSRF-rejected POST to a reset URL | 403; secret in a `django.security.csrf` message | Codex R3, PG17.11 |
+| **CX-8** | Four successful login entry states (spies delegate to the real code) | `cycle_key` calls N 1, AN 1, **SA 0, DA 0**. Rows inside the finalizer N 1, AN 1, SA 1, **DA 0** (key None). SA keeps the same key. | Codex R4, PG17.11, PR #40 `e713a1e` |
+| **CX-9** | Response save not applied (injected before save) | **SA:** 500, 1 row, old key valid, no cookie. **DA:** 500, **0 rows**, no cookie. | Codex R4, PG17.11 |
+| **CX-10** | INSERT on the auth alias in autocommit | Persisted, visible from another connection; `_commit` calls 0 | Codex R4, PG17.11 |
+| **CX-11** | Fresh `auth_migration` process | `accounts` installed; `LOGGING` empty; `django` handlers `[StreamHandler, AdminEmailHandler]` | Codex R4 (stdlib/Django observation) |
+| **CX-12** | Sentinel logger name and exception qualname | Both pass revision 4's regex | Codex R4 |
 | Earlier | Codex's 14 PR #37 probes; native COMMIT experiment | 14/14 reproduce; COMMIT 352 ms under a 100 ms `statement_timeout` | Mine (rerun, PG16.15) and Codex (PG17.11) |
 
-I have not rerun the CX probes. Their source (PR #38 appendix) uses only the existing code plus fault injection, and matches the source reading in §6.3–§6.8. B1 implementation CI on PostgreSQL 17 remains mandatory.
+**Source confirmation for revision 5 (mine, Django 5.2.19):**
+
+* `contrib/auth/__init__.py:175-187`: `flush()` only inside the `SESSION_KEY in session` branch, when the user or hash differs; `cycle_key()` only in the `else` branch.
+* `sessions/backends/db.py:68-78` and `114-138`: `save()` with a None key calls `create()` (an `exists()` loop, then an INSERT with `must_create`). A non-integrity `DatabaseError` on that INSERT is re-raised, not turned into `UpdateError`.
+* `accounts/throttling.py:82-92` and `accounts/backends.py:29` (PR #29): neither opens an atomic block.
+
+**I have not rerun CX-1 to CX-12.** B1 implementation CI on PostgreSQL 17 remains mandatory for each increment.
 
 ### 6.14 Residual risks requiring owner acceptance
 
 | ID | Risk | Severity | Why B1 cannot remove it | Where it can be addressed |
 | --- | --- | --- | --- | --- |
-| RB-1 | **Undelivered valid authenticated session rows** (orphans) after L5, SA L4, or a lost response | Low (an attacker would need the random key) | The session write and HTTP delivery are separate. **B2 groups the session row into the finalization unit, but cannot make COMMIT atomic with HTTP delivery**, so orphans remain possible after a lost acknowledgement or response. | B2 reduces the number of units; expiry (1800 s) and cleanup bound the lifetime; accept |
+| RB-1 | **Undelivered valid authenticated session rows** (orphans). They can arise only where a response-phase save **committed** but the key was not delivered: **N and AN L5u** (the UPDATE made K′ authenticated), **DA and SX L5i** (the INSERT created K_B), or a lost response after a successful save. **SA has no orphan** at L4u or L5u, because the key is the client's own (it is a renewal; see RB-6). | Low (an attacker would need the random 32-character key) | Response-phase saves and HTTP delivery are separate. **B2 can move the session row into the finalization unit, but cannot make COMMIT atomic with HTTP delivery**, so orphans remain possible after a lost acknowledgement or response. | B2 reduces the number of units; expiry (1800 s) and cleanup bound the lifetime; accept |
 | RB-2 | **P5:** Set-Cookie may be delivered before a write or transport failure | Low–Medium | Outside Django's lifecycle | Stage C; accept |
-| RB-3 | **No total request or COMMIT bound**; a worker kill mid-transaction gives an uncertain outcome | Medium (availability) | `statement_timeout` does not bound COMMIT | Stage C deadlines from measurement; possible PG17 `transaction_timeout` review |
-| RB-4 | **Logs outside Python logging in the Django process:** Gunicorn error and access logs (paths, including "Error handling request"), Caddy logs, raw stderr writes | Medium (privacy) | Outside the Django process's logging tree. **Django's own `django.security.*` loggers are not part of this risk** (§6.8 covers them). | Stage C configuration; Stage D retention |
-| RB-5 | **An issued token without delivered email revokes older links** (F-ISSUE P3) | Medium (recovery availability) | Existing revocation semantics | B7 |
-| RB-6 | **Prior legitimate authority survives a failure:** SA key retained or renewed (including a known key's expiry extended when its UPDATE commits and the acknowledgement is lost); **DA: A remains valid when the switch rolled back (L0–L2)**; F-CHG C0–C2: the server-side session remains valid, even when the browser cookie was deleted (C2) | Low–Medium | Existing Django and login behaviour. Status conversion cannot change it. Changing it is a policy change to successful-path semantics. | D-B1-1 and D-B1-2; B2 if the owner requires revocation |
-| RB-7 | My local verification used PostgreSQL 16; the CX probes ran on 17.11 but were not rerun by me | Process | Environment | Hosted PostgreSQL 17 CI and the Stage C lab are mandatory |
-| RB-8 | `handler500` relies on `sys.exc_info()`, which is not a documented Django API | Low | Framework design | Tested fallback; re-verify on upgrades |
-| RB-9 | **Reduced diagnosability:** B1 logs drop all free text (only status, route, category and SQLSTATE) | Low (operations) | The privacy-first allowlist | B3 structured events; D-B1-4 |
-| RB-10 | **The classifier depends on Django and psycopg exception layouts** (the wrapper allowlist, SQLSTATE attributes) | Low | Framework internals | Unknown wrappers fall to `NOT_DATABASE` or `DATABASE_UNPROVEN` (500 or 400), **never to a false 503**; re-verify chain tests on upgrades |
-| RB-11 | **Development profiles with `DEBUG=True`** show technical pages, including request data | Low (local only) | Developer tooling | E104 forbids it in secure profiles; development stays local and synthetic |
+| RB-3 | **No total request or COMMIT bound.** S3 and E3 outcomes are uncertain, for example after a worker kill. | Medium (availability) | `statement_timeout` does not bound COMMIT; implicit statements can persist before the client sees the result | Stage C deadlines from measurement; possible PG17 `transaction_timeout` review |
+| RB-4 | **Logs outside B1's named logger tree:** Gunicorn error and access logs (including "Error handling request <path>"), Caddy logs, raw stderr writes | Medium (privacy) | A configuration boundary (Gunicorn may share the process and the Python logging system). **Django's `django.security.*` loggers are covered by §6.8.** | Stage C configuration; Stage D retention |
+| RB-5 | **An issued token without delivered email revokes older links** (F-ISSUE E3) | Medium (recovery availability) | Existing revocation semantics | B7 |
+| RB-6 | **Prior legitimate authority survives a failure:** SA K kept with its expiry unchanged (L4u) or **renewed** (L5u, when the UPDATE commits and the acknowledgement is lost); DA A valid after a rolled-back switch (L0–L2); F-CHG C0–C2 server-side session valid even when the browser cookie was deleted (C2) | Low–Medium | Existing Django and login behaviour (SA neither flushes nor cycles). Status conversion cannot change it. | D-B1-1 and D-B1-2; B2 if the owner requires revocation or no-renewal |
+| RB-7 | My local runs were PostgreSQL 16; the CX probes (PostgreSQL 17.11) were not rerun by me; documentation CI does not exercise B1 | Process | Environment | Each increment's hosted PostgreSQL 17 CI with restricted roles; the Stage C lab |
+| RB-8 | `handler500` relies on `sys.exc_info()` | Low | Framework design | Middleware, view and response integration tests; no-active-exception fallback; re-verify on upgrades |
+| RB-9 | **Reduced diagnosability:** only fixed labels, status, route, typed event and category, SQLSTATE and exception-class labels | Low (operations) | The privacy-first allowlist | B3 structured events; D-B1-4 |
+| RB-10 | **The classifier depends on Django and psycopg exception layouts** | Low | Framework internals | Unknown or opaque chains → `NOT_DATABASE` or `DATABASE_UNPROVEN` (500 or 400), **never a false 503**; pinned-version chain tests; upgrade review |
+| RB-11 | **Development profiles with `DEBUG=True`** show technical pages | Low (local only) | Developer tooling | E104 under `UCC_SECURE_PROFILE`; development stays local and synthetic |
+| **RB-12** | **The logging guard is a startup snapshot:** a raw handler added to a child logger after startup would emit before the root sink | Low (requires code change) | Python logging is mutable at runtime | Prohibition rule plus the source-scan test (§6.10 D); code review |
+| **RB-13** | **Excluded profiles keep Django's default logging** (`auth_migration`, foundation and historical test profiles) | Low | They serve no authentication route (empty `config.urls`); offline tools must keep working | Operators run offline commands only with synthetic or locally controlled data; revisit if any excluded profile ever gains routes |
 
-**Decisions for the owner:**
+**Decisions for the owner** (Codex PR #40 recommendations noted):
 
-* **D-B1-1 (prior authority on a failed login):** Accept that a failed login may leave **prior legitimate authority** valid: same-account retention or renewal, **and the original account A after a failed or rolled-back account-switch attempt**. That is recommended for B1 and documented. The alternative is to require revocation or no-renewal, which is a B2 change to login and session policy.
-* **D-B1-2 (failed password change):** Accept that a failed password change may leave the **server-side** session valid. In phase C2, the browser cookie may be deleted while the server row remains valid. Recommended. The alternative is to require server-side revocation on failure, which B1 cannot deliver because the transaction rolled back; it would be a B2-or-later design. Cookie deletion and server revocation are different controls.
-* **D-B1-3 (timers):** Approve the candidate timer values, including `connect_timeout` 5 s, **with the stated limits** (no COMMIT or request bound).
-* **D-B1-4 (logging):** Approve the B1b logging scope:
-  * sink-level sanitisation that drops all free text in the application process;
-  * new sanitized stderr output in `DEBUG=False` profiles;
-  * runserver request lines lost in development;
-  * the B3 taxonomy and Stage C/D sinks left separate.
-* **D-B1-5 (increments):** Approve the order B1a → B1b (privacy) → B1c (classification and rendering) → B1d (wording and full matrix), with the per-increment gates and the trusted-synthetic-development rule. Each increment is authorized separately.
-* **D-B1-6 (classification policy):** Approve:
-  * the categories and statuses in §6.4: 503 only for proven outage, connection or configuration states; `CONNECTION_UNAVAILABLE` (driver error with no SQLSTATE) as 503 without `Retry-After`; 500 for defects and unproven database errors;
-  * 400 kept for genuine concurrent deletion and other non-database 400s;
-  * the preserved role-middleware 503 exception.
+* **D-B1-1 (prior authority on a failed login):** Accept that a failed login may leave **prior legitimate authority** valid, using the corrected oracle:
+  * SA K kept, and possibly renewed (L5u);
+  * DA A valid after a rolled-back switch.
+
+  Recommended for B1. Requiring revocation or no-renewal is a separate B2 policy change.
+* **D-B1-2 (failed password change):** Accept that a failed change may leave the **server-side** session valid while the browser cookie may be deleted (C2). Recommended. No compensating write or retry.
+* **D-B1-3 (timers):** Approve the candidates for **synthetic testing and tuning only**: `connect_timeout` 5 s, `lock_timeout` 3 s, `statement_timeout` 5 s (auth) and 10 s (runtime), idle 15 s. None is a COMMIT or request bound. Final values come from Stage C measurement.
+* **D-B1-4 (logging):** Approve the B1b scope:
+  * the protected and excluded profile table (§6.8.1);
+  * fixed-label output with no free text;
+  * the typed `FailureEvent` category;
+  * startup-snapshot enforcement with the runtime-reconfiguration prohibition;
+  * new sanitized stderr lines;
+  * runserver request lines lost in development.
+* **D-B1-5 (increments):** Approve B1a → B1b (privacy, including the shared walker) → B1c (classification and rendering) → B1d (wording and full matrix), with the §6.11 gates. Each PR is separately authorized and reviewed. No intermediate staging and no real data.
+* **D-B1-6 (classification policy):** Approve the bounded SQLSTATE policy:
+  * preserved handled contracts;
+  * a reachable defect gives 500 at every boundary;
+  * the documented Django-only `handler400` exception (genuine deletion stays 400);
+  * the opaque-chain limits (RB-10).
 
 Owner acceptance cannot excuse incorrect SQLSTATE routing, a false test oracle or an unsupported privacy claim. Stage A merge authorization and PR #29 integration remain external prerequisites.
 
@@ -781,14 +997,14 @@ Owner acceptance cannot excuse incorrect SQLSTATE routing, a false test oracle o
 ## 7. Decisions requested from the owner
 
 1. **Stage A:** authorize merging PR #29, then PR #26 (Codex sequence). This is a live behaviour change for #29. B1 depends on #29 being on `master`.
-2. **B1 policy decisions D-B1-1 to D-B1-6** (§6.14):
+2. **B1 policy decisions D-B1-1 to D-B1-6** (§6.14, with the corrected session oracle):
    * prior authority on a failed login, including account switch;
    * password-change failure semantics;
    * timers with their stated limits;
    * logging scope;
    * the increment order and gates;
    * the classification policy.
-3. **Request another independent Codex review** of this revision 4 before any B1 implementation is authorized.
+3. **Request another independent Codex review** of this revision 5 before any B1 implementation is authorized.
 4. **Stage C coordination** (§6.12):
    * a preflight that runs `check --deploy`;
    * deadlines from lab measurement only;
@@ -801,7 +1017,7 @@ Owner acceptance cannot excuse incorrect SQLSTATE routing, a false test oracle o
 
 ---
 
-## Appendix B1-R: Claude observation probes R1–R3 (revision 3; unchanged in revision 4; not application code)
+## Appendix B1-R: Claude observation probes R1–R3 (code unchanged since revision 3; R3 reinterpreted in revision 5, see §6.13; not application code)
 
 Three probes supporting §6.13 R1–R3. Observation only: no B1 implementation and no fix. Synthetic identities and disposable PostgreSQL only. **Do not add them to application test discovery.** Run them like Codex's appendix, against the approved PR #29 code (`42910ed`), with the repository `AuthenticationTestRunner` and real separate LOGINs:
 
