@@ -1,4 +1,13 @@
-"""Evidence only: actual PBKDF2 work under Student locks; no timing SLA assertion."""
+"""Evidence only: actual PBKDF2 work under Student locks; no timing SLA assertion.
+
+Reported separately (L-6B):
+* hash_calls_under_lock: PBKDF2 encode calls made while the Student row lock is held;
+* lock_hold_seconds: lock acquisition (statement return) to real COMMIT return;
+* observer_overhead_seconds: the part of that hold spent waiting for the NOWAIT
+  observer handshake that proves the lock exists (test coordination, not app work);
+* lock_hold_excluding_observer_seconds: the difference. It still includes thread
+  scheduling and other non-hash work, so it is an upper bound on hashing time.
+"""
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 import json
@@ -45,6 +54,7 @@ class HashLockMeasurements(AuthenticationCase):
                     if 'FOR UPDATE' in sql and 'accounts_student' in sql and state.get('locked_at') is None:
                         state['locked_at']=time.monotonic();ready.set()
                         if not observed.wait(10):raise AssertionError('Real row-lock observer did not run')
+                        state['observer_seconds']=time.monotonic()-state['locked_at']
                     return result
                 def commit():
                     result=real_commit()
@@ -65,8 +75,13 @@ class HashLockMeasurements(AuthenticationCase):
                 self.assertEqual(sqlstate(error.exception),'55P03')
                 observed.set();status=future.result(timeout=60)
             self.assertEqual(status,200 if flow=='reset_confirm' else 302)
-            self.assertIn('seconds',state);self.assertGreaterEqual(state['hashes'],1)
-            records.append({'flow':flow,'seconds':round(state['seconds'],6),'hash_calls_under_lock':state['hashes'],
+            self.assertIn('seconds',state);self.assertIn('observer_seconds',state)
+            self.assertGreaterEqual(state['hashes'],1)
+            self.assertLessEqual(state['observer_seconds'],state['seconds'])
+            records.append({'flow':flow,'hash_calls_under_lock':state['hashes'],
+                            'lock_hold_seconds':round(state['seconds'],6),
+                            'observer_overhead_seconds':round(state['observer_seconds'],6),
+                            'lock_hold_excluding_observer_seconds':round(state['seconds']-state['observer_seconds'],6),
                             'algorithm':'pbkdf2_sha256','iterations':PBKDF2PasswordHasher.iterations,
                             'python':platform.python_version(),'postgresql':connections['auth'].pg_version})
         print('B1A_PBKDF2_LOCK_MEASUREMENTS='+json.dumps(records,sort_keys=True))

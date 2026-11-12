@@ -36,7 +36,8 @@ class SafetyConfigurationTests(SimpleTestCase):
             self.assertEqual(actual['options'],f'-c lock_timeout=3000 -c statement_timeout={statement} -c idle_in_transaction_session_timeout=15000')
             self.assertEqual(actual['connect_timeout'],5)
             for key in ('sslmode','sslrootcert','application_name'):
-                self.assertEqual(actual[key],original[alias]['OPTIONS'][key])
+                # .get(): a dropped TLS/connection key must be an assertion failure, not a KeyError.
+                self.assertEqual(actual.get(key),original[alias]['OPTIONS'][key])
         self.assertTrue(n['UCC_DB_SAFETY_CONFIGURED'])
         self.assertEqual(apps.get_app_config('accounts').name, 'accounts')
         self.assertEqual(apps.get_app_config('accounts').label, 'accounts')

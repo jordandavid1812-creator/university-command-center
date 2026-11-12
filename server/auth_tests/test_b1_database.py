@@ -70,10 +70,22 @@ class DatabaseTimerTests(AuthenticationCase):
             with connections[alias].cursor() as c:c.execute('SELECT 1');self.assertEqual(c.fetchone(),(1,))
 
     def test_idle_transaction_timeout_terminates_then_reconnects(self):
-        conn=connections['auth']
+        # L-6A: wait for the server to terminate the idle backend (observed through
+        # pg_stat_activity on a separate connection) instead of a fixed short sleep.
+        conn=connections['auth']; configured=settings.UCC_DB_SAFETY_VALUES['idle_ms']/1000
         try:
-            with conn.cursor() as c:c.execute('BEGIN');c.execute('SELECT 1')
-            time.sleep(15.3)  # Deliberately create an idle gap, not a retry/delay workaround.
+            with conn.cursor() as c:
+                c.execute('BEGIN');c.execute('SELECT pg_backend_pid()');pid=c.fetchone()[0]
+            idle_from=time.monotonic();deadline=idle_from+configured+5;alive=True
+            time.sleep(configured-1)
+            while alive and time.monotonic()<deadline:
+                with connections['default'].cursor() as observer:
+                    observer.execute('SELECT count(*) FROM pg_stat_activity WHERE pid=%s',[pid])
+                    alive=observer.fetchone()[0]==1
+                if alive:time.sleep(.1)
+            elapsed=time.monotonic()-idle_from
+            self.assertFalse(alive,'Idle backend was not terminated within the bounded observation window')
+            self.assertGreaterEqual(elapsed,configured-.5)
             with self.assertRaises(DatabaseError) as error:
                 with conn.cursor() as c:c.execute('SELECT 1')
             self.assertEqual(sqlstate(error.exception),'25P03')
@@ -81,6 +93,13 @@ class DatabaseTimerTests(AuthenticationCase):
         with conn.cursor() as c:c.execute('SELECT 1');self.assertEqual(c.fetchone(),(1,))
 
     def test_connect_timeout_with_a_single_stalled_handshake(self):
+        # L-2: the effective timeout comes from the configured auth alias, not a literal.
+        params=connections['auth'].get_connection_params()
+        configured=params['connect_timeout']
+        self.assertIs(type(configured),int)
+        self.assertEqual(configured,settings.UCC_DB_SAFETY_VALUES['connect_seconds'])
+        self.assertEqual(params['options'],settings.DATABASES['auth']['OPTIONS']['options'])
+        self.assertEqual(params.get('sslmode'),settings.DATABASES['auth']['OPTIONS'].get('sslmode'))
         listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(1)
         stop=Event();accepted=Event()
         def stall():
@@ -91,12 +110,14 @@ class DatabaseTimerTests(AuthenticationCase):
                 if client:client.close()
         worker=Thread(target=stall,daemon=True);worker.start();start=time.monotonic()
         try:
-            with self.assertRaises(psycopg.OperationalError):
-                psycopg.connect(host='127.0.0.1',port=listener.getsockname()[1],
-                                user='synthetic',dbname='synthetic',connect_timeout=5,sslmode='disable')
+            # Only the listener address changes; options/TLS mode/timeout stay as configured.
+            # The real credential is replaced so it can never reach the synthetic listener.
+            stalled=dict(params,host='127.0.0.1',port=listener.getsockname()[1],password='synthetic-unused')
+            with self.assertRaises(psycopg.OperationalError):psycopg.connect(**stalled)
+            elapsed=time.monotonic()-start
             self.assertTrue(accepted.is_set())
-            self.assertGreaterEqual(time.monotonic()-start,4)
-            self.assertLess(time.monotonic()-start,20)
+            self.assertGreaterEqual(elapsed,configured-1)
+            self.assertLess(elapsed,configured*4)
         finally:stop.set();listener.close();worker.join(12)
 
     def test_cleanup_timeout_rolls_back_delete_call_and_reports_failure(self):
@@ -215,10 +236,20 @@ class DatabaseTimerTests(AuthenticationCase):
             c.execute('CREATE CONSTRAINT TRIGGER b1_deferred AFTER INSERT ON b1_commit_probe DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION b1_commit_sleep()')
             from psycopg import sql
             c.execute(sql.SQL('GRANT INSERT ON b1_commit_probe TO {}').format(sql.Identifier(os.environ['UCC_AUTH_ROLE'])))
+        conn=connections['auth'];real_commit=conn._commit;durations=[]
+        def timed_commit():
+            # L-4: time only the real COMMIT, where the deferred trigger runs.
+            started=time.monotonic()
+            try:return real_commit()
+            finally:durations.append(time.monotonic()-started)
         try:
-            with connections['auth'].cursor() as c:c.execute("SET statement_timeout='100ms'")
-            with transaction.atomic(using='auth'):
-                with connections['auth'].cursor() as c:c.execute('INSERT INTO b1_commit_probe VALUES (1)')
+            with conn.cursor() as c:c.execute("SET statement_timeout='100ms'")
+            with patch.object(conn,'_commit',timed_commit):
+                with transaction.atomic(using='auth'):
+                    with conn.cursor() as c:c.execute('INSERT INTO b1_commit_probe VALUES (1)')
+            self.assertEqual(len(durations),1)
+            self.assertGreaterEqual(durations[0],0.2)  # trigger delay ran inside COMMIT; no upper bound
+            print('B1A_DEFERRED_COMMIT_SECONDS=%.6f statement_timeout_ms=100'%durations[0])
             with connections['default'].cursor() as c:c.execute('SELECT count(*) FROM b1_commit_probe');self.assertEqual(c.fetchone(),(1,))
         finally:
             connections['auth'].close()

@@ -1,6 +1,8 @@
 """B1a observes Django's existing session units; it does not change their policy."""
 from concurrent.futures import ThreadPoolExecutor
+import sys
 from unittest.mock import patch
+from django.core.signals import got_request_exception
 from django.conf import settings
 from django.contrib.auth import HASH_SESSION_KEY, SESSION_KEY
 from django.contrib.sessions.backends.db import SessionStore
@@ -12,7 +14,27 @@ from django.utils import timezone
 from accounts import views
 from accounts.models import Student
 from .base import AuthenticationCase, PASSWORD, NEW_PASSWORD
-from .test_b1_database import thread_call
+from .test_b1_database import thread_call, sqlstate
+
+
+def capture_auth_errors(errors):
+    """Record (SQL text with placeholders only, SQLSTATE) for each failing auth statement
+    in this thread. Parameters are never captured or printed."""
+    def capture(execute,sql,params,many,context):
+        try:return execute(sql,params,many,context)
+        except Exception as exc:
+            errors.append((' '.join(sql.split()),sqlstate(exc)));raise
+    return connections['auth'].execute_wrapper(capture)
+
+
+class RequestExceptions:
+    """got_request_exception receiver, connected only for one request and always removed."""
+    def __init__(self):self.states=[]
+    def receive(self,sender,request=None,**kwargs):self.states.append(sqlstate(sys.exc_info()[1]))
+    def __enter__(self):
+        got_request_exception.connect(self.receive,weak=False,dispatch_uid='b1a-l3-capture');return self
+    def __exit__(self,*exc):
+        got_request_exception.disconnect(dispatch_uid='b1a-l3-capture');return False
 
 
 class SessionUnitTests(AuthenticationCase):
@@ -110,16 +132,29 @@ class SessionUnitTests(AuthenticationCase):
                         if committed:self.assertEqual(rows[0].get_decoded()[SESSION_KEY],str(self.a.pk))
                         elif state=='SA':self.assertTrue((rows[0].session_key,rows[0].expire_date)==before[0])
                         else:self.assertNotIn(SESSION_KEY,rows[0].get_decoded())
-                    if state=='SA':self.assertTrue(rows[0].session_key==old)
+                    if state=='SA':
+                        self.assertTrue(rows[0].session_key==old)
+                        prior=before[0][1];after=rows[0].expire_date
+                        # L-5: existing semantics allow renewal (D-B1-1); never a shorter expiry.
+                        self.assertGreaterEqual(after,prior)
+                        outcome='renewed' if after>prior else 'preserved'
+                        if not committed:self.assertEqual(outcome,'preserved')
+                        print(f'B1A_SA_L5U_EXPIRY committed={committed} outcome={outcome}')
 
     def test_real_session_update_lock_timeout_keeps_prior_key_and_expiry(self):
         client,old=self.client_state('SA');before=Session.objects.using('auth').get(pk=old).expire_date
-        def request():return self.login(client)
+        errors=[]
+        def request():
+            with capture_auth_errors(errors):return self.login(client)
         with ThreadPoolExecutor(max_workers=1) as pool:
             with transaction.atomic(using='default'):
                 Session.objects.using('default').select_for_update().get(pk=old)
                 response=pool.submit(thread_call(request)).result(timeout=15)
         self.assertEqual(response.status_code,400)
+        # L-3: the 400 must come from a real lock timeout on the response session UPDATE.
+        self.assertEqual(len(errors),1)
+        self.assertTrue(errors[0][0].startswith('UPDATE "django_session" SET'))
+        self.assertEqual(errors[0][1],'55P03')
         self.no_new_cookie(response,old)
         saved=Session.objects.using('auth').get(pk=old)
         self.assertEqual(saved.expire_date,before)
@@ -163,12 +198,25 @@ class SessionUnitTests(AuthenticationCase):
                     bucket=salted_hmac('ucc-auth-rate',f"login|{client.defaults['REMOTE_ADDR']}",algorithm='sha256').hexdigest()
                     AuthThrottle.objects.using('auth').update_or_create(bucket=bucket,defaults={
                         'attempts':1,'expires_at':timezone.now()+timedelta(minutes=15)})
+                    errors=[]
+                    def request():
+                        with capture_auth_errors(errors),RequestExceptions() as raised:
+                            return self.login(client),raised.states
                     with ThreadPoolExecutor(max_workers=1) as pool:
                         with transaction.atomic(using='default'):
                             if phase=='L0':AuthThrottle.objects.using('default').select_for_update().get(pk=bucket)
                             else:Student.objects.using('default').select_for_update().get(pk=self.a.pk)
-                            response=pool.submit(thread_call(lambda:self.login(client))).result(timeout=15)
+                            response,raised=pool.submit(thread_call(request)).result(timeout=15)
                     self.assertEqual(response.status_code,500)
+                    # L-3: exactly the nominated statement failed with a real lock timeout,
+                    # and that exception (not another error) produced the 500.
+                    self.assertEqual(len(errors),1)
+                    statement,state_code=errors[0]
+                    self.assertEqual(state_code,'55P03')
+                    if phase=='L0':self.assertTrue(statement.startswith('INSERT INTO accounts_auththrottle'))
+                    else:self.assertTrue(statement.startswith('SELECT') and 'FROM "accounts_student"' in statement
+                                         and statement.endswith('FOR UPDATE'))
+                    self.assertEqual(raised,['55P03'])
                     self.no_new_cookie(response,old)
                     after=list(Session.objects.using('auth').values_list('session_key','session_data','expire_date'))
                     self.assertEqual(after,before)
