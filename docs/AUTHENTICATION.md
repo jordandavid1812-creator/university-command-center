@@ -356,3 +356,58 @@ For the full student pages, use the [student website profiles and guide](STUDENT
 They inherit this authentication/role boundary and do not broaden runtime privileges.
 `auth_development` remains the historical minimal demonstration profile;
 `web_development` provides the new local student website and shared presentation.
+
+
+## B1a: protected application connection timeouts
+
+The protected `auth_development`, `auth_secure`, `auth_test`, `web_development`,
+`web_secure` and `web_test` profiles apply connection options through
+`accounts.dbsafety.apply_db_safety`. Only the `auth` and academic application
+aliases are configured. The separate test migrator and the `auth_migration`,
+foundation, security and offline runtime profiles do not opt in. App name and
+label remain `accounts`. No migration or role/grant change is required.
+
+| Environment variable | Default | Accepted range |
+| --- | --- | --- |
+| `UCC_DB_CONNECT_TIMEOUT_SECONDS` | 5 seconds | 2–30 |
+| `UCC_DB_LOCK_TIMEOUT_MS` | 3000 ms | At least 1000, strictly below both statement limits |
+| `UCC_AUTH_STATEMENT_TIMEOUT_MS` | 5000 ms | Above lock limit, at most 60000 |
+| `UCC_RUNTIME_STATEMENT_TIMEOUT_MS` | 10000 ms | Above lock limit, at most 60000 |
+| `UCC_DB_IDLE_TIMEOUT_MS` | 15000 ms | 5000–300000 |
+
+Inputs must be exact integers or ASCII digits-only environment strings. Boolean,
+decimal, unit-bearing, signed, whitespace-bearing, zero and out-of-range values
+are rejected without rounding. These are owner-authorized synthetic tuning
+candidates, not accepted production timeout policy.
+
+The helper owns the fixed ordered `OPTIONS["options"]` string on these aliases.
+Absent/empty or identical options are accepted; conflicting options and presence
+of `PGOPTIONS` (even empty) are rejected. An existing conflicting connect timeout
+is rejected too. TLS (`sslmode`, `sslrootcert`) and unrelated settings are retained.
+Direct connections built from an alias's parameters inherit these options;
+arbitrary external clients or later configuration changes are not covered.
+
+Only the helper sets `UCC_DB_SAFETY_CONFIGURED`. Flag-gated `accounts.E101` checks
+that configured options still match. Run `check --deploy` with
+`config.settings.web_secure` before a future release; unrelated deployment
+warnings may also appear. WSGI does not run system checks automatically.
+
+Owner-approved cleanup option 1 keeps `clear_auth_artifacts` under the protected
+auth timers. A failed statement rolls back; the command has separate delete calls,
+so previously completed DELETEs are not promised to roll back. Command failures
+must be reported and investigated, never treated as successful cleanup.
+
+These timers bound specific connection/lock/statement/idle operations, not the
+whole request, DNS/multiple-address connection attempts or COMMIT. Idle expiry
+terminates a connection. Existing autocommit writes can survive a later failure;
+an uncertain acknowledgement can follow a completed COMMIT. B1a adds no retry,
+error classification, logging sink, session policy, device activation or status
+conversion. Existing 400/500/503 paths remain as implemented. B1b–B1d and Stage C
+remain separately authorized and reviewed work.
+
+Options affect newly opened connections. A future approved release or rollback
+must recycle affected connections/workers, verify fresh/reused `SHOW` values and
+preserve TLS/roles. Reverting B1a does not undo committed writes, change operator
+DB defaults or authorize reversing migrations. See
+[B1a implementation evidence](security/B1A_IMPLEMENTATION_EVIDENCE.md) for tests
+and remaining limitations.

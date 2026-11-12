@@ -53,3 +53,6 @@ def configure(namespace):
         # topology lists its proxy networks here. Keep empty in every profile.
         UCC_TRUSTED_PROXIES=(),
     )
+    # B1a only: application aliases; test/offline migrator defaults stay untouched.
+    from accounts.dbsafety import apply_db_safety
+    apply_db_safety(namespace)
