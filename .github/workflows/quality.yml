@@ -121,6 +121,15 @@ jobs:
           PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
           PGTESTDATABASE: test_ucc_authentication
         run: python server/manage.py test auth_tests --settings=config.settings.auth_test -v 2
+      # Rehearsal-only evidence; canonical authentication implementation stays in PR29.
+      - name: Independent PR29 lock/session probes and race mutation controls
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_pr29_independent
+          PYTHONPATH: tools
+        run: python server/manage.py test pr29_rehearsal_probes pr29_negative_controls --settings=config.settings.auth_test -v 2
       - name: Student website integration, calculations and accessibility structure tests
         env:
           PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
