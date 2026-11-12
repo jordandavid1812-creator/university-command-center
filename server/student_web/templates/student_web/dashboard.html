@@ -1,10 +1,84 @@
 {% extends 'accounts/base.html' %}
+{% load static %}
 {% block title %}Dashboard · University Command Center{% endblock %}
-{% block content %}<header class="page-heading dashboard-heading"><div><p class="eyebrow">Your academic command center</p><h1>Welcome back, {{ student_username }}.</h1><p>Your actual results and the work ahead, in one place.</p></div><div class="action-row"><a class="button" href="{% url 'student_web:course-create' %}">Add a course</a><a class="button secondary" href="{% url 'student_web:assignment-create' %}">Add an assignment</a></div></header>
-{% if not semesters %}<section class="notice onboarding" aria-labelledby="getting-started"><h2 id="getting-started">Start with one semester</h2><ol><li><a href="{% url 'student_web:semester-create' %}">Create your first semester</a>.</li><li>Add courses and their credit units; leave grades ungraded until you have results.</li><li>Add assignments to track deadlines.</li></ol><p>Your CGPA will appear after you enter an actual grade. Ungraded courses are never counted as F.</p></section>{% endif %}
+{% block body_class %}dashboard-page{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}">{% endblock %}
+{% block content %}
+<div class="dashboard">
+  <header class="page-heading dashboard-heading dashboard-welcome">
+    <div>
+      <p class="eyebrow">Academic Studio · Dashboard</p>
+      <h1>Welcome back, {{ student_username }}.</h1>
+      <p>Your actual results and the work ahead, in one place.</p>
+    </div>
+    <div class="action-row">
+      {% if courses %}<a class="button" href="{% url 'student_web:assignment-create' %}">Add assignment</a>
+      {% elif semesters %}<a class="button" href="{% url 'student_web:course-create' %}">Add course</a>
+      {% else %}<a class="button" href="{% url 'student_web:semester-create' %}">Create your first semester</a>{% endif %}
+      <a class="button secondary" href="{% url 'student_web:overview' %}">View GPA overview</a>
+    </div>
+    {% if not semesters and not courses %}<p class="dashboard-onboarding"><strong>Start with one semester.</strong> Add courses and deadlines next. Ungraded courses are never counted as F.</p>
+    {% elif not courses %}<p class="dashboard-onboarding">Your semester is ready. Add a course before creating assignments.</p>{% endif %}
+  </header>
 
-<section aria-labelledby="snapshot-title"><div class="section-heading"><h2 id="snapshot-title">Your academic snapshot</h2><a href="{% url 'student_web:overview' %}">View full overview →</a></div>{% include 'student_web/components/metrics.html' %}</section>
-<div class="two-columns"><section class="panel"><div class="section-heading"><h2>Current semester</h2><span class="badge neutral">Your selection</span></div><form method="get" class="stacked-form" aria-label="Choose current semester"><label for="id_semester">Choose your current semester</label><select id="id_semester" name="semester"><option value="">Choose a semester</option>{% for semester in semesters %}<option value="{{ semester.pk }}"{% if selector.cleaned_data.semester == semester.pk|stringformat:'s' %} selected{% endif %}>{{ semester.label }}</option>{% endfor %}</select>{{ selector.errors }}<button class="button secondary" type="submit">Show semester GPA</button></form>{% if current_selected %}<p class="result-number">{% if current.gpa != None and current %}{{ current.gpa|floatformat:2 }}<span> / 5.00</span>{% else %}Not graded{% endif %}</p><p class="muted">{% if current %}{{ current.label }} · {{ current.units|floatformat:'-4' }} attempted credits{% else %}No graded courses in the selected semester yet.{% endif %}</p>{% else %}<p class="muted">Choose a semester to see its actual GPA here.</p>{% endif %}</section>
-<section class="panel"><h2>Your workload</h2><dl class="workload"><div><dt>Total courses</dt><dd>{{ courses|length }}</dd></div><div><dt>Pending assignments</dt><dd>{{ totals.pending|default:0 }}</dd></div><div><dt>Completed assignments</dt><dd>{{ totals.completed|default:0 }}</dd></div><div><dt>Overdue assignments</dt><dd><a href="{% url 'student_web:assignment-list' %}?status=overdue" aria-label="Review {{ totals.overdue|default:0 }} overdue assignments">{{ totals.overdue|default:0 }}</a></dd></div></dl><a href="{% url 'student_web:assignment-list' %}">Manage assignments →</a></section></div>
-<section class="panel"><div class="section-heading"><h2>Upcoming deadlines</h2><a href="{% url 'student_web:assignment-list' %}?status=upcoming">View upcoming work →</a></div><p class="muted">Pending work due today or later · Africa/Lagos calendar dates</p>{% if upcoming %}<ul class="deadline-list">{% for item in upcoming %}<li><div><strong>{{ item.title }}</strong><span>{{ item.course.normalized_code }}</span></div><time datetime="{{ item.due_date|date:'Y-m-d' }}">{{ item.due_date|date:'j M Y' }}</time></li>{% endfor %}</ul>{% else %}<p class="empty-inline">No upcoming deadlines. Visit Assignments to review overdue tasks or add your next one.</p>{% endif %}</section>
-<section class="panel"><h2>Semester performance</h2>{% include 'student_web/components/performance.html' %}<p class="muted">Semesters follow your display order, which does not establish chronology.</p></section>{% endblock %}
+  {% if totals.overdue > 0 %}
+  <a class="dashboard-attention" href="{% url 'student_web:assignment-list' %}?status=overdue" aria-label="Review {{ totals.overdue }} overdue assignment{{ totals.overdue|pluralize }}">
+    <span><strong>{{ totals.overdue }} overdue assignment{{ totals.overdue|pluralize }}</strong><span>Review the deadlines that need your attention.</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+  {% endif %}
+
+  <div class="dashboard-main">
+    <section class="panel dashboard-summary" aria-labelledby="actual-cgpa-title">
+      <p class="eyebrow">Your academic snapshot</p>
+      <h2 id="actual-cgpa-title">Actual CGPA</h2>
+      <p class="dashboard-gpa"><strong id="actual-cgpa-value">{% if summary.gpa != None %}{{ summary.gpa|floatformat:2 }}{% else %}Not graded{% endif %}</strong>{% if summary.gpa != None %}<span> / 5.00</span>{% endif %}</p>
+      <p class="dashboard-note">Credit-weighted actual results. Ungraded courses are excluded; F counts as 0.</p>
+      <dl class="dashboard-stats">
+        <div><dt>Attempted credits</dt><dd>{{ summary.units|floatformat:'-4' }}</dd></div>
+        <div><dt>Graded courses</dt><dd>{{ summary.graded }}</dd></div>
+        <div><dt>Ungraded courses</dt><dd>{{ summary.ungraded }}</dd></div>
+        <div><dt>Total courses</dt><dd>{{ courses|length }}</dd></div>
+      </dl>
+      {% if summary.warnings %}<div class="notice warning" role="status">{% for warning in summary.warnings %}<p>{{ warning }}</p>{% endfor %}</div>{% endif %}
+    </section>
+
+    <section class="panel dashboard-deadlines" aria-labelledby="upcoming-title">
+      <div class="section-heading"><h2 id="upcoming-title">Upcoming deadlines</h2><a href="{% url 'student_web:assignment-list' %}?status=upcoming">View upcoming work</a></div>
+      <p class="dashboard-note">Up to five pending deadlines due today or later · Africa/Lagos calendar dates</p>
+      {% if upcoming %}<ul class="dashboard-task-list">
+        {% for item in upcoming %}<li><div><a href="{% url 'student_web:assignment-edit' item.pk %}">{{ item.title }}</a><span>{{ item.course.normalized_code }}</span></div><time datetime="{{ item.due_date|date:'Y-m-d' }}">{{ item.due_date|date:'j M Y' }}</time></li>{% endfor %}
+      </ul>{% else %}<div class="dashboard-deadline-empty"><p><strong>No upcoming deadlines.</strong></p>{% if totals.total == 0 %}<p>Add an assignment when you have a deadline.</p>{% elif totals.overdue > 0 %}<p>Visit Assignments to review overdue tasks.</p>{% else %}<p>Visit Assignments to view your work.</p>{% endif %}</div>{% endif %}
+      <dl class="dashboard-workload"><div><dt>Pending</dt><dd>{{ totals.pending|default:0 }}</dd></div><div><dt>Completed</dt><dd>{{ totals.completed|default:0 }}</dd></div></dl>
+      <a class="dashboard-link" href="{% url 'student_web:assignment-list' %}">Manage assignments <span aria-hidden="true">→</span></a>
+    </section>
+  </div>
+
+  <section class="panel dashboard-semester" aria-labelledby="selected-title">
+    <div><h2 id="selected-title">Selected semester</h2><p class="dashboard-note">Choose a semester for this view. This does not save an active-semester preference.</p>
+      <form method="get" class="dashboard-selector" aria-label="Choose selected semester">
+        <label for="id_semester">Choose a semester</label>
+        <div><select id="id_semester" name="semester"><option value="">Choose a semester</option>{% for semester in semesters %}<option value="{{ semester.pk }}"{% if selector.cleaned_data.semester == semester.pk|stringformat:'s' %} selected{% endif %}>{{ semester.label }}</option>{% endfor %}</select><button class="button secondary" type="submit">Show semester GPA</button></div>
+        {{ selector.errors }}
+      </form>
+    </div>
+    <div class="dashboard-selected-result">
+      {% if current_selected %}<p class="dashboard-note">Selected semester GPA</p><p class="dashboard-selected-value">{% if current and current.gpa != None %}{{ current.gpa|floatformat:2 }}<span> / 5.00</span>{% else %}Not graded{% endif %}</p><p class="dashboard-note">{% if current %}{{ current.label }} · {{ current.units|floatformat:'-4' }} attempted credits{% else %}No graded courses in the selected semester yet.{% endif %}</p>
+      {% else %}<p class="dashboard-note">Choose a semester to see its actual GPA here.</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="panel dashboard-performance">
+    <div class="section-heading"><h2 id="performance-title">Semester performance</h2><a href="{% url 'student_web:overview' %}">Full overview</a></div>
+    {% if summary.semesters %}{% include 'student_web/components/performance.html' %}{% else %}<p class="dashboard-note">Your academic story starts here. Add courses and actual grades to see the complete comparison.</p>{% endif %}
+    <p class="dashboard-note">Semesters follow your display order, which does not establish chronology.</p>
+  </section>
+
+  <nav class="dashboard-quick-actions" aria-label="Quick actions"><h2>Keep your workspace moving</h2><ul>
+    <li><a href="{% url 'student_web:semester-create' %}">Add semester</a></li>
+    {% if semesters %}<li><a href="{% url 'student_web:course-create' %}">Add course</a></li>{% endif %}
+    {% if courses %}<li><a href="{% url 'student_web:assignment-create' %}">Add assignment</a></li>{% endif %}
+    <li><a href="{% url 'student_web:overview' %}">View GPA overview</a></li><li><a href="{% url 'student_web:assignment-list' %}">Manage assignments</a></li>
+  </ul></nav>
+</div>
+{% endblock %}

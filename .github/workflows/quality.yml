@@ -151,3 +151,4 @@ jobs:
       - run: python -m pip check
       - run: python tools/test_frontend_foundation_browser.py -v
       - run: python tools/test_premium_auth_browser.py -v
+      - run: python tools/test_dashboard_browser.py -v

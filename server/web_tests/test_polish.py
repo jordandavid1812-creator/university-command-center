@@ -16,7 +16,7 @@ class WebsitePolishTests(WebsiteCase):
         self.assertContains(response, 'Create your first semester')
         self.assertContains(response, 'never counted as F')
         self.assertNotContains(response, 'class="hero"')
-        self.assertLess(response.content.index(b'Actual CGPA'), response.content.index(b'Current semester'))
+        self.assertLess(response.content.index(b'Actual CGPA'), response.content.index(b'Selected semester'))
 
     def test_existing_workspace_does_not_repeat_first_time_onboarding(self):
         self.seed()
@@ -27,10 +27,11 @@ class WebsitePolishTests(WebsiteCase):
         # this test does not start failing once that fixture date is in the past.
         with patch('student_web.views.timezone.localdate', return_value=date(2026, 11, 11)):
             response = self.client_a.get('/')
-        self.assertContains(response, 'Review 0 overdue assignments')
+        self.assertNotContains(response, 'Review 0 overdue assignments')
+        self.assertEqual(response.context['totals']['overdue'], 0)
         with patch('student_web.views.timezone.localdate', return_value=date(2026, 11, 12)):
             overdue = self.client_a.get('/')
-        self.assertContains(overdue, 'Review 1 overdue assignments')
+        self.assertContains(overdue, 'Review 1 overdue assignment')
 
     def test_course_search_matches_code_and_name_case_insensitively(self):
         self.seed()
