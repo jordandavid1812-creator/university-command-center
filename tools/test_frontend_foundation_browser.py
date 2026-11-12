@@ -31,6 +31,7 @@ import django
 django.setup()
 from django.template.loader import render_to_string
 from django.test import RequestFactory, override_settings
+from django.urls import resolve
 from student_web.context import navigation
 from student_web.forms import SemesterFilter, CourseFilter, CourseForm
 from accounts.forms import BoundedAuthenticationForm
@@ -40,7 +41,8 @@ from types import SimpleNamespace
 
 def fixture_html(public=False, scene=None):
     """Real navigation context and templates, explicitly empty synthetic workspace."""
-    request = RequestFactory().get('/')
+    request = RequestFactory().get('/accounts/login/' if public else '/')
+    request.resolver_match = resolve(request.path)
     request.student_identity = object()
     request.user = SimpleNamespace(username='Synthetic UI fixture')
     # Only enable the existing context function while constructing the static fixture.

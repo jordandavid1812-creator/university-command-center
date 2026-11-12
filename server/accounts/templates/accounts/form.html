@@ -1,15 +1,16 @@
 {% extends 'accounts/auth_base.html' %}
 {% block title %}{{ title }} · University Command Center{% endblock %}
 {% block auth_content %}
+{% with auth_page=request.resolver_match.view_name %}
 <section class="panel auth-panel auth-card">
   <header class="auth-card-header">
     <p class="eyebrow">Your student account</p>
     <h1>{{ title }}</h1>
-    {% if website_enabled and title == 'Login' %}
+    {% if website_enabled and auth_page == 'accounts:login' %}
       <p class="muted">If your session expired, sign in again before retrying your changes. Changes are saved only after a successful submission.</p>
-    {% elif website_enabled and title == 'Choose a new password' %}
+    {% elif website_enabled and auth_page == 'accounts:reset-confirm' %}
       <p class="muted">Enter your new password twice to confirm it.</p>
-    {% elif website_enabled and title == 'Reset password' %}
+    {% elif website_enabled and auth_page == 'accounts:reset' %}
       <p class="muted">Enter the email address you use for your account.</p>
     {% endif %}
   </header>
@@ -27,21 +28,23 @@
   </form>
   {% if website_enabled %}
     <nav class="auth-secondary" aria-label="Account options">
-      {% if title == 'Login' %}
+      {% if auth_page == 'accounts:password-change' %}
+        <a class="button secondary" href="{% url 'student_web:settings' %}">Back to Account Settings</a>
+      {% elif auth_page == 'accounts:login' %}
         <p>New to University Command Center?</p>
         <a class="button secondary" href="{% url 'accounts:register' %}">Create an account</a>
         <div class="auth-link-pair">
           <a href="{% url 'accounts:reset' %}">Forgot password?</a>
           <a href="{% url 'accounts:resend' %}">Resend verification</a>
         </div>
-      {% elif title == 'Register' %}
+      {% elif auth_page == 'accounts:register' %}
         <p>Already have an account?</p>
         <a class="button secondary" href="{% url 'accounts:login' %}">Back to login</a>
         <a class="auth-text-action" href="{% url 'accounts:resend' %}">Resend verification</a>
-      {% elif title == 'Reset password' %}
+      {% elif auth_page == 'accounts:reset' %}
         <a class="button secondary" href="{% url 'accounts:login' %}">Back to login</a>
         <a class="auth-text-action" href="{% url 'accounts:resend' %}">Resend verification</a>
-      {% elif title == 'Choose a new password' %}
+      {% elif auth_page == 'accounts:reset-confirm' %}
         <a class="button secondary" href="{% url 'accounts:login' %}">Back to login</a>
         <a class="auth-text-action" href="{% url 'accounts:reset' %}">Request another reset link</a>
       {% else %}
@@ -51,4 +54,5 @@
     </nav>
   {% endif %}
 </section>
+{% endwith %}
 {% endblock %}

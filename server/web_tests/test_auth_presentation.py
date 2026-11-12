@@ -3,7 +3,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 from django.core import mail
-from django.test import Client
+from django.test import Client, override_settings
+from django.template.loader import render_to_string
 from accounts.tokens import GENERIC_EMAIL_MESSAGE
 from auth_tests.base import NEW_PASSWORD
 from .base import WebsiteCase
@@ -51,6 +52,57 @@ class AuthPresentationTests(WebsiteCase):
                 self.assertTrue(all(link.startswith(('/accounts/', '#')) for link in parsed.links))
                 self.assertContains(response, '/static/accounts/auth.css')
                 self.assertNotContains(response, 'class="public-nav"')
+                expected = {
+                    '/accounts/login/': {'/accounts/register/', '/accounts/reset/', '/accounts/verify/request/'},
+                    '/accounts/register/': {'/accounts/login/', '/accounts/verify/request/'},
+                    '/accounts/reset/': {'/accounts/login/', '/accounts/verify/request/'},
+                    '/accounts/verify/request/': {'/accounts/login/', '/accounts/reset/'},
+                }
+                self.assertTrue(expected[path].issubset(set(parsed.links)))
+
+    def test_signed_in_change_returns_to_settings_without_public_navigation(self):
+        self.login()
+        response = self.client_a.get('/accounts/password/change/')
+        self.assertEqual(response.status_code, 200)
+        parsed = AuthMarkup()
+        parsed.feed(response.content.decode())
+        public = {'/accounts/login/', '/accounts/register/', '/accounts/reset/', '/accounts/verify/request/'}
+        self.assertFalse(public.intersection(parsed.links))
+        self.assertIn('/settings/', parsed.links)
+        self.assertContains(response, 'Back to Account Settings')
+        self.assertEqual(self.client_a.get('/settings/').status_code, 200)
+        self.assertTrue({'old_password', 'new_password1', 'new_password2', 'csrfmiddlewaretoken'}.issubset(parsed.inputs))
+
+    @override_settings(STUDENT_WEBSITE_ENABLED=False, ROOT_URLCONF='config.auth_urls')
+    def test_legacy_signed_in_change_returns_to_existing_academic_page(self):
+        self.login()
+        response = self.client_a.get('/accounts/password/change/')
+        self.assertEqual(response.status_code, 200)
+        parsed = AuthMarkup()
+        parsed.feed(response.content.decode())
+        self.assertTrue(set(parsed.links).issubset({'#main-content', '/accounts/academic/'}))
+        self.assertIn('/accounts/academic/', parsed.links)
+        self.assertEqual(self.client_a.get('/accounts/academic/').status_code, 200)
+
+    def test_navigation_uses_resolved_route_not_title_or_query_values(self):
+        self.login()
+        for path, required, forbidden in (
+            ('/accounts/password/change/', '/settings/', '/accounts/reset/'),
+            ('/accounts/login/', '/accounts/register/', '/settings/'),
+            ('/accounts/register/', '/accounts/login/', '/settings/'),
+            ('/accounts/reset/', '/accounts/login/', '/settings/'),
+        ):
+            with self.subTest(path=path):
+                response = self.client_a.get(path, {'auth_page': 'accounts:login', 'title': 'Login'})
+                # A translated heading cannot change the stable server-resolved route ID.
+                html = render_to_string('accounts/form.html', {
+                    'title': 'Translated heading fixture', 'submit': 'Submit fixture',
+                    'form': response.context['form'],
+                }, request=response.wsgi_request)
+                parsed = AuthMarkup()
+                parsed.feed(html)
+                self.assertIn(required, parsed.links)
+                self.assertNotIn(forbidden, parsed.links)
 
     def test_generic_login_error_and_csrf_denial_are_preserved(self):
         known = self.client_a.post('/accounts/login/', {'username': 'alpha', 'password': 'wrong'})

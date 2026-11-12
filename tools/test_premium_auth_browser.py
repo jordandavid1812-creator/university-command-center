@@ -14,29 +14,43 @@ from importlib.metadata import version
 # Reuse the existing isolated static-template harness (dummy DB rejects queries).
 import test_frontend_foundation_browser as foundation
 from accounts.forms import (BoundedAuthenticationForm, RegistrationForm, EmailRequestForm,
-                            BoundedSetPasswordForm)
+                            BoundedSetPasswordForm, BoundedPasswordChangeForm)
 from accounts.models import Student
 from accounts.tokens import GENERIC_EMAIL_MESSAGE
 from django.template.loader import render_to_string
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
+from django.urls import resolve
+from types import SimpleNamespace
 from playwright.sync_api import sync_playwright
 
 ROOT = foundation.REPO
-SCENES = ('login', 'register', 'forgot', 'reset', 'confirmation', 'login-errors')
+SCENES = ('login', 'register', 'forgot', 'reset', 'confirmation', 'login-errors', 'change')
 
 
 def html_for(scene):
-    request = RequestFactory().get('/accounts/login/')
+    # Fixed fixture paths resolve through the real URLconf, like Django's request handler.
+    paths = {'register': '/accounts/register/', 'forgot': '/accounts/reset/',
+             'reset': '/accounts/reset/00000000-0000-0000-0000-000000000001/synthetic-secret/',
+             'change': '/accounts/password/change/'}
+    request = RequestFactory().get(paths.get(scene, '/accounts/login/'))
+    request.resolver_match = resolve(request.path)
     forms = {
         'login': ('Login', 'Login', BoundedAuthenticationForm()),
         'register': ('Register', 'Register', RegistrationForm()),
         'forgot': ('Reset password', 'Send email', EmailRequestForm()),
         'reset': ('Choose a new password', 'Change password',
                   BoundedSetPasswordForm(Student(username='synthetic-preview'))),
+        'change': ('Change password', 'Change password',
+                   BoundedPasswordChangeForm(Student(username='synthetic-preview'))),
         'login-errors': ('Login', 'Login', BoundedAuthenticationForm(data={})),
     }
     context = dict(website_enabled=True, workspace_authenticated=False,
                    request=request, csrf_token='synthetic-form-token', messages=[])
+    if scene == 'change':
+        request.user = SimpleNamespace(username='Synthetic preview')
+        request.student_identity = object()  # Static fixture only; never an authorization capability.
+        with override_settings(STUDENT_WEBSITE_ENABLED=True):
+            context.update(foundation.navigation(request))
     if scene == 'confirmation':
         template = 'accounts/message.html'
         context['message'] = GENERIC_EMAIL_MESSAGE
@@ -142,6 +156,48 @@ class PremiumAuthBrowserTests(unittest.TestCase):
         self.assertEqual(len(captured), 1)
         self.assertIn('csrfmiddlewaretoken=synthetic-form-token', captured[0])
         self.assertIn('username=synthetic-preview', captured[0])
+
+    def test_signed_in_change_navigation_without_javascript(self):
+        for width in (390, 1280):
+            page = self.page('change', width=width, javascript=False)
+            nav = page.locator('.auth-secondary')
+            self.assertEqual(nav.locator('a').count(), 1)
+            self.assertEqual(nav.locator('a').get_attribute('href'), '/settings/')
+            self.assertEqual(page.locator('a[href="/accounts/login/"],a[href="/accounts/reset/"],a[href="/accounts/register/"],a[href="/accounts/verify/request/"]').count(), 0)
+            page.locator('.skip-link').focus()
+            seen = set()
+            for _ in range(25):
+                page.keyboard.press('Tab')
+                focused = page.locator(':focus')
+                name = focused.get_attribute('name')
+                if name:
+                    seen.add(name)
+                r = focused.bounding_box()
+                self.assertGreaterEqual(r['y'], 0)
+                self.assertLessEqual(r['y'] + r['height'], 1000)
+                self.assertEqual(focused.evaluate('(e)=>getComputedStyle(e).outlineStyle'), 'solid')
+                if focused.evaluate('(e)=>!!e.closest(".auth-secondary")'):
+                    self.assertEqual(focused.get_attribute('href'), '/settings/')
+                    break
+            else:
+                self.fail('Account Settings return link is not keyboard reachable')
+            self.assertTrue({'old_password', 'new_password1', 'new_password2'}.issubset(seen))
+            captured = []
+            def respond(route):
+                if route.request.method == 'POST':
+                    captured.append(route.request.post_data)
+                    route.fulfill(status=200, content_type='text/html', body='<p>Synthetic change POST received</p>')
+                else:
+                    route.fulfill(status=200, content_type='text/html', body=self.scenes['change'])
+            page.route('https://ucc.example.invalid/**', respond)
+            page.goto('https://ucc.example.invalid/accounts/password/change/')
+            for field in ('old_password', 'new_password1', 'new_password2'):
+                page.locator(f'[name={field}]').fill('Synthetic-Preview-Only!')
+            page.locator('.auth-form button[type=submit]').click()
+            page.get_by_text('Synthetic change POST received').wait_for()
+            self.assertEqual(len(captured), 1)
+            for name in ('old_password', 'new_password1', 'new_password2', 'csrfmiddlewaretoken'):
+                self.assertIn(name + '=', captured[0])
 
     def test_error_focus_and_feedback_styles(self):
         page = self.page('login-errors', width=390)

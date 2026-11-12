@@ -2,7 +2,14 @@
 {% load static %}
 {% block body_class %}{% if website_enabled %}auth-page{% endif %}{% endblock %}
 {% block extra_styles %}{% if website_enabled %}<link rel="stylesheet" href="{% static 'accounts/auth.css' %}">{% endif %}{% endblock %}
-{% block public_navigation %}{% if not website_enabled %}{{ block.super }}{% endif %}{% endblock %}
+{% block public_brand_url %}{% if request.resolver_match.view_name == 'accounts:password-change' %}{% url 'accounts:academic' %}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block public_navigation %}
+{% if not website_enabled %}
+  {% if request.resolver_match.view_name == 'accounts:password-change' %}
+    <nav class="public-nav" aria-label="Account navigation"><a href="{% url 'accounts:academic' %}">Back to academic workspace</a></nav>
+  {% else %}{{ block.super }}{% endif %}
+{% endif %}
+{% endblock %}
 {% block content %}
 {% if website_enabled %}<div class="auth-layout"><div class="auth-card-slot">{% endif %}
 {% block auth_content %}{% endblock %}

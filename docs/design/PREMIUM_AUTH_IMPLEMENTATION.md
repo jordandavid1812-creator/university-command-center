@@ -14,13 +14,13 @@ The desktop layout balances the card and secondary editorial content; phones use
 
 - `server/accounts/templates/accounts/base.html`: adds body-class, extra-style and public-navigation extension blocks. Academic routes continue using their original shell/navigation.
 - `server/accounts/templates/accounts/auth_base.html`: new shared presentation frame, loaded only by the existing form/message templates. Authenticated password-change forms retain the academic shell and hide the editorial panel.
-- `server/accounts/templates/accounts/form.html`, `message.html`: visual composition and route-derived secondary actions. The same form instance, csrf_token, field.as_field_group, summary include and message values render server-side.
+- `server/accounts/templates/accounts/form.html`, `message.html`: visual composition and secondary actions selected by stable, server-resolved route names. The same form instance, csrf_token, field.as_field_group, summary include and message values render server-side.
 - `server/accounts/static/accounts/auth.css`: locally served scoped stylesheet; no external fonts/images/libraries. Its 6,882 bytes plus the unchanged 21,923-byte site.css total **28,805 bytes**, below the combined 30 KB CSS budget. Application JavaScript stays unchanged at 1,774 bytes.
-- `server/web_tests/test_auth_presentation.py`: four PostgreSQL-backed presentation/workflow/asset checks.
+- `server/web_tests/test_auth_presentation.py`: seven PostgreSQL-backed presentation/workflow/navigation checks.
 - `tools/test_premium_auth_browser.py`: static real-template screen/state, native POST, accessibility and glass-fallback checks. The existing browser harness also inlines the new asset and correctly ignores gradients hidden by an opaque descendant; unsupported visible compositing still fails explicitly.
 - `.github/workflows/quality.yml`: adds the auth browser command to the existing restricted browser job. Hashed dependencies and the [browser dependency policy](BROWSER_TEST_DEPENDENCIES.md) are unchanged.
 
-The premium visual treatment applies to the website-enabled profiles (`web_development`, `web_secure`, `web_test`) that already serve local assets. The legacy auth-only profiles keep their existing minimal unstyled rendering/navigation; no settings, route or asset-serving policy was changed to expand those profiles.
+The premium visual treatment applies to the website-enabled profiles (`web_development`, `web_secure`, `web_test`) that already serve local assets. The legacy auth-only profiles keep their minimal unstyled rendering, with signed-in password-change navigation returning to the existing academic workspace; no settings, route or asset-serving policy was changed to expand those profiles.
 
 ## Backend and security invariants
 
@@ -48,14 +48,14 @@ Local Python 3.12.14 / Django 5.2.19 / psycopg 3.3.8, **PostgreSQL 17.11** with 
 | Foundation database constraints | 33 passed |
 | Restricted-role isolation | 46 passed |
 | Historical authentication | 76 passed |
-| Website including new presentation tests | 76 passed (72 existing + 4 new) |
-| Focused presentation/asset rerun | 4 passed |
+| Website including new presentation tests | 79 passed (72 historical + 7 presentation tests) |
+| Focused presentation/asset rerun | 7 passed |
 | Existing foundation browser methods | 10 passed |
-| New auth browser methods | 4 passed |
+| New auth browser methods | 5 passed |
 | Strict audit of all three hashed locks | No known vulnerabilities |
 | Django checks / migration drift | No issues / no changes detected |
 
-The auth browser suite covers six states (login, register, reset request, new password, generic confirmation and invalid login) at 320, 390, 768, 1440 and 1280/200%-text: **30 layout observations**, no document overflow. It checks keyboard reachability/focus, intercepted native POST with JavaScript disabled and intact field names/CSRF, error-summary links, busy/pageshow label restoration, hover/disabled/reduced-motion states, conservative glass contrast and opaque/forced-color fallbacks. The intercepted POST is a browser HTML contract check, **not actual authentication**. The real reset/confirmation path is tested separately against PostgreSQL.
+The auth browser suite covers seven states (login, register, reset request, new password, generic confirmation, invalid login and signed-in password change) at 320, 390, 768, 1440 and 1280/200%-text: **35 layout observations**, no document overflow. It checks keyboard reachability/focus, intercepted native POST with JavaScript disabled and intact field names/CSRF, error-summary links, busy/pageshow label restoration, hover/disabled/reduced-motion states, conservative glass contrast and opaque/forced-color fallbacks. Signed-in password change additionally checks desktop/phone keyboard traversal, Account Settings navigation and native POST with all three credential field names and CSRF present. These intercepted POSTs are browser HTML contract checks, **not actual authentication**. The real reset/confirmation path is tested separately against PostgreSQL.
 
 An initial concurrent browser run hit the old harness's 3s content-load timeout while retaining many pages. The harness now closes layout pages after each case; the serial foundation/auth run passed. No selector assertions or security regressions were removed or bypassed. Hosted CI is recorded with its exact head/run in the PR after completion; documentation cannot predeclare it passed.
 
@@ -70,11 +70,24 @@ All images below are **synthetic static template renders**, not live account ses
 | Reset request | [1440px](evidence/premium-auth/forgot-1440.png) | [390px](evidence/premium-auth/forgot-390.png) |
 | New password | [1440px](evidence/premium-auth/reset-1440.png) | [390px](evidence/premium-auth/reset-390.png) |
 | Generic next step | [1440px](evidence/premium-auth/confirmation-1440.png) | [390px](evidence/premium-auth/confirmation-390.png) |
+| Signed-in password change | [1440px](evidence/premium-auth/change-1440.png) | [390px](evidence/premium-auth/change-390.png) |
 | Invalid login fields | [1440px](evidence/premium-auth/login-errors-1440.png) | [390px](evidence/premium-auth/login-errors-390.png) |
 
 [1280px / 200% root text](evidence/premium-auth/login-1280-text-200.png)
 
 ![Academic Studio login presentation, synthetic static render](evidence/premium-auth/login-1440.png)
+
+## Independent-review conditions at 141d385
+
+**P1 — resolved:** the signed-in website Change Password screen now offers only **Back to Account Settings** in its form navigation. Its existing signed-in sidebar/mobile navigation remains intact. Neither public login nor recovery links are rendered anywhere on that page. The legacy auth-only profile has no Settings route, so both its brand/home link and navigation return to `accounts:academic`. Login/register/reset/resend/reset-confirm public links retain their existing destinations. No view, validation, session/logout behavior, URL or security message changed.
+
+**P2 — resolved:** presentation branching uses `request.resolver_match.view_name` (for example `accounts:password-change`), assigned to a template-local `auth_page`. These are stable URLconf names supplied by Django's resolver, not visible headings, raw URL strings, POST/query values or a client-selectable template name. Changing/translating the heading no longer changes links or instructions. The template performs no authorization; the unchanged view still enforces signed-in access. Tests vary headings and query parameters and verify the same route-appropriate links. Static browser fixtures now resolve their fixed synthetic paths through the actual URLconf.
+
+**P3 — retained intentional exceptions:** the **20px auth-card radius** softens the larger standalone entry surface; the **Georgia/serif story heading** supplies a restrained editorial accent. Both remain confined to the existing accounts auth stylesheet and auth components. Inputs, labels, validation text and functional headings retain the readable system UI type; academic cards keep their 12px radius and academic headings keep the UI font. Neither exception changes colors or contrast. The story is supplemental, has no fixed text height, can wrap and is hidden on narrower screens; the card grows with content. The unchanged glass/focus/forced-color tests and 35 viewport/text observations support readability and responsive behavior without claiming a full accessibility certification. **No CSS change was needed for these corrections.**
+
+**P4 — explicitly deferred:** forms still lack complete pre-submission password-policy guidance. The existing “enter it twice” instruction describes confirmation, not all password requirements. A future usability change should surface accurate guidance from the configured Django validators, coordinated with security review and localization, rather than hard-code policy text. This PR changes no validator, form rule or password requirement and does not claim P4 is implemented.
+
+New evidence: [desktop signed-in change](evidence/premium-auth/change-1440.png) and [phone signed-in change](evidence/premium-auth/change-390.png) are synthetic template fixtures, not actual authenticated sessions. The approved public screenshots and styling are preserved. Remaining physical-device, screen-reader, cross-browser and actual-zoom limitations below still apply.
 
 ## Reproduction and limits
 
