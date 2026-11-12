@@ -2,11 +2,13 @@
 from functools import wraps
 from django.conf import settings
 from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.contrib.auth.hashers import check_password
 from django.db import DatabaseError, transaction
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods, require_POST
@@ -45,9 +47,24 @@ def login(request):
             return limited
     form = BoundedAuthenticationForm(request, data=request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
-        auth_login(request, form.get_user())  # Django rotates the anonymous session key.
-        request.session.set_expiry(0)  # Browser-session cookie; server-side limit is 30 minutes.
-        return redirect('student_web:dashboard' if getattr(settings, 'STUDENT_WEBSITE_ENABLED', False) else 'accounts:academic')
+        verified = form.get_user()
+        # F04b: the password was verified against a row read WITHOUT a lock. Re-read it
+        # under the Student lock (the lock reset/change also take) and create the session
+        # only if the stored hash is still exactly the one verified. A credential change
+        # committed in between refuses the login; one committed afterwards waits for this
+        # lock and then invalidates the new session through the existing auth-hash check.
+        with transaction.atomic(using='auth'):
+            current = (Student.objects.using('auth').select_for_update()
+                       .filter(pk=verified.pk, is_active=True, email_verified_at__isnull=False,
+                               email__isnull=False).first())
+            # A different hash with the SAME secret (a concurrent hash upgrade) still accepts
+            # this password; re-verify under the lock only in that rare case (no setter).
+            if current is not None and (constant_time_compare(current.password, verified.password)
+                                        or check_password(form.cleaned_data['password'], current.password)):
+                auth_login(request, current)  # Django rotates the anonymous session key.
+                request.session.set_expiry(0)  # Browser-session cookie; server-side limit is 30 minutes.
+                return redirect('student_web:dashboard' if getattr(settings, 'STUDENT_WEBSITE_ENABLED', False) else 'accounts:academic')
+        form.add_error(None, form.get_invalid_login_error())  # Same generic error as a wrong password.
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Login', 'submit': 'Login'})
 
 
