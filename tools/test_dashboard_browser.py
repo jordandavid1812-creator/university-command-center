@@ -309,6 +309,21 @@ class DashboardBrowserTests(unittest.TestCase):
         region.evaluate("e=>e.removeEventListener('keydown',window.blockArrow)")
         self.assert_keyboard_horizontal_scroll(page, region)
 
+    def test_nonoverflowing_table_does_not_require_horizontal_scrolling(self):
+        page = self.page('graded', width=1440, javascript=False)
+        region = page.get_by_role('region', name='Semester performance')
+        region.focus()
+        self.assertTrue(region.evaluate('e=>e===document.activeElement'))
+        self.assertGreaterEqual(region.evaluate('e=>e.clientWidth'),
+                                region.evaluate('e=>e.scrollWidth'))
+        # The scrolling helper must reject a non-overflowing fixture, rather than
+        # falsely require movement where the complete table already fits.
+        with self.assertRaisesRegex(AssertionError, 'not greater than'):
+            self.assert_keyboard_horizontal_scroll(page, region)
+        page.keyboard.press('ArrowRight')
+        self.assertEqual(region.evaluate('e=>e.scrollLeft'), 0)
+        self.assertTrue(region.evaluate('e=>e===document.activeElement'))
+
     def test_native_get_selection_and_table_keyboard_without_js(self):
         page = self.page('graded', width=390, javascript=False)
         region = page.get_by_role('region', name='Semester performance')

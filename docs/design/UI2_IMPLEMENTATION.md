@@ -54,7 +54,7 @@ Local: Python 3.12.14, Django 5.2.19, psycopg 3.3.8; PostgreSQL **17.11** with t
 | Baseline/new query observation | 1 method passed, empty and populated cases |
 | UI1 browser | 10 passed |
 | Premium-auth browser | 5 passed |
-| UI2 browser | 11 passed |
+| UI2 browser | 12 passed |
 | All three hashed dependency locks audited | No known vulnerabilities |
 | Django check / migration drift | No issues / no changes detected |
 
@@ -138,4 +138,4 @@ Hosted CI is reported with the exact head/run after completion, not predeclared 
 
 ## Native table-keyboard test follow-up
 
-[Actual browser diagnostics and reproducible polling probe](UI2_TABLE_KEYBOARD_DIAGNOSTICS.md) explain the no-JavaScript wait correction. Native focus, genuine overflow and keyboard movement remain required; a blocked-key mutation proves the assertion rejects failed scrolling. UI2 now has 11 browser methods; UI1 and premium-auth assertions are unchanged. U1–U4 remain intact and owner approval remains recorded.
+[Actual browser diagnostics and reproducible polling probe](UI2_TABLE_KEYBOARD_DIAGNOSTICS.md) explain the no-JavaScript wait correction. Native focus, genuine overflow and keyboard movement remain required; a blocked-key mutation proves the assertion rejects failed scrolling. UI2 now has 12 browser methods; UI1 and premium-auth assertions are unchanged. U1–U4 remain intact and owner approval remains recorded.

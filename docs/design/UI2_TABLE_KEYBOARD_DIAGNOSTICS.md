@@ -70,4 +70,6 @@ python tools/test_premium_auth_browser.py -v
 python tools/test_dashboard_browser.py -v
 ```
 
-Expected methods: UI1 10, premium-auth 5, UI2 11, including both negative controls. Final exact-head hosted results are recorded in PR #44. PostgreSQL 17 restricted-role CI must pass separately; static browser fixtures do not verify database behavior. No merge, deployment or UI3 work is included.
+Expected methods: UI1 10, premium-auth 5, UI2 12, including both negative controls. Final exact-head hosted results are recorded in PR #44. PostgreSQL 17 restricted-role CI must pass separately; static browser fixtures do not verify database behavior. No merge, deployment or UI3 work is included.
+
+The final verification also checks the complementary non-overflowing 1440px table with JavaScript disabled: all columns fit, focus is retained, and ArrowRight requires no horizontal movement. The overflowing-table helper must reject this fixture at its overflow precondition. This is separate from the 390px positive scrolling and blocked-key negative control.
