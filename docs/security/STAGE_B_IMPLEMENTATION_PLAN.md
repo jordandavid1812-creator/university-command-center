@@ -588,7 +588,7 @@ Pooling is out of scope for B1.
 
 ### 6.8 Logging privacy: sink-level sanitisation in protected profiles (R3-04, R4-02, R4-04, R4-05)
 
-**Proposed B1b amendment (B1B-1–B1B-7):** [B1B_LOGGING_DESIGN_AMENDMENT.md](B1B_LOGGING_DESIGN_AMENDMENT.md) governs the updated early lastResort, exception-hook, secure-email E105, walker, emission and event-type details below. D-B1-4(a–f) are all **PENDING**; this is design only, not B1b implementation authorization. B1a is merged at master `3a4fff14421d8f79422df901027213da75a7cecc`; its CI evidence is recorded in the amendment. Other historical Revision 5 evidence retains its original scope.
+**Proposed B1b amendment (B1B-1–B1B-7, corrected by N1–N4):** [B1B_LOGGING_DESIGN_AMENDMENT.md](B1B_LOGGING_DESIGN_AMENDMENT.md) governs the updated early lastResort, exception-hook, secure-email E105, walker, emission and event-type details below. D-B1-4(a–f) are all **PENDING**; this is design only, not B1b implementation authorization. B1a is merged at master `3a4fff14421d8f79422df901027213da75a7cecc`; its CI evidence is recorded in the amendment. Other historical Revision 5 evidence retains its original scope.
 
 **Inventory.** These are the Django 5.2.19 namespaces that emit records in the application process (source: every `getLogger` call in the package):
 
@@ -669,8 +669,8 @@ They serve no authentication route, because their `ROOT_URLCONF` has an empty `u
 
    Every propagating record reaches the root handler, so the policy covers child loggers. Logger-level filters do not (Probe, Codex R3).
 2. **No raw fallback sinks, startup snapshot.**
-   * `AccountsConfig.ready()` returns immediately unless the policy is `"enforce"`.
-   * In enforce mode `log_privacy.configure()` replaces `logging.lastResort` during protected settings configuration, **before** `AccountsConfig.ready()`. Proposed sanitized `sys.excepthook` and `threading.excepthook` are installed at that phase too. Ready validates identities and the final graph. Pre-settings/bootstrap, command/fatal output and existing pre-configuration raw handlers remain explicit boundaries (amendment B1B-2/B1B-3).
+   * The logging-specific branch of `AccountsConfig.ready()` is skipped unless the policy is `"enforce"`. Registration of ordinary E104/E105 secure checks is independent and must not be skipped by that branch (N2).
+   * In enforce mode `log_privacy.configure()` replaces `logging.lastResort` during protected settings configuration, **before** `AccountsConfig.ready()`. Proposed sanitized `sys.excepthook` and `threading.excepthook` are installed at that phase too, with mandatory containment of **all BaseException failures from their own machinery** (N1). Optional `sys.unraisablehook` is pending separate owner selection and has the same containment rule. Ready validates identities and the final graph. Pre-settings/bootstrap, command/fatal output and existing pre-configuration raw handlers remain explicit boundaries (amendment B1B-2/B1B-3).
    * It then raises `ImproperlyConfigured` if:
      * any handler on the root logger, or on any existing logger named `django*`, `psycopg*`, `py.warnings`, `accounts*`, `academics*` or `student_web*`, is not a `SanitizingHandler` (`NullHandler` is allowed);
      * any of those loggers or handlers has a filter.
@@ -689,7 +689,7 @@ They serve no authentication route, because their `ROOT_URLCONF` has an empty `u
 | `status` | `record.__dict__.get('status_code')` | Only if `type(x) is int` and 100 ≤ x ≤ 599, otherwise `-` |
 | `method` | `request.method` (only if `record.__dict__.get('request')` is an `HttpRequest`) | Membership in a fixed method tuple, emitting the tuple's constant; otherwise `OTHER` |
 | `route` | `request.resolver_match.view_name` | Membership in a **fixed tuple of the project's view names** (accounts and student_web URLconfs, maintained with them and checked by a test against both URL roots), emitting the constant; otherwise `other`. Paths, URL arguments, queries, headers, cookies, `META`, `user`, `session` and the body are **never** read. |
-| `exc` | `record.exc_info`, only if it is a valid three-tuple whose second item is a `BaseException` | The shared walker (`accounts/exception_chain.py`, §6.4; delivered in **B1b**). Each node maps to a label from an identity-keyed table of known classes (Django session and DB error classes, psycopg base classes). A psycopg.errors subclass is emitted as `psycopg.errors[<SQLSTATE>]`. Unknown classes → `OTHER`. A SQLSTATE is emitted only if `psycopg.errors.lookup(code)` succeeds; otherwise `XXXXX`. Always label the outermost exception (unknown → `OTHER`); traverse only allowlisted nodes, stopping at opaque wrappers, suppression, repeated identity or 16 examined nodes including the outer node. Exception groups are opaque and never flattened. See amendment B1B-4. `str()` and `repr()` are never called on exception instances. |
+| `exc` | `record.exc_info`, only if it is a valid three-tuple whose second item is a `BaseException` | The shared walker (`accounts/exception_chain.py`, §6.4; delivered in **B1b**). Each node maps to a label from an identity-keyed table of known classes (Django session and DB error classes, psycopg base classes). A psycopg.errors subclass is emitted as `psycopg.errors[<SQLSTATE>]`. Unknown classes → `OTHER`. For recognized exact psycopg.errors classes, prefer validated **class** SQLSTATE attributes, including lookup/class-identity validation; instance data cannot override a valid class code. Initial B1b omits diagnostic-instance fallback. Missing, malformed or raising attributes give `XXXXX`; no message/SQL/traceback access (N4). Always label the outermost exception (unknown → `OTHER`); traverse only allowlisted nodes, stopping at opaque wrappers, suppression, repeated identity or 16 examined nodes including the outer node. Exception groups are opaque and never flattened. See amendment B1B-4. `str()` and `repr()` are never called on exception instances. |
 | `event`, `category`, `sqlstate` | `record.__dict__.get('ucc_event')` | Only if `type(x) is FailureEvent`: a frozen dataclass with exact plain **Enum** field types (no IntEnum/StrEnum, strings or duck types), validated again at emission, and `sqlstate` validated as above. B1b initially provides EventKind.FAILURE and FailureCategory.UNCLASSIFIED only; extensions/classification/live emission belong to B1c (amendment B1B-6). The emitted values are the enum constants. This is the **only** extra the sanitizer accepts. B1c's consumed-exception emission uses it (`logger.error('b1.failure', extra={'ucc_event': FailureEvent(...)})`). |
 
 **Never copied:**
@@ -713,9 +713,9 @@ ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label>
 * Build one bounded safe line including newline, then one stream write per line. A per-thread re-entry guard shared by handler/lastResort/hooks drops nested emission and clears in finally.
 * An ordinary preparation/serialization error attempts only the constant line `ucc-log record suppressed (sanitizer error)\n`. A failed or short stream write causes no further output or retry.
 * Never call `getMessage()`, `Handler.format()`, an arbitrary formatter or default `handleError`. No raw stderr fallback or recursive logging.
-* `SystemExit`, `KeyboardInterrupt` and `GeneratorExit` raised inside emission machinery propagate. Uncaught-hook behavior preserves interpreter/thread semantics as specified in amendment B1B-2.
+* Normal logging-handler emission propagates `SystemExit`, `KeyboardInterrupt` and `GeneratorExit`. **Exception-hook bodies instead contain all BaseException failures from their own machinery and return safely**, never triggering raw interpreter fallback (N1). Original main/thread exception semantics are preserved; a hook failure must not change them. Optional unraisable hooks use the same containment.
 
-**`ADMINS`.** E102 (enforce mode only) keeps it empty. Removing `mail_admins` from the graph is the actual control. **Proposed E105** rejects console/file email backends (including subclasses) in secure profiles only. Development stays compatible. Secure preflight fails until an approved real backend is configured; passing E105 alone does not approve a backend or prove delivery. This independent raw-email channel and the new exception hooks require D-B1-4(f) approval.
+**`ADMINS`.** E102 (enforce mode only) keeps it empty. Removing `mail_admins` from the graph is the actual control. **Proposed E105 (N2)** uses an empty-or-one separately reviewed **exact-class allow-list**, rejecting console/file, subclasses, wrappers, unknown classes and import failures. No backend is approved here. E104/E105 are ordinary (not deploy-only) checks loaded whenever the secure flag is True, independently of logging enforcement; both check and check --deploy exercise them. Registration is not execution: commands that run checks fail until approval/configuration; WSGI startup still requires explicit preflight. Development stays compatible; passing E105 does not prove delivery. This independent raw-email channel and the new exception hooks require D-B1-4(f) approval.
 
 **Scope statement.**
 
@@ -723,7 +723,7 @@ ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label>
 * **Not covered:**
   * Gunicorn's `gunicorn.error` and `gunicorn.access`. Gunicorn may share the OS process and the Python logging system with Django; the exclusion is a **named-logger and configuration boundary**, not a separate-process guarantee.
   * Caddy and proxy logs.
-  * Raw stdout/stderr outside the proposed sanitized hooks, console/file email output, pre-settings/bootstrap, management `CommandError`/`--traceback`, unraisable/native/fatal output and non-integer SystemExit messages. `manage.py test --debug-sql` is disposable-synthetic-only (amendment B1B-7).
+  * Raw stdout/stderr outside the proposed hooks, console/file mail, directly printed CommandError/command-caught errors, socketserver.handle_error, wsgiref log_exception, unittest output, pre-settings/bootstrap and native/fatal errors, external servers/proxies/email and non-integer SystemExit messages. --traceback re-raises reaching installed hooks stay sanitized; the flag itself is not a bypass (N3). Unraisable output remains uncovered unless the optional hook is approved and implemented. `manage.py test --debug-sql` is disposable-synthetic-only (amendment B1B-7).
   * Retention and export.
 
   These are RB-4. Handlers added after startup are RB-12. Excluded profiles are RB-13.
@@ -739,7 +739,7 @@ ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label>
 | `server/accounts/dbsafety.py` (new) | `apply_db_safety()` (merge, reject duplicates, `connect_timeout`), validation | B1a |
 | `server/config/settings/auth_common.py` | Call `apply_db_safety` (B1a); call `log_privacy.configure` (B1b); middleware order (B1c) | B1a–B1c |
 | `server/config/settings/auth_secure.py` | `UCC_SECURE_PROFILE = True` (`web_secure` inherits it) | B1b |
-| `server/accounts/checks.py` (new), `apps.py` | E101 (timers, always registered for profiles calling `apply_db_safety`); E102 and E103 (registered only when `UCC_LOG_PRIVACY == "enforce"`); E104 and proposed E105 (evaluated only when `UCC_SECURE_PROFILE`). Protected settings configuration installs lastResort/hooks early; `ready()` validates the guard and identities **only in enforce mode**. | B1a (E101); B1b (E102–E105, amendment) |
+| `server/accounts/checks.py` (new), `apps.py` | E101 (timers, always registered for profiles calling `apply_db_safety`); E102 and E103 (registered only when `UCC_LOG_PRIVACY == "enforce"`); E104 and proposed exact-class E105 are ordinary checks loaded/evaluated whenever `UCC_SECURE_PROFILE is True`, independently of the logging flag (not deploy-only; registration does not run them). Protected settings configuration installs lastResort/hooks early; `ready()` validates the guard and identities **only in enforce mode**. | B1a (E101); B1b (E102–E105, amendment) |
 | `server/accounts/exception_chain.py` (new) | Shared bounded cause/context walker and wrapper allowlist (§6.4), used by the sanitizer (B1b) and the classifier (B1c) | **B1b** |
 | `server/accounts/log_privacy.py` (new) | `configure(namespace)`: sets `UCC_LOG_PRIVACY="enforce"` and `LOGGING`; installs early safe lastResort and proposed exception hooks (amendment) | B1b |
 | `server/accounts/logging.py` (new) | `SanitizingHandler`, label tables, exact plain-Enum `FailureEvent`, one-write/re-entry guards and safe hook emission; never default `handleError` (amendment) | B1b (`FailureEvent` enum values extended in B1c) |
@@ -818,7 +818,7 @@ ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label>
 | `test_debug_flags_documented_behaviour` | With `DEBUG=True`, `handler400` and `handler500` are not called and `process_exception` 503 still applies. With `DEBUG_PROPAGATE_EXCEPTIONS=True`, an uncaught exception is re-raised. E104 fires on either flag when `UCC_SECURE_PROFILE` is set, and is silent when it is unset. |
 | `test_body_variants_constant_and_enumeration_comparison` | Identical bytes within a variant across known and unknown accounts. Status and timing distributions are compared separately; no claim that constant bodies alone prove enumeration resistance. |
 
-**D. Logging (B1b; extended in B1c). Assertions are at the sink.** The amendment adds the B1B-1–B1B-7 test matrix: email E105, early lastResort, uncaught hooks/exit semantics, groups/opaque first nodes, single-write/re-entry/failure guards, exact enums and production mutation evidence. Evidence comes from the bytes written to the `SanitizingHandler` stream, **not** from `assertLogs`.
+**D. Logging (B1b; extended in B1c). Assertions are at the sink.** The amendment adds the B1B-1–B1B-7 test matrix: exact-class email E105 and ordinary secure-check activation, early lastResort, all-BaseException containment inside hooks with original exit/thread semantics, optional unraisable defense, class-first SQLSTATEs, groups/opaque first nodes, single-write/re-entry/failure guards, exact enums and production mutation evidence (N1–N4). Evidence comes from the bytes written to the `SanitizingHandler` stream, **not** from `assertLogs`.
 
 | Test | Evidence required |
 | --- | --- |
@@ -829,7 +829,7 @@ ucc-log logger=<label> level=<label> status=<int|-> method=<label> route=<label>
 | `test_child_logger_propagation_sanitized` | `django.b1probe.child` (no handlers) → sanitized line |
 | `test_last_resort_replaced` | A logger with `propagate=False` and no handlers → sanitized line; no raw text on stderr |
 | `test_sanitizer_and_stream_failures_never_leak` | Sanitizer raises `RuntimeError` → constant line; label computation raises → `other`; stream `write` raises → overridden `handleError`, captured stderr holds no sentinel; the caller sees no exception |
-| `test_sanitizer_process_control_propagates` | `KeyboardInterrupt` propagates |
+| `test_sanitizer_process_control_propagates` | In the normal handler, KeyboardInterrupt/SystemExit/GeneratorExit propagate. In main/thread (and optional unraisable) hooks, all four injected emission failures including ordinary Exception are contained, original secrets stay absent and original exit/thread semantics hold; unsafe-propagation mutation must fail (N1) |
 | `test_no_runtime_logging_reconfiguration_in_app_code` | Source scan of `accounts`, `academics`, `student_web` and `config`: no `addHandler`, `dictConfig`, `fileConfig`, `basicConfig` or `captureWarnings` outside `accounts/logging.py` and `accounts/log_privacy.py` |
 | `test_admins_empty_and_no_admin_email_handler` | E102; no `AdminEmailHandler` in the tree (enforce mode) |
 | `test_walker_shared_and_bounded` (B1b) | `exception_chain` unit tests: cause before context, suppression, the 16-node cap, cycles, an opaque stop |
@@ -865,7 +865,7 @@ The historical `assertLogs('accounts.tokens')` test (`auth_tests/test_accounts.p
 | `test_protected_profile_with_raw_handler_fails_startup` | **R5-T2:** add the unsafe child handler/filter in the test-only LOGGING dictionary, or inject after configure_logging and before ready. Prove its identity exists at the guard boundary; setup fails. Disabling the production guard must make the assertion fail. An earlier object erased by dictConfig does not count |
 | `test_excluded_profiles_keep_default_graph` | For `auth_migration`, `development`, `runtime`, `test` and `security_test`: the policy setting is absent; the `django` handlers are Django's defaults (`StreamHandler`, `AdminEmailHandler`); `lastResort` is unchanged; E102 and E103 are not registered |
 | `test_excluded_profiles_commands_start` | `manage.py check` under each excluded profile. `manage.py migrate --plan` under `auth_migration` against the disposable test database. The provisioning commands (`accounts` `configure_auth_role` and `academics` `configure_runtime`) run under `auth_migration` against the disposable database, as in the existing test runners. |
-| `test_secure_flag_scope` | `UCC_SECURE_PROFILE` is True only in `auth_secure` and `web_secure`. E104 is evaluated there and not in the development or test profiles. |
+| `test_secure_flag_scope` | `UCC_SECURE_PROFILE` is True only in `auth_secure` and `web_secure`. E104/E105 are ordinary checks, not deploy-only, evaluated there independently of logging policy; test check and check --deploy under web_secure. They are inactive for excluded development/test profiles; an empty E105 allow-list intentionally fails secure checks (N2). |
 
 **H. Implicit versus explicit units (B1a).**
 
@@ -984,7 +984,7 @@ The historical `assertLogs('accounts.tokens')` test (`auth_tests/test_accounts.p
 * **D-B1-4(c) — PENDING:** minimal plain-Enum, exact-type FailureEvent foundation; no B1c classification/emission.
 * **D-B1-4(d) — PENDING:** startup enforcement and source audits, not guaranteed runtime immutability.
 * **D-B1-4(e) — PENDING:** sanitized stderr/lastResort and loss of development request lines.
-* **D-B1-4(f) — PENDING:** proposed secure-profile E105 and sanitized uncaught process/thread hooks, accepting the amendment's limits; external logging and retention deferred to operational readiness.
+* **D-B1-4(f) — PENDING:** proposed empty-or-one reviewed exact-class E105 allow-list, ordinary secure E104/E105 activation and sanitized process/thread hooks with mandatory N1 containment; optional unraisable hook requires explicit selection. Accept named raw-output limits; external logging and retention deferred to operational readiness.
 * **D-B1-5 (increments):** Approve B1a → B1b (privacy, including the shared walker) → B1c (classification and rendering) → B1d (wording and full matrix), with the §6.11 gates. Each PR is separately authorized and reviewed. No intermediate staging and no real data.
 * **D-B1-6 (classification policy):** Approve the bounded SQLSTATE policy:
   * preserved handled contracts;
