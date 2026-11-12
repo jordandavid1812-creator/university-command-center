@@ -31,6 +31,7 @@ import django
 django.setup()
 from django.template.loader import render_to_string
 from django.test import RequestFactory, override_settings
+from django.urls import resolve
 from student_web.context import navigation
 from student_web.forms import SemesterFilter, CourseFilter, CourseForm
 from accounts.forms import BoundedAuthenticationForm
@@ -40,7 +41,8 @@ from types import SimpleNamespace
 
 def fixture_html(public=False, scene=None):
     """Real navigation context and templates, explicitly empty synthetic workspace."""
-    request = RequestFactory().get('/')
+    request = RequestFactory().get('/accounts/login/' if public else '/')
+    request.resolver_match = resolve(request.path)
     request.student_identity = object()
     request.user = SimpleNamespace(username='Synthetic UI fixture')
     # Only enable the existing context function while constructing the static fixture.
@@ -77,6 +79,8 @@ def fixture_html(public=False, scene=None):
     # Inline unchanged entry assets for static browser inspection; no external requests.
     html = html.replace('<link rel="stylesheet" href="/static/student_web/site.css">',
                         '<style>' + (asset / 'site.css').read_text() + '</style>')
+    html = html.replace('<link rel="stylesheet" href="/static/accounts/auth.css">',
+                        '<style>' + (REPO / 'server/accounts/static/accounts/auth.css').read_text() + '</style>')
     return html.replace('<script defer src="/static/student_web/site.js"></script>',
                         '<script>' + (asset / 'site.js').read_text() + '</script>')
 
@@ -127,6 +131,7 @@ class FoundationBrowserTests(unittest.TestCase):
                     self.assertEqual(page.locator('h1').count(), 1)
                     if SCREENSHOTS and width in (360, 1440):
                         page.screenshot(path=str(SCREENSHOTS / f'{"login" if public else "workspace"}-{width}.png'), full_page=True)
+                    page.close()
 
     def test_short_desktop_tab_focus_and_text_resize(self):
         for scale in (100, 200):
@@ -206,7 +211,17 @@ class FoundationBrowserTests(unittest.TestCase):
             };
             const blend=(front, back)=>front.slice(0,3).map((v,i)=>v*front[3]+back[i]*(1-front[3]));
             let background=[255,255,255];
-            const ancestors=[];for(let n=e;n;n=n.parentElement)ancestors.unshift(n);
+            // An opaque descendant hides ancestor gradients, but not ancestor opacity.
+            for(let n=e;n;n=n.parentElement){
+                if(getComputedStyle(n).opacity!=='1')throw Error('Unsupported compositing effect');
+            }
+            const ancestors=[];
+            for(let n=e;n;n=n.parentElement){
+                const s=getComputedStyle(n);
+                ancestors.unshift(n);
+                if(s.backgroundImage!=='none')throw Error('Unsupported compositing effect');
+                if(parse(s.backgroundColor)[3]===1)break;
+            }
             for(const n of ancestors){
                 const s=getComputedStyle(n);
                 if(s.backgroundImage!=='none'||s.opacity!=='1')throw Error('Unsupported compositing effect');

@@ -1,0 +1,32 @@
+{% extends 'accounts/base.html' %}
+{% load static %}
+{% block body_class %}{% if website_enabled %}auth-page{% endif %}{% endblock %}
+{% block extra_styles %}{% if website_enabled %}<link rel="stylesheet" href="{% static 'accounts/auth.css' %}">{% endif %}{% endblock %}
+{% block public_brand_url %}{% if request.resolver_match.view_name == 'accounts:password-change' %}{% url 'accounts:academic' %}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block public_navigation %}
+{% if not website_enabled %}
+  {% if request.resolver_match.view_name == 'accounts:password-change' %}
+    <nav class="public-nav" aria-label="Account navigation"><a href="{% url 'accounts:academic' %}">Back to academic workspace</a></nav>
+  {% else %}{{ block.super }}{% endif %}
+{% endif %}
+{% endblock %}
+{% block content %}
+{% if website_enabled %}<div class="auth-layout"><div class="auth-card-slot">{% endif %}
+{% block auth_content %}{% endblock %}
+{% if website_enabled %}
+  </div>
+  <aside class="auth-story" aria-label="Academic Studio">
+    <p class="eyebrow">Academic Studio</p>
+    <h2>A little clarity.<br>A lot more possibility.</h2>
+    <p>A thoughtful space for your university life.</p>
+    <ul>
+      <li>Bring courses and deadlines together.</li>
+      <li>See your actual academic results.</li>
+      <li>Keep what-if plans separate from saved grades.</li>
+    </ul>
+    <div class="auth-story-detail" aria-hidden="true"><span></span><span></span><span></span></div>
+    <p class="auth-story-note">Your studies, in one place.</p>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
