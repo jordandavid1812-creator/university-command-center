@@ -37,7 +37,7 @@ The committed regression additionally renders the already-loaded real view conte
 
 No additional queryset access is hidden in an include. Course counts use the loaded list; deadline course codes use the existing select_related result. All authorization and snapshot/query bounds remain in their existing services/views.
 
-The dashboard asset is **7,155 bytes**, plus unchanged site.css **21,923 bytes** = **29,078 CSS bytes per dashboard**, within the 30 KB page budget. The auth-only stylesheet is not loaded by the dashboard. Aggregate repository CSS is larger because the auth and dashboard entry styles are mutually exclusive; the budget here is explicitly page payload. This isolation avoids changing shared/auth styles. Application JS remains 1,774 bytes and no remote asset/framework/library is added.
+The dashboard asset is **7,096 bytes**, plus unchanged site.css **21,923 bytes** = **29,019 CSS bytes per dashboard**, within the 30 KB page budget. Auth and dashboard styles are mutually exclusive. Aggregate repository CSS is larger; this budget is explicitly page payload. Application JS remains 1,774 bytes; no remote asset/framework/library is added.
 
 ## Regression evidence
 
@@ -45,34 +45,60 @@ Local: Python 3.12.14, Django 5.2.19, psycopg 3.3.8; PostgreSQL **17.11** with t
 
 | Suite | Result |
 | --- | --- |
-| Website | 90 passed (79 existing + 11 UI2) |
+| Website | 91 passed (79 baseline + 12 UI2), with U2 assertion approval still pending |
 | Authentication | 76 passed |
 | Restricted-role isolation | 46 passed |
 | Foundation/academic database | 33 passed |
 | Legacy CLI/Streamlit/calculations | 113 passed |
-| Focused UI2 + polish rerun | 28 passed; final UI2 assertions also rerun separately |
+| Historical presentation assertions | Three changes remain pending explicit owner approval (U2); the current suite uses those proposed edits |
 | Baseline/new query observation | 1 method passed, empty and populated cases |
 | UI1 browser | 10 passed |
 | Premium-auth browser | 5 passed |
-| UI2 browser | 7 passed |
+| UI2 browser | 10 passed |
 | All three hashed dependency locks audited | No known vulnerabilities |
 | Django check / migration drift | No issues / no changes detected |
 
 UI2 covers no semesters, semesters without courses, all ungraded, actual zero, mixed grades, overdue without upcoming work, five-record previews, same-label UUID rows, full comparison, foreign account data/forged semester rejection, native GET and page asset budgets. Existing academic/security tests are preserved.
 
-Only presentation assertions in `test_polish.py` changed: Current → Selected semester; zero-overdue attention is now absent (the actual zero count is still asserted); the one-overdue accessible label uses singular grammar. These implement the requested copy/conditional behavior, not weaker calculation or security expectations.
+**U2 is awaiting explicit owner approval.** The previously changed presentation assertions in `test_polish.py` are: Current → Selected semester; zero-overdue attention is now absent (the actual zero count is still asserted); the one-overdue accessible label uses singular grammar. Their exact before/after text and rationale are in [the pending U2 decision register](UI2_ASSERTION_APPROVAL.md). This correction does not edit that historical test file. Passing CI does not resolve U2; no owner approval is inferred. Mathematical, security and query-budget assertions remain unchanged.
 
 The browser investigation caught two issues before submission: a duplicate outer/inner “Semester performance” region name (outer redundant label removed, inner native scroll region retained), and UI1's row flex-basis becoming a tall blank column above mobile actions. A dashboard-only override and a header-spacing regression prevent that blank gap. No auth/shared stylesheet change was needed.
 
 ## Accessibility and responsive checks actually performed
 
-The seven UI2 browser methods cover **eight states × eight required widths = 64 layout cases**, plus 18 compact-header cases. Widths: 320, 360, 390, 768, 820, 1024, 1280, 1440 CSS px. Empty/graded/long states also use 1280×500 and 1440px at 200% root text size, and **320×200 equivalent reflow for a 1280×800 viewport at 400%**. This is equivalent-layout evidence, not a claim of actual browser-zoom testing.
+The UI2 browser methods cover **eight states × eight required widths = 64 layout cases**, plus 18 compact-header cases. Widths: 320, 360, 390, 768, 820, 1024, 1280, 1440 CSS px. Empty/graded/long states also use 1280×500 and 1440px at 200% root text size, and **320×200 equivalent reflow for a 1280×800 viewport at 400%**. This is equivalent-layout evidence, not a claim of actual browser-zoom testing.
 
 Checks: no document overflow; meaningful H1/source order; actual mobile section order; readable action grouping; long username/title wrapping; keyboard-reachable primary action in short viewports; unchanged sidebar focus; no-JS GET submits the selected UUID; comparison keyboard scrolling and complete two-row text. Overdue attention precedes actual results only when positive. Native controls and full-page navigation remain.
 
 Rendered important text pairs pass ≥4.5:1; control borders/focus pass ≥3:1 on adjacent opaque/attention/welcome surfaces using alpha-aware composition. Frost is optional and has an opaque fallback. Forced colors remove blur/shadow, preserve boundaries/focus, and keep text/links native. UI2 adds no motion; reduced-motion behavior and the existing meaningful motion-probe regression remain. No fixed mobile overlay, tooltip-only control, chart-only value or focus trap is added.
 
 **Not tested:** real screen readers, physical phones, Safari/Firefox, actual browser zoom or a complete axe/WCAG 2.2 AA audit. Automated/Chromium evidence is not certification. Existing two-dimensional comparison-table local scrolling remains an intentional supported pattern; assignment-list adaptation is UI3, not this PR.
+
+## Independent-review corrections against 0296607
+
+| Finding | Disposition / evidence |
+| --- | --- |
+| **U1 required** | Corrected: auto-fitting tracks reserve **26rem per card** against actual content width, so 1280/1440 desktop views stack at 150% and 200% root text. Dates wrap beneath title/course metadata when an 18rem title column plus date cannot fit. Scalable padding is kept compact without reducing the 44px task-link target. Stats use adaptive 10rem tracks and normal word breaking. The selected-semester panel also auto-fits 22rem tracks so its controls/result reflow at enlarged text. No title truncation, hidden data, line clamp or content max-height is used. |
+| **U2 required** | **Unresolved — awaiting explicit owner approval.** [Three exact historical assertion changes](UI2_ASSERTION_APPROVAL.md) remain as reviewed; this task is not approval. The draft is not ready for merge while that decision is pending. |
+| **U3 recommended** | Corrected: `align-items:start` keeps the actual-CGPA card at natural height. A regression compares identical summary data beside one short task, five short tasks and five long tasks; the summary height must stay within 1px across those cases. |
+| **U4 recommended** | Corrected: caption explicitly says **up to five pending deadlines due today or later**. Empty workspaces say “Add an assignment when you have a deadline.” Overdue review guidance appears only if the existing overdue count is positive; completed-only workspaces get neutral “view your work” guidance. No count/query semantics change. |
+
+**Intentional secondary action:** View GPA overview is read-only and available with or without parent records. It exposes complete actual results/rules without competing with the prerequisite-aware primary creation action. This is a deliberate dashboard design choice, not a new backend feature.
+
+New content-area tests inspect 1280/1440px × 150%/200% × normal/long assignment fixtures (eight configurations): full-width stacked cards, title columns at least 16rem, stat labels no more than two lines with no mid-word splits, actual row heights, dates below metadata where space is insufficient, and the entire focus ring on every deadline link reached by Tab. Normal rows are bounded by 6rem and the 186-character long-fixture rows by 16rem **in the tests**, relative to actual root text size; production CSS does not clamp height or hide text. Single-column statistics are also checked at 320px.
+
+The **same readability assertions reject a test-only restoration of the original desktop grid/nowrap rules**. The negative fixture is intentionally broken and labelled as such; it is not the delivered design. [Captured corrected geometry](evidence/ui2/enlarged-content-metrics.json) is separate from full-page screenshots. Root-text scaling is not asserted to be identical to real browser zoom/OS text settings.
+
+Updated full-page enlarged-text evidence:
+
+| Width / text | Normal assignments | Long assignments |
+| --- | --- | --- |
+| 1280 / 150% | [Full page](evidence/ui2/graded-1280-text-150-full.png) | [Full page](evidence/ui2/long-1280-text-150-full.png) |
+| 1280 / 200% | [Full page](evidence/ui2/graded-1280-text-200-full.png) | [Full page](evidence/ui2/long-1280-text-200-full.png) |
+| 1440 / 150% | [Full page](evidence/ui2/graded-1440-text-150-full.png) | [Full page](evidence/ui2/long-1440-text-150-full.png) |
+| 1440 / 200% | [Full page](evidence/ui2/graded-1440-text-200-full.png) | [Full page](evidence/ui2/long-1440-text-200-full.png) |
+
+[Negative control: restored original broken layout](evidence/ui2/negative-original-layout-1280-text-200.png). The 1280×500 text-200 image below is now a full-page capture from that short viewport, rather than only the welcome region. Before-baseline images are retained; current-state screenshots are regenerated.
 
 ## Synthetic screenshot pack
 

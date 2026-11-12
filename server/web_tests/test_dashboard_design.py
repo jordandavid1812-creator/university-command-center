@@ -123,6 +123,23 @@ class DashboardDesignTests(WebsiteCase):
         self.assertNotContains(response, 'dashboard-attention')
 
     @patch('student_web.views.timezone.localdate', return_value=TODAY)
+    def test_empty_and_completed_only_workspaces_use_neutral_deadline_guidance(self, _date):
+        semester=self.workspace()
+        course=self.course(semester)
+        response=self.client_a.get('/')
+        self.assertEqual(response.context['totals']['total'],0)
+        self.assertContains(response,'Add an assignment when you have a deadline.')
+        self.assertNotContains(response,'review overdue tasks')
+        self.assertContains(response,'Up to five pending deadlines due today or later')
+        services.assignments.create(self.owner,course_id=course.pk,title='Synthetic completed work',
+                                    due_date=TODAY-timedelta(days=1),completed=True)
+        response=self.client_a.get('/')
+        self.assertEqual(response.context['totals']['overdue'],0)
+        self.assertContains(response,'Visit Assignments to view your work.')
+        self.assertNotContains(response,'review overdue tasks')
+        self.assertNotContains(response,'All caught up')
+
+    @patch('student_web.views.timezone.localdate', return_value=TODAY)
     def test_same_label_semesters_keep_full_uuid_comparison_and_isolation(self, _date):
         self.seed()
         self.owner = self.identity_a

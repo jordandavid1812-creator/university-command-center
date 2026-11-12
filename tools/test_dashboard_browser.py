@@ -25,7 +25,7 @@ TODAY = date(2026, 11, 12)
 SCENES = ('empty', 'semester-only', 'ungraded', 'zero', 'graded', 'mixed', 'overdue', 'long')
 
 
-def html_for(scene):
+def html_for(scene, task_limit=None):
     request = RequestFactory().get('/')
     request.resolver_match = resolve('/')
     request.student_identity = object()  # Static presentation marker, never a web capability.
@@ -52,6 +52,8 @@ def html_for(scene):
             tasks.append(NS(pk=uuid.UUID(int=100+index), course=courses[0], completed=False,
                             title=('Synthetic long assignment ' + 'x'*160) if scene == 'long' else f'Synthetic assignment {index+1}',
                             due_date=TODAY+timedelta(days=-(index+1) if scene == 'overdue' else index)))
+    if task_limit is not None:
+        tasks=tasks[:task_limit]
     totals = dict(total=len(tasks), pending=len(tasks), completed=0,
                   overdue=sum(t.due_date < TODAY for t in tasks))
     selector = SemesterFilter({'semester': str(semesters[0].pk)} if courses else {}, semesters=semesters)
@@ -77,6 +79,7 @@ class DashboardBrowserTests(unittest.TestCase):
         executable = os.environ.get('UCC_CHROMIUM_EXECUTABLE')
         cls.browser = cls.driver.chromium.launch(headless=True, executable_path=executable)
         cls.scenes = {s: html_for(s) for s in SCENES}
+        cls.scenes['short'] = html_for('ungraded', task_limit=1)
         print('Browser:', cls.browser.version, 'Playwright:', version('playwright'))
         if OUTPUT:
             (OUTPUT/'browser-metadata.json').write_text(json.dumps(dict(browser=cls.browser.version,
@@ -148,7 +151,113 @@ class DashboardBrowserTests(unittest.TestCase):
                 self.assertGreaterEqual(r['y'], 0)
                 self.assertLessEqual(r['y']+r['height'], height)
                 if OUTPUT and scene == 'long' and width == 1280:
-                    page.screenshot(path=str(OUTPUT/'long-1280x500-text-200.png'))
+                    page.screenshot(path=str(OUTPUT/'long-1280x500-text-200.png'), full_page=True)
+
+    def assert_readable_enlarged_content(self, page, scene):
+        metrics=page.evaluate(r"""()=>{
+            const summary=document.querySelector('.dashboard-summary').getBoundingClientRect();
+            const deadlines=document.querySelector('.dashboard-deadlines').getBoundingClientRect();
+            const main=document.querySelector('.dashboard-main').getBoundingClientRect();
+            const root=parseFloat(getComputedStyle(document.documentElement).fontSize);
+            const labels=[...document.querySelectorAll('.dashboard-stats dt')].map(e=>{
+                const node=e.firstChild, text=node.textContent, splitWords=[];
+                for(const match of text.matchAll(/\S+/g)){
+                    const range=document.createRange();
+                    range.setStart(node,match.index);range.setEnd(node,match.index+match[0].length);
+                    splitWords.push(new Set([...range.getClientRects()].map(r=>Math.round(r.top))).size);
+                }
+                return {height:e.getBoundingClientRect().height,line:parseFloat(getComputedStyle(e).lineHeight),
+                        overflow:e.scrollWidth>e.clientWidth,splitWords};
+            });
+            const rows=[...document.querySelectorAll('.dashboard-task-list li')].map(e=>({
+                title:e.querySelector('div').getBoundingClientRect().width,
+                height:e.getBoundingClientRect().height,
+                chars:e.querySelector('a').textContent.length,
+                titleBottom:e.querySelector('div').getBoundingClientRect().bottom,
+                dateTop:e.querySelector('time').getBoundingClientRect().top
+            }));
+            return {summary:{top:summary.top,bottom:summary.bottom,width:summary.width},
+                deadlines:{top:deadlines.top,width:deadlines.width},mainWidth:main.width,root,labels,rows};
+        }""")
+        self.assertGreaterEqual(metrics['deadlines']['top'], metrics['summary']['bottom'],
+                                'summary and deadlines must stack when text is enlarged')
+        self.assertGreaterEqual(metrics['summary']['width'], metrics['mainWidth']*.95)
+        self.assertGreaterEqual(metrics['deadlines']['width'], metrics['mainWidth']*.95)
+        for label in metrics['labels']:
+            self.assertFalse(label['overflow'])
+            self.assertLessEqual(label['height'],label['line']*2+1)
+            self.assertTrue(all(lines==1 for lines in label['splitWords']), 'normal stat words must not split')
+        selection=page.locator('.dashboard-semester').evaluate("""e=>{
+            const s=getComputedStyle(e),content=e.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight);
+            return {content,form:e.firstElementChild.getBoundingClientRect().width};
+        }""")
+        self.assertGreaterEqual(selection['form'],selection['content']*.95,
+                                'selected-semester content must reflow with enlarged text too')
+        for row in metrics['rows']:
+            self.assertGreaterEqual(row['title'],16*metrics['root'], 'deadline titles need a meaningful text column')
+            # The long fixture is 186 characters, below the real 200-character field bound.
+            self.assertLessEqual(row['height'],(16 if scene=='long' else 6)*metrics['root'],
+                                 'assignment rows must not become narrow text towers')
+        return metrics
+
+    def test_enlarged_content_at_150_and_200_percent(self):
+        observations=[]
+        for width in (1280,1440):
+            for text in (150,200):
+                for scene in ('graded','long'):
+                    with self.subTest(width=width,text=text,scene=scene):
+                        page=self.page(scene,width,900,text,javascript=False)
+                        metrics=self.assert_readable_enlarged_content(page,scene)
+                        observations.append(dict(scene=scene,width=width,text_percent=text,**metrics))
+                        if width==1280 and text==200:
+                            self.assertTrue(all(r['dateTop']>=r['titleBottom']-1 for r in metrics['rows']))
+                        # Traverse every deadline link by keyboard, deep in the actual content.
+                        page.locator('.dashboard-deadlines .section-heading a').focus()
+                        for task in page.locator('.dashboard-task-list a').all():
+                            page.keyboard.press('Tab')
+                            self.assertTrue(task.evaluate('(e)=>e===document.activeElement'))
+                            r=task.bounding_box()
+                            ring=task.evaluate('(e)=>{const s=getComputedStyle(e);return parseFloat(s.outlineWidth)+parseFloat(s.outlineOffset)}')
+                            self.assertGreaterEqual(r['y']-ring,0)
+                            self.assertLessEqual(r['y']+r['height']+ring,900)
+                            self.assertGreaterEqual(r['x']-ring,0)
+                            self.assertLessEqual(r['x']+r['width']+ring,width)
+                        self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
+                        if OUTPUT:
+                            page.evaluate('window.scrollTo(0,0)')
+                            page.screenshot(path=str(OUTPUT/f'{scene}-{width}-text-{text}-full.png'),full_page=True)
+                        page.close()
+        if OUTPUT:
+            (OUTPUT/'enlarged-content-metrics.json').write_text(json.dumps(observations,indent=2)+'\n')
+
+    def test_original_narrow_layout_mutation_is_rejected(self):
+        page=self.page('long',1280,900,200)
+        # Restore the reviewed desktop rules in the test page only, never on disk.
+        page.add_style_tag(content="""
+            .dashboard-main {grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);align-items:stretch}
+            .dashboard-stats {grid-template-columns:repeat(2,minmax(0,1fr))}
+            .dashboard-stats dt {overflow-wrap:anywhere}
+            .dashboard-task-list li {flex-wrap:nowrap}
+            .dashboard-task-list li > div {flex:initial;min-width:0}
+            .dashboard-task-list time {flex-shrink:0}
+        """)
+        with self.assertRaisesRegex(AssertionError,'summary and deadlines must stack'):
+            self.assert_readable_enlarged_content(page,'long')
+        if OUTPUT:
+            page.screenshot(path=str(OUTPUT/'negative-original-layout-1280-text-200.png'),full_page=True)
+
+    def test_statistics_can_reflow_to_one_column_and_cards_keep_natural_height(self):
+        phone=self.page('graded',320)
+        columns=phone.locator('.dashboard-stats').evaluate('(e)=>getComputedStyle(e).gridTemplateColumns.split(" ").length')
+        self.assertEqual(columns,1)
+        heights=[]
+        for scene in ('short','ungraded','long'):
+            page=self.page(scene,1440)
+            heights.append(page.locator('.dashboard-summary').bounding_box()['height'])
+        self.assertLessEqual(max(heights)-min(heights),1,
+                             'summary height must not depend on the adjacent assignment list')
+        long_page=self.page('long',1440)
+        self.assertGreater(long_page.locator('.dashboard-deadlines').bounding_box()['height'],heights[-1])
 
     def test_mobile_header_actions_stay_next_to_the_intro(self):
         for width in (320,360,390,768,820,1024):

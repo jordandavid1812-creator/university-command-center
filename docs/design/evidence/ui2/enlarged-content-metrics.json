@@ -1,0 +1,730 @@
+[
+  {
+    "scene": "graded",
+    "width": 1280,
+    "text_percent": 150,
+    "summary": {
+      "top": 419.3125,
+      "bottom": 966.015625,
+      "width": 843.21875
+    },
+    "deadlines": {
+      "top": 990.015625,
+      "width": 843.21875
+    },
+    "mainWidth": 843.21875,
+    "root": 24,
+    "labels": [
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 640.015625,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1241.375,
+        "dateTop": 1167.15625
+      },
+      {
+        "title": 640.015625,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1340.59375,
+        "dateTop": 1266.375
+      },
+      {
+        "title": 640.015625,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1439.8125,
+        "dateTop": 1365.59375
+      },
+      {
+        "title": 640.015625,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1539.03125,
+        "dateTop": 1464.8125
+      },
+      {
+        "title": 640.015625,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1638.25,
+        "dateTop": 1564.03125
+      }
+    ]
+  },
+  {
+    "scene": "long",
+    "width": 1280,
+    "text_percent": 150,
+    "summary": {
+      "top": 462.5,
+      "bottom": 1009.203125,
+      "width": 843.21875
+    },
+    "deadlines": {
+      "top": 1033.203125,
+      "width": 843.21875
+    },
+    "mainWidth": 843.21875,
+    "root": 24,
+    "labels": [
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 640.015625,
+        "height": 235.203125,
+        "chars": 186,
+        "titleBottom": 1420.546875,
+        "dateTop": 1210.34375
+      },
+      {
+        "title": 640.015625,
+        "height": 235.203125,
+        "chars": 186,
+        "titleBottom": 1655.75,
+        "dateTop": 1445.546875
+      },
+      {
+        "title": 640.015625,
+        "height": 235.203125,
+        "chars": 186,
+        "titleBottom": 1890.953125,
+        "dateTop": 1680.75
+      },
+      {
+        "title": 640.015625,
+        "height": 235.203125,
+        "chars": 186,
+        "titleBottom": 2126.15625,
+        "dateTop": 1915.953125
+      },
+      {
+        "title": 640.015625,
+        "height": 235.203125,
+        "chars": 186,
+        "titleBottom": 2361.359375,
+        "dateTop": 2151.15625
+      }
+    ]
+  },
+  {
+    "scene": "graded",
+    "width": 1280,
+    "text_percent": 200,
+    "summary": {
+      "top": 623.953125,
+      "bottom": 1693.953125,
+      "width": 723.21875
+    },
+    "deadlines": {
+      "top": 1717.953125,
+      "width": 723.21875
+    },
+    "mainWidth": 723.21875,
+    "root": 32,
+    "labels": [
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 641.21875,
+        "height": 175.984375,
+        "chars": 22,
+        "titleBottom": 2165.8125,
+        "dateTop": 2173.8125
+      },
+      {
+        "title": 641.21875,
+        "height": 175.984375,
+        "chars": 22,
+        "titleBottom": 2341.796875,
+        "dateTop": 2349.796875
+      },
+      {
+        "title": 641.21875,
+        "height": 175.984375,
+        "chars": 22,
+        "titleBottom": 2517.78125,
+        "dateTop": 2525.78125
+      },
+      {
+        "title": 641.21875,
+        "height": 175.984375,
+        "chars": 22,
+        "titleBottom": 2693.765625,
+        "dateTop": 2701.765625
+      },
+      {
+        "title": 641.21875,
+        "height": 175.984375,
+        "chars": 22,
+        "titleBottom": 2869.75,
+        "dateTop": 2877.75
+      }
+    ]
+  },
+  {
+    "scene": "long",
+    "width": 1280,
+    "text_percent": 200,
+    "summary": {
+      "top": 724.9375,
+      "bottom": 1794.9375,
+      "width": 723.21875
+    },
+    "deadlines": {
+      "top": 1818.9375,
+      "width": 723.21875
+    },
+    "mainWidth": 723.21875,
+    "root": 32,
+    "labels": [
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 641.21875,
+        "height": 407.9375,
+        "chars": 186,
+        "titleBottom": 2498.75,
+        "dateTop": 2506.75
+      },
+      {
+        "title": 641.21875,
+        "height": 407.9375,
+        "chars": 186,
+        "titleBottom": 2906.6875,
+        "dateTop": 2914.6875
+      },
+      {
+        "title": 641.21875,
+        "height": 407.9375,
+        "chars": 186,
+        "titleBottom": 3314.625,
+        "dateTop": 3322.625
+      },
+      {
+        "title": 641.21875,
+        "height": 407.9375,
+        "chars": 186,
+        "titleBottom": 3722.5625,
+        "dateTop": 3730.5625
+      },
+      {
+        "title": 641.21875,
+        "height": 407.9375,
+        "chars": 186,
+        "titleBottom": 4130.5,
+        "dateTop": 4138.5
+      }
+    ]
+  },
+  {
+    "scene": "graded",
+    "width": 1440,
+    "text_percent": 150,
+    "summary": {
+      "top": 427.3125,
+      "bottom": 989.171875,
+      "width": 993.625
+    },
+    "deadlines": {
+      "top": 1013.171875,
+      "width": 993.625
+    },
+    "mainWidth": 993.625,
+    "root": 24,
+    "labels": [
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 782.421875,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1268.53125,
+        "dateTop": 1194.3125
+      },
+      {
+        "title": 782.421875,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1367.75,
+        "dateTop": 1293.53125
+      },
+      {
+        "title": 782.421875,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1466.96875,
+        "dateTop": 1392.75
+      },
+      {
+        "title": 782.421875,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1566.1875,
+        "dateTop": 1491.96875
+      },
+      {
+        "title": 782.421875,
+        "height": 99.21875,
+        "chars": 22,
+        "titleBottom": 1665.40625,
+        "dateTop": 1591.1875
+      }
+    ]
+  },
+  {
+    "scene": "long",
+    "width": 1440,
+    "text_percent": 150,
+    "summary": {
+      "top": 427.3125,
+      "bottom": 989.171875,
+      "width": 993.625
+    },
+    "deadlines": {
+      "top": 1013.171875,
+      "width": 993.625
+    },
+    "mainWidth": 993.625,
+    "root": 24,
+    "labels": [
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 29.25,
+        "line": 29.25,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 782.421875,
+        "height": 200.40625,
+        "chars": 186,
+        "titleBottom": 1369.71875,
+        "dateTop": 1194.3125
+      },
+      {
+        "title": 782.421875,
+        "height": 200.40625,
+        "chars": 186,
+        "titleBottom": 1570.125,
+        "dateTop": 1394.71875
+      },
+      {
+        "title": 782.421875,
+        "height": 200.40625,
+        "chars": 186,
+        "titleBottom": 1770.53125,
+        "dateTop": 1595.125
+      },
+      {
+        "title": 782.421875,
+        "height": 200.40625,
+        "chars": 186,
+        "titleBottom": 1970.9375,
+        "dateTop": 1795.53125
+      },
+      {
+        "title": 782.421875,
+        "height": 200.40625,
+        "chars": 186,
+        "titleBottom": 2171.34375,
+        "dateTop": 1995.9375
+      }
+    ]
+  },
+  {
+    "scene": "graded",
+    "width": 1440,
+    "text_percent": 200,
+    "summary": {
+      "top": 566.359375,
+      "bottom": 1325.984375,
+      "width": 873.625
+    },
+    "deadlines": {
+      "top": 1349.984375,
+      "width": 873.625
+    },
+    "mainWidth": 873.625,
+    "root": 32,
+    "labels": [
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 608.6875,
+        "height": 127.6875,
+        "chars": 22,
+        "titleBottom": 1716.65625,
+        "dateTop": 1621.96875
+      },
+      {
+        "title": 608.6875,
+        "height": 127.6875,
+        "chars": 22,
+        "titleBottom": 1844.34375,
+        "dateTop": 1749.65625
+      },
+      {
+        "title": 608.6875,
+        "height": 127.6875,
+        "chars": 22,
+        "titleBottom": 1972.03125,
+        "dateTop": 1877.34375
+      },
+      {
+        "title": 608.6875,
+        "height": 127.6875,
+        "chars": 22,
+        "titleBottom": 2099.71875,
+        "dateTop": 2005.03125
+      },
+      {
+        "title": 608.6875,
+        "height": 127.6875,
+        "chars": 22,
+        "titleBottom": 2227.40625,
+        "dateTop": 2132.71875
+      }
+    ]
+  },
+  {
+    "scene": "long",
+    "width": 1440,
+    "text_percent": 200,
+    "summary": {
+      "top": 724.9375,
+      "bottom": 1484.5625,
+      "width": 873.625
+    },
+    "deadlines": {
+      "top": 1508.5625,
+      "width": 873.625
+    },
+    "mainWidth": 873.625,
+    "root": 32,
+    "labels": [
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      },
+      {
+        "height": 39,
+        "line": 39,
+        "overflow": false,
+        "splitWords": [
+          1,
+          1
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "title": 608.6875,
+        "height": 359.640625,
+        "chars": 186,
+        "titleBottom": 2107.1875,
+        "dateTop": 1780.546875
+      },
+      {
+        "title": 608.6875,
+        "height": 359.640625,
+        "chars": 186,
+        "titleBottom": 2466.828125,
+        "dateTop": 2140.1875
+      },
+      {
+        "title": 608.6875,
+        "height": 359.640625,
+        "chars": 186,
+        "titleBottom": 2826.46875,
+        "dateTop": 2499.828125
+      },
+      {
+        "title": 608.6875,
+        "height": 359.640625,
+        "chars": 186,
+        "titleBottom": 3186.109375,
+        "dateTop": 2859.46875
+      },
+      {
+        "title": 608.6875,
+        "height": 359.640625,
+        "chars": 186,
+        "titleBottom": 3545.75,
+        "dateTop": 3219.109375
+      }
+    ]
+  }
+]
