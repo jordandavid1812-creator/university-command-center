@@ -79,6 +79,8 @@ def fixture_html(public=False, scene=None):
     # Inline unchanged entry assets for static browser inspection; no external requests.
     html = html.replace('<link rel="stylesheet" href="/static/student_web/site.css">',
                         '<style>' + (asset / 'site.css').read_text() + '</style>')
+    html = html.replace('<link rel="stylesheet" href="/static/student_web/dashboard.css">',
+                        '<style>' + (REPO / 'server/student_web/static/student_web/dashboard.css').read_text() + '</style>')
     html = html.replace('<link rel="stylesheet" href="/static/accounts/auth.css">',
                         '<style>' + (REPO / 'server/accounts/static/accounts/auth.css').read_text() + '</style>')
     return html.replace('<script defer src="/static/student_web/site.js"></script>',

@@ -1,0 +1,7 @@
+{
+  "browser": "156.0.8078.79",
+  "executable": "/usr/bin/chromium",
+  "playwright": "1.65.0",
+  "django": "5.2.19",
+  "fixtures": "synthetic static records, real academic_summary; no live sessions"
+}
