@@ -45,12 +45,12 @@ Local: Python 3.12.14, Django 5.2.19, psycopg 3.3.8; PostgreSQL **17.11** with t
 
 | Suite | Result |
 | --- | --- |
-| Website | 91 passed (79 baseline + 12 UI2), with U2 assertion approval still pending |
+| Website | 91 passed (79 baseline + 12 UI2), with the three U2 presentation assertion changes now owner-approved |
 | Authentication | 76 passed |
 | Restricted-role isolation | 46 passed |
 | Foundation/academic database | 33 passed |
 | Legacy CLI/Streamlit/calculations | 113 passed |
-| Historical presentation assertions | Three changes remain pending explicit owner approval (U2); the current suite uses those proposed edits |
+| Historical presentation assertions | Three U2 presentation changes explicitly owner-approved in [comment #6822116700](https://github.com/jordandavid1812-creator/university-command-center/pull/44#issuecomment-6822116700); no further assertion edits |
 | Baseline/new query observation | 1 method passed, empty and populated cases |
 | UI1 browser | 10 passed |
 | Premium-auth browser | 5 passed |
@@ -60,7 +60,7 @@ Local: Python 3.12.14, Django 5.2.19, psycopg 3.3.8; PostgreSQL **17.11** with t
 
 UI2 covers no semesters, semesters without courses, all ungraded, actual zero, mixed grades, overdue without upcoming work, five-record previews, same-label UUID rows, full comparison, foreign account data/forged semester rejection, native GET and page asset budgets. Existing academic/security tests are preserved.
 
-**U2 is awaiting explicit owner approval.** The previously changed presentation assertions in `test_polish.py` are: Current → Selected semester; zero-overdue attention is now absent (the actual zero count is still asserted); the one-overdue accessible label uses singular grammar. Their exact before/after text and rationale are in [the pending U2 decision register](UI2_ASSERTION_APPROVAL.md). This correction does not edit that historical test file. Passing CI does not resolve U2; no owner approval is inferred. Mathematical, security and query-budget assertions remain unchanged.
+**U2 is explicitly owner-approved.** [PR #44 comment #6822116700](https://github.com/jordandavid1812-creator/university-command-center/pull/44#issuecomment-6822116700), recorded on 12 November 2026, authorizes exactly: Current → Selected semester; absence of the zero-overdue attention link while retaining the actual zero-count assertion; singular grammar for one overdue assignment. Exact before/after text and rationale remain in [the U2 approval register](UI2_ASSERTION_APPROVAL.md). This documentation update does not edit the historical test file. Mathematical, security and query-budget assertions remain unchanged; independent review is still required before merge.
 
 The browser investigation caught two issues before submission: a duplicate outer/inner “Semester performance” region name (outer redundant label removed, inner native scroll region retained), and UI1's row flex-basis becoming a tall blank column above mobile actions. A dashboard-only override and a header-spacing regression prevent that blank gap. No auth/shared stylesheet change was needed.
 
@@ -79,7 +79,7 @@ Rendered important text pairs pass ≥4.5:1; control borders/focus pass ≥3:1 o
 | Finding | Disposition / evidence |
 | --- | --- |
 | **U1 required** | Corrected: auto-fitting tracks reserve **26rem per card** against actual content width, so 1280/1440 desktop views stack at 150% and 200% root text. Dates wrap beneath title/course metadata when an 18rem title column plus date cannot fit. Scalable padding is kept compact without reducing the 44px task-link target. Stats use adaptive 10rem tracks and normal word breaking. The selected-semester panel also auto-fits 22rem tracks so its controls/result reflow at enlarged text. No title truncation, hidden data, line clamp or content max-height is used. |
-| **U2 required** | **Unresolved — awaiting explicit owner approval.** [Three exact historical assertion changes](UI2_ASSERTION_APPROVAL.md) remain as reviewed; this task is not approval. The draft is not ready for merge while that decision is pending. |
+| **U2 required** | **Owner-approved.** [Three exact historical assertion changes](UI2_ASSERTION_APPROVAL.md) are authorized by [comment #6822116700](https://github.com/jordandavid1812-creator/university-command-center/pull/44#issuecomment-6822116700). Scope and justification are preserved; no further assertion changes. U1–U4 are ready for independent review, which remains a pre-merge gate. |
 | **U3 recommended** | Corrected: `align-items:start` keeps the actual-CGPA card at natural height. A regression compares identical summary data beside one short task, five short tasks and five long tasks; the summary height must stay within 1px across those cases. |
 | **U4 recommended** | Corrected: caption explicitly says **up to five pending deadlines due today or later**. Empty workspaces say “Add an assignment when you have a deadline.” Overdue review guidance appears only if the existing overdue count is positive; completed-only workspaces get neutral “view your work” guidance. No count/query semantics change. |
 
