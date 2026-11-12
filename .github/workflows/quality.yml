@@ -45,7 +45,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --upgrade pip==26.3
       - run: python -m pip install pip-audit==2.10.1
-      - run: python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner off -r requirements-lock.txt -r requirements-django-lock.txt
+      - run: python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner off -r requirements-lock.txt -r requirements-django-lock.txt -r requirements-browser-test-lock.txt
 
   database-tests:
     runs-on: ubuntu-latest
@@ -128,3 +128,25 @@ jobs:
           PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
           PGTESTDATABASE: test_ucc_website
         run: python server/manage.py test web_tests --settings=config.settings.web_test -v 2
+
+  frontend-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements-django-lock.txt
+      # Test-only browser tooling; never loaded by the application.
+      - run: 'python -m pip install --require-hashes --only-binary=:all: -r requirements-browser-test-lock.txt'
+      # Browser revisions follow the locked Playwright package. Ubuntu apt dependencies
+      # and browser downloads are not covered by Python wheel hashes; see UI1 notes.
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m playwright install --list
+      - run: python -m pip check
+      - run: python tools/test_frontend_foundation_browser.py -v
