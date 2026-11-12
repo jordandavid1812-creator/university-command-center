@@ -108,7 +108,7 @@ after a verified recovery (A.7). This happens in one `auth` transaction:
 1. `SELECT ... FOR UPDATE` on the student row. This keeps the existing lock order (Student first) and serializes device issuance per student. **Under that lock** (implemented in S0-02A):
    * the supplied username must equal the student's **stored** username exactly. The record is bound by the student **UUID foreign key**; there is no username-derived key (review F02);
    * the caller's `credential_stamp` (the password-derived `get_session_auth_hash()` captured when the password was verified) must still match.
-   
+
    So a login verified before a password change or reset can never create trust after it.
 2. If the browser presented a cookie for a record of *this* student, rotate that record instead of creating a new one (A.4.3).
 3. Otherwise, if the student has 10 or more live records, delete the least-recently-used ones down to 9 (`ORDER BY last_used_at, id`).

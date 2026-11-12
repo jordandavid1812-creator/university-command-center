@@ -230,22 +230,50 @@ UCC_RUNTIME_ROLE, UCC_AUTH_ROLE and UCC_CONTEXT_SIGNING_KEY configured privately
 
 ```sh
 python server/manage.py migrate --settings=config.settings.auth_migration --noinput
-python server/manage.py configure_runtime --settings=config.settings.auth_migration
 python server/manage.py configure_auth_role --settings=config.settings.auth_migration
+python server/manage.py configure_runtime --settings=config.settings.auth_migration
 python server/manage.py makemigrations --check --dry-run --settings=config.settings.auth_migration
 ```
 
-These commands provision the DB key/runtime grants and THEN separate auth grants.
+These commands provision separate auth grants immediately after migration, then the
+DB key/runtime grants. Complete and verify both before operating the web service.
 No application role owns objects or has role membership. Do not add ad hoc grants.
 Re-run the offline provisioning commands after adding reviewed tables/columns.
 
 **S0-02A (dormant):** migration `accounts.0003_trusted_device_foundation` adds
-`accounts_trusteddevice` and `accounts_loginlimit`. After migrating, re-run
-`configure_runtime` and `configure_auth_role`. Until then, every web request
-fails closed with a generic 503: the auth role must hold exactly SELECT, INSERT,
-DELETE and column-limited UPDATE on both tables, and runtime must hold nothing.
-Login does not use these tables yet. The design is in
+all three support tables: `accounts_trusteddevice`, `accounts_loginlimit` and
+`accounts_devicegeneration`. The auth role receives SELECT, INSERT and DELETE
+plus column-limited UPDATE on the first two tables; on
+`accounts_devicegeneration` it receives SELECT, INSERT and UPDATE only on
+`generation`, without DELETE/TRUNCATE or identity-column UPDATE. Runtime must
+have no access to any of the three. Login does not use these tables or issue
+device cookies, and no new login restrictions are activated. The design is in
 `docs/security/S1_PROPOSALS.md` section A.
+
+**Operational sequence for a separately authorized deployment:**
+
+1. Before touching a persistent database, inspect its applied migration history
+   and the exact revision of any previously applied `accounts.0003`. An older
+   applied revision is not upgraded just by fetching this file. Require a reviewed
+   forward-migration/recovery plan if the history differs. Never fake migrations
+   or reverse a persistent migration without an approved recovery plan.
+2. Plan a maintenance window before deployment and keep the service out of normal
+   operation during migration and provisioning. This documentation authorizes no
+   deployment or database change.
+3. Apply the reviewed migration 0003 using the authorized offline migration role
+   and `auth_migration` process above. Never run it with runtime/auth credentials
+   or give the web process migration credentials.
+4. Run `configure_auth_role` **immediately afterward**, using that documented
+   offline provisioning process, then complete `configure_runtime` as shown above.
+   When support tables exist without the required grants, requests intentionally
+   fail closed with generic **503** responses; do not return the service to normal
+   operation during this gap.
+5. Before returning the service to operation, verify both authentication and
+   runtime grants using their actual restricted LOGINs and the documented role
+   boundary checks. Confirm the exact auth support-table/column allowlist, no
+   runtime support-table access, no unexpected memberships/ownership/MAINTAIN or
+   grant options, and enabled/forced academic RLS. Stop and repair through the
+   reviewed provisioning process if a check fails; do not bypass the guards.
 
 Start a NEW process environment containing ONLY application credentials:
 
