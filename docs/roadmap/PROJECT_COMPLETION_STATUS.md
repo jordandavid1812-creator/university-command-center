@@ -6,15 +6,15 @@ Evidence snapshot: **12 November 2026 (Africa/Lagos)**. This is the live reconna
 
 | Item | Verified state |
 | --- | --- |
-| Current master | `36439f3cd056ea4267f83daa7728afcac689743c`; [CI 43194643457](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43194643457) passed all four jobs |
-| Latest master addition | Merged PR #36, B1 Revision 5 **design only**, head `9b8cca56253526c770082b8b5bb9e41d9915ee7f`; the only changed file since UI2's base is `docs/security/STAGE_B_IMPLEMENTATION_PLAN.md` |
-| UI2 PR #44 | Open **draft**, unmerged; head `bbcec0da4554032887811e0c359e1c9f8181224a`; merge-base `ed8890982d99b7be5262d997e2e76266a4b65b0c` |
-| UI2 current CI | [Run 43221580854](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43221580854); all four jobs passed: tests, dependency-audit, database-tests and frontend-browser; verified at this exact head |
-| UI2 integration | `git merge-tree --write-tree origin/master frontend/ui2-academic-dashboard` succeeded without changing a branch/worktree; no integration commit was made. This is conflict detection, not combined-release execution |
-| UI2 approval | [Owner comment #6822116700](https://github.com/jordandavid1812-creator/university-command-center/pull/44#issuecomment-6822116700) explicitly approves exactly three historical presentation assertions. No merge approval. No submitted GitHub review on the current head at inspection; Claude review remains required |
-| This status document | Independent docs-only branch `docs/project-completion-status` from current master; does not include UI2 application changes or copy unmerged security/staging plans onto master |
+| Current master | `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`; [CI 43232194518](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43232194518) passed all four jobs: tests, dependency-audit, database-tests and frontend-browser |
+| UI2 PR #44 | **MERGED** as `785253ddd796554dfc509361d69f18a7140affb2`; final branch head `d38ff425df38a2da8cb629c7ab9976950788c8cc` |
+| Roadmap PR #45 | **MERGED** as `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`; final branch head `e60f5131005de313d940670a6144630d5a75ba04` |
+| Integration evidence | Both exact merge commits are ancestors of fetched master. Master CI above exercises the integrated UI2/roadmap tree; earlier pre-merge conflict checks are historical and no longer the integration evidence |
+| Review disposition | The owner reports Claude's completed retrospective independent **APPROVAL** of both merged PRs. [Comment #6822116700](https://github.com/jordandavid1812-creator/university-command-center/pull/44#issuecomment-6822116700) separately records the three U2 assertion approvals; UI6/UI10 carryovers remain open implementation tasks |
+| B1 design | PR #36 is merged, head `9b8cca56253526c770082b8b5bb9e41d9915ee7f`; `docs/security/STAGE_B_IMPLEMENTATION_PLAN.md` is **design only**, not B1 implementation |
+| This reconciliation | Fresh docs-only branch `docs/post-merge-roadmap-reconciliation` from master `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`; changes only this status file |
 
-The attached work order's historical `cb7f812` UI2 head is superseded. Its permission is limited by the owner's explicit milestone/review gates. No security branch is edited by this documentation change. Local uncommitted workspace state is not repository evidence and is not part of this reproducible status inventory. No rebases, force-pushes, draft promotion, merges or PR closures were performed.
+This post-merge snapshot supersedes the earlier UI2-draft and pre-integration status. Prior heads and runs below are retained only where explicitly labelled historical evidence. No security branch, application or tests are changed by this reconciliation; no merge, rebase, force-push, PR closure or deployment is performed here.
 
 ## Live status matrix
 
@@ -32,7 +32,7 @@ Statuses describe the specified slice, not a guarantee of production readiness.
 | Academic Studio blueprint | **DONE & MERGED** design | PR #39; [design system](../design/DESIGN_SYSTEM.md), [screens](../design/SCREEN_BLUEPRINTS.md), [delivery gates](../design/DELIVERY_AND_ACCEPTANCE.md) |
 | UI1 shared shell/tokens/focus | **DONE & MERGED** implementation; **OUTSTANDING COMMITMENT** | PR #41, merge `13c8cc10aa8c4a7b2a2e08c16778f5a9697364ef`; separate UI1 browser suite. Shared supporting metadata still includes 12px text; UI1 committed to the 14px `--type-meta` alignment in UI2. The owner **explicitly approved deferral to UI10** on 12 November 2026; alignment is still not implemented |
 | Premium authentication presentation | **DONE & MERGED** | PR #43, merge `ed8890982d99b7be5262d997e2e76266a4b65b0c`; intentional auth-only radius/serif exceptions, generic messages and native no-JS flow preserved |
-| UI2 dashboard | **IMPLEMENTED BUT UNMERGED** / **BLOCKED BY REVIEW** | PR #44; U1/U3/U4 corrected, U2 owner-approved. See exact-head evidence below; no UI3 dependency may assume UI2 is merged |
+| UI2 dashboard | **DONE & MERGED** | PR #44 merge `785253ddd796554dfc509361d69f18a7140affb2`; U1/U3/U4 and keyboard correction retained, U2 owner-approved; retrospective independent approval reported by owner. UI6 table-header and UI10 metadata implementation remain outstanding; no UI3 work is authorized by this reconciliation |
 | UI3–UI7 academic presentation | **DESIGNED ONLY** | Existing functional screens remain; proposed narrow PRs below. No redesigned assignment list or new feature is claimed |
 | UI8 remaining settings/auth usability | **DESIGNED ONLY** / **BLOCKED BY SECURITY COORDINATION** | Reuse PR #43; validator-derived password guidance remains deferred. No authority to change auth decisions through presentation work |
 | UI9 system dark theme | **DESIGNED ONLY** | Token proposal exists; current CSS is light mode. No persisted/manual preference approved |
@@ -45,13 +45,14 @@ Statuses describe the specified slice, not a guarantee of production readiness.
 | Paid hosting / public pilot / deployment | **BLOCKED BY OWNER** | No purchase, provider account, DNS, deployment or live delivery authorized |
 | Import/export, notifications, billing, analytics, integrations, manual theme, MFA | **DEFERRED/OUT OF SCOPE** | Require separate product/security/data decisions; no roadmap completion shortcut |
 
-## Open-PR reconciliation
+## PR reconciliation — merged and remaining open
 
-GitHub was queried rather than assuming older approvals imply current merge authorization. No open branch was modified except the existing authorized UI2 branch. Head checks here are inventory, not new security audits or a claim of fresh CI on every old PR.
+GitHub confirms #44/#45 merged and #29/#26 still open/unmerged. Remaining rows retain the earlier inventory unless separately noted; they are not new security audits or fresh CI claims. This reconciliation modifies no existing feature/security branch.
 
 | PR | Exact head at inspection | Disposition / dependency |
 | --- | --- | --- |
-| [#44](https://github.com/jordandavid1812-creator/university-command-center/pull/44) UI2 | `bbcec0da4554032887811e0c359e1c9f8181224a` | Draft; current independent-review gate |
+| [#44](https://github.com/jordandavid1812-creator/university-command-center/pull/44) UI2 | `d38ff425df38a2da8cb629c7ab9976950788c8cc` | **Merged** as `785253ddd796554dfc509361d69f18a7140affb2`; retrospective approval reported by owner |
+| [#45](https://github.com/jordandavid1812-creator/university-command-center/pull/45) roadmap | `e60f5131005de313d940670a6144630d5a75ba04` | **Merged** as `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078`; retrospective approval reported by owner |
 | [#29](https://github.com/jordandavid1812-creator/university-command-center/pull/29) F04b | `42910ed09ed1a20aee556e77666cf6e347c724cd` | Draft; historical approval is head-scoped, not a merge instruction; current-master reconciliation and owner authorization required |
 | [#26](https://github.com/jordandavid1812-creator/university-command-center/pull/26) dormant foundation | `44c515f903cc35f1dfdd3d1c2b777a8d1a873222` | Draft; after separately approved #29 integration, recheck migration/grants and exact combined release; never activate implicitly |
 | [#35](https://github.com/jordandavid1812-creator/university-command-center/pull/35) Stage A/C docs | `e3da0bfa268b26e420f004d9eaabd06f69ccadc4` | Open, unmerged; `docs/SECURITY_INTEGRATION_READINESS.md`, `docs/LOCAL_STAGING_ARCHITECTURE.md`, `docs/REMAINING_ENGINEERING_LAUNCH_PLAN.md` are proposed context, not current-master implementation |
@@ -70,7 +71,7 @@ U1 uses rem-sized auto-fitting tracks, wraps dates, permits single-column stats 
 
 The keyboard-scrolling failure was independently diagnosed on the earlier head: at 390px, the region was focused, `clientWidth=314`, `scrollWidth=640`, overflow-x/y=auto and ArrowRight moved scrollLeft0→40 despite browser-side polling timing out. A reproducible Chromium158 probe shows subsequent rAF/timer callbacks do not reliably execute with JS disabled. Python-side protocol polling preserves the original five-second bound and requires actual movement; a blocked-key mutation must fail. The final follow-up checks the complementary 1440px non-overflow case (`clientWidth=scrollWidth=1048`, scrollLeft0), with retained focus and no required movement.
 
-Evidence remains in PR #44, not copied into master by this documentation PR:
+The following UI2 evidence is now on master through merged PR #44; this reconciliation does not regenerate it:
 
 - `docs/design/UI2_IMPLEMENTATION.md`: full screenshot index, exact data bindings and U1–U4 dispositions.
 - `docs/design/UI2_ASSERTION_APPROVAL.md`: exact three approved assertion changes and owner evidence.
@@ -80,9 +81,11 @@ Evidence remains in PR #44, not copied into master by this documentation PR:
 
 Local final UI2 browser run: **12 methods passed**, Playwright1.65.0, managed Chromium158.0.8127.18, Python3.12.14. Includes genuine overflow, blocked-key negative control, non-overflow and original-layout mutation; root-text scaling is not actual browser zoom. Existing UI1 10 and premium-auth5 passed locally on the same managed browser during the preceding investigation; their code is unchanged by the final non-overflow test. Hosted final-head run re-executed all three successfully (10 UI1 +5 premium-auth +12 UI2). Screenshots retain original recorded Chromium156 provenance; do not mislabel them as Chromium158 captures.
 
-Current master hosted run43194643457 has foundation33, restricted-role46, auth76 and web79 (verified from database job logs), with legacy113: **347 regression tests**. UI2 adds12 website tests, yielding359. Master has the two merged browser suites (10+5); the unmerged UI2 suite adds12. Counts are per snapshot, not a promise for future security integration.
+**Historical pre-UI2 master** `36439f3cd056ea4267f83daa7728afcac689743c`, hosted run43194643457, had foundation33, restricted-role46, auth76 and web79 (verified from database job logs), with legacy113: **347 regression tests**. UI2 adds12 website tests, yielding359. That historical master had two browser suites (10+5); UI2 added12. Current merged master has all three suites (27 browser methods). Counts are per snapshot, not a promise for future security integration.
 
-Earlier UI2 head `2572b45a8c391943403348d606cec136c1fc2c19` has [all-green hosted CI 43211392876](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43211392876), verified from actual job logs: legacy113, foundation33, restricted-role46, auth76, web91 = **359**; browsers10+5+11 =26. PostgreSQL was **17.11**, not SQLite/16. The new test adds one UI2 browser method (27 total across suites), not a database test. Fresh final-head hosted run43221580854 passed all four jobs: 359 regression tests and 27 browser methods; previous-head results are kept only for provenance.
+Earlier UI2 head `2572b45a8c391943403348d606cec136c1fc2c19` has [all-green hosted CI 43211392876](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43211392876), verified from actual job logs: legacy113, foundation33, restricted-role46, auth76, web91 = **359**; browsers10+5+11 =26. PostgreSQL was **17.11**, not SQLite/16. The new test adds one UI2 browser method (27 total across suites), not a database test. Historical UI2 head `bbcec0da4554032887811e0c359e1c9f8181224a`, hosted run43221580854, passed all four jobs: 359 regression tests and 27 browser methods; previous-head results are kept only for provenance.
+
+**Current integrated master evidence:** [run 43232194518](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43232194518) at `4e78b52d5a94856e31bfd15ef41d52a0f7f6c078` passed tests, dependency-audit, database-tests and frontend-browser. Its job logs confirm legacy113 + foundation33 + restricted-role46 + auth76 + web91 = **359 regression tests**, and UI1 10 + premium-auth5 + UI2 12 = **27 browser tests**, PostgreSQL **17.11** and Chromium **158.0.8127.18**. This is merged UI2 evidence; it does not verify unmerged #29/#26, future B1, email, backups or staging. No local database/browser suite is newly claimed for this documentation edit.
 
 ## Reproducible quality contract
 
@@ -105,7 +108,7 @@ python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner o
 python tools/check_repository_safety.py
 ```
 
-These commands require the **separate disposable database environments** in [DATABASE_SECURITY.md](../DATABASE_SECURITY.md), [AUTHENTICATION.md](../AUTHENTICATION.md) and [STUDENT_WEBSITE.md](../STUDENT_WEBSITE.md). Never run destructive migration/role suites on an application database or use migration credentials for requests. Browser commands in the block require the unmerged UI2 branch for UI2. Offline default is a migrator only in the test/provisioning process; protected web `default` is the academic runtime, `auth` is the narrow account/session role; `STUDENT_DB_ALIAS` selects academic runtime. Test aliases and provisioning are not production privileges.
+These commands require the **separate disposable database environments** in [DATABASE_SECURITY.md](../DATABASE_SECURITY.md), [AUTHENTICATION.md](../AUTHENTICATION.md) and [STUDENT_WEBSITE.md](../STUDENT_WEBSITE.md). Never run destructive migration/role suites on an application database or use migration credentials for requests. All three browser suites in the block are now present on master, including UI2. Offline default is a migrator only in the test/provisioning process; protected web `default` is the academic runtime, `auth` is the narrow account/session role; `STUDENT_DB_ALIAS` selects academic runtime. Test aliases and provisioning are not production privileges.
 
 Current source has no configured formatter/type-checker gate to invent; repository workflows provide safety, Django checks, migration-drift, dependency and regression checks. Historical counts in older documents are milestone snapshots, not today's discovery. This report distinguishes previous executed evidence and current CI; it does not claim every command was rerun locally for a Markdown edit.
 
@@ -113,13 +116,13 @@ Page asset budget remains ≤30KB CSS / ≤5KB JS unless explicitly reviewed. UI
 
 ## Ordered implementation slices and acceptance gates
 
-Each row means a **future separate draft PR and exact-head independent review**, not permission to bypass dependencies. A row cannot be marked done merely by writing its design.
+The completed UI2 row is historical. Every remaining implementation row requires a **future separate draft PR and exact-head independent review**, not permission to bypass dependencies. A row cannot be marked done merely by writing its design.
 
 | Order / slice | Proposed scope / base | Required evidence and stop gate |
 | --- | --- | --- |
-| 1 UI2 review | Existing #44; no competing implementation PR | Final-head four CI jobs, 27 browser methods including both mutations and non-overflow, 359 regression tests, query/screenshot evidence, U1–U4 review. Stop for Claude then owner exact-head merge decision |
+| 1 UI2 | **Completed and merged** through #44 | Retrospective independent approval reported by owner; integrated master CI43232194518 passed. Preserve U1–U4, mutation/non-overflow/query evidence and outstanding UI6/UI10 carryovers |
 | 2 Stage A reconciliation | Existing #29, then separately #26; no branch changes in this milestone | Owner authorizes each exact reviewed head; current-master integration review, dormant-device proof, migration/grant inventory, combined PG17 race/isolation/auth/regression results; no security activation |
-| 3 UI3 assignments | After owner-authorized UI2 merge, fresh master; responsive single semantic task list only | At320px all actions visible, no-JS GET filters/search/sort/pagination and POST CSRF/version contracts; overdue/today/future/completed/empty/no-match/409/foreign UUID; no new queries or invented reminders; before/after synthetic screenshots |
+| 3 UI3 assignments | UI2 merge prerequisite satisfied; future separately scoped work on fresh master, not started here; responsive single semantic task list only | At320px all actions visible, no-JS GET filters/search/sort/pagination and POST CSRF/version contracts; overdue/today/future/completed/empty/no-match/409/foreign UUID; no new queries or invented reminders; before/after synthetic screenshots |
 | 4 UI4 courses | Reviewed current master after preceding dependent slice | Credits remain exact Decimal, F/ungraded, account-wide normalized codes, semester UUIDs, native errors/409 retained values, query bounds and keyboard/mobile regressions |
 | 5 UI5 semesters | Reviewed current master | Explicit display order, duplicate-label UUID distinction, dependent deletion protection, version conflicts, reachable mobile actions; no chronology inference or bulk API |
 | 6 UI6 actual overview | Reviewed current master | Complete numeric table/text alternatives, 0/F versus ungraded, weighted actual values, no trend/rank claims; genuine keyboard table scrolling, enlarged text and contrast; explicitly correct pre-existing mid-word table-header wrapping at 150%/200% text. Require readable header words/column widths, complete values, semantic headers and visible focus; verify 1280/1440 desktop plus mobile/reflow, retaining local overflow where necessary |
@@ -153,14 +156,14 @@ Safe local preparation after its own scope gate can use synthetic disposable Pos
 | Performance / observability | Fixed-environment benchmark/load/pool/query evidence, bounded metrics and log redaction across Django/worker/proxy/email; no invented SLA or secret-bearing traces |
 | Review/integration drift | Re-fetch exact heads before decisions. Independent approval attaches to the tested head, not a moving branch; fresh review for post-review changes and current-master combined CI |
 
-**Immediate next action:** independent Claude review of PR #44 at its final head and review of this docs-only status PR. No new UI3 implementation or security-sensitive work begins in this handoff. Owner then chooses the exact reviewed PR merge(s), outstanding B1 policy/increment decisions, tool/provider proposals and manual-test responsibilities. This snapshot must be refreshed after authorized merges; do not treat today's open-PR list or green run as permanent state.
+**Immediate next action:** independent review of this post-merge documentation PR. UI2/#45 retrospective review is complete per the owner; their former review/merge gate is not an outstanding task. No UI3 or security-sensitive implementation begins here. Stage A still requires separate exact-head owner decisions for #29/#26, and B1 still requires its policy/increment approvals. Refresh this snapshot after subsequent authorized changes; green UI2/master CI is not launch acceptance.
 
 ## Final review conditions and integration regression instructions
 
-Claude's review of this status document at `00a77bb3919c65e31bf76e47f30f8f5353d9b770` returned **APPROVE WITH CONDITIONS**. Repository heads, counts and green CI cited above are pinned historical observations; this documentation correction does not establish new implementation, security acceptance or a combined release.
+Historically, Claude's review of this document at `00a77bb3919c65e31bf76e47f30f8f5353d9b770` returned **APPROVE WITH CONDITIONS**. The owner now reports retrospective **APPROVAL** of merged #44/#45. The carryover implementation tasks below remain; the old conditional-review gate is superseded. Current master CI verifies UI2 integration, not the still-unmerged Stage A security release or launch readiness.
 
 - **Metadata commitment (P44-1):** shared 12px supporting metadata has not been aligned to the approved 14px token. UI1 scheduled that alignment for UI2. The owner **explicitly approved deferring this work to UI10 on 12 November 2026**. The implementation and acceptance work remains open in UI10, separate from the three already approved U2 assertion changes and from any PR merge approval.
-- **UI6 table-header task (P44-2):** pre-existing enlarged-text mid-word table-header wrapping remains unresolved. UI6 must include the header readability, real-overflow scrolling, semantic/focus and viewport evidence specified in its acceptance row above. This task is not permission to change shared CSS in the present documentation PRs.
+- **UI6 table-header task (P44-2):** pre-existing enlarged-text mid-word table-header wrapping remains unresolved. UI6 must include the header readability, real-overflow scrolling, semantic/focus and viewport evidence specified in its acceptance row above. This task is not permission to change shared CSS in this post-merge documentation PR.
 - **After Stage A integration and after each B1 increment (B1a, B1b, B1c and B1d): rerun all three frontend browser suites plus website and authentication suites** on the exact integrated candidate, in addition to every security/academic/role/migration gate required by that increment. Use real PostgreSQL 17 restricted auth/runtime roles for the database suites. Preserve exact-head hosted CI, versions, counts/skips, no-JS/session/error-path observations and investigate failures before independent acceptance. Existing screenshots or an older green UI2 run cannot substitute for these integration regressions.
 
 ```sh
@@ -171,4 +174,4 @@ python server/manage.py test web_tests --settings=config.settings.web_test -v 2
 python server/manage.py test auth_tests --settings=config.settings.auth_test -v 2
 ```
 
-The UI2 browser suite must be present in the approved integrated baseline. If UI2 has not been owner-authorized and merged when a security candidate is assessed, record that dependency explicitly and arrange a separately reviewed integration candidate; do not silently omit the third suite, merge UI2, or treat its code as already on master. Separate disposable provisioning/test environments remain mandatory. No intermediate B1 build becomes accepted staging through these tests.
+The UI2 browser suite is now on master through #44 and must remain in every Stage A/B1 candidate's three-suite frontend regression run. Do not omit it or substitute older screenshots/CI. Separate disposable provisioning/test environments remain mandatory. No intermediate B1 build becomes accepted staging through these tests.
