@@ -276,8 +276,21 @@ class DashboardBrowserTests(unittest.TestCase):
         region = page.get_by_role('region', name='Semester performance')
         self.assertEqual(region.locator('tbody tr').count(), 2)
         region.focus()
+        def scroll_state():
+            return region.evaluate("""e => ({clientWidth:e.clientWidth,
+                scrollWidth:e.scrollWidth, scrollLeft:e.scrollLeft,
+                focused:document.activeElement===e,
+                activeTag:document.activeElement.tagName,
+                overflowX:getComputedStyle(e).overflowX,
+                overflowY:getComputedStyle(e).overflowY,
+                visibility:document.visibilityState,
+                tableWidth:e.querySelector('table').getBoundingClientRect().width})""")
+        print('TABLE_KEYBOARD_BEFORE='+json.dumps(scroll_state()), flush=True)
         page.keyboard.press('ArrowRight')
-        page.wait_for_function('document.querySelector(".table-scroll").scrollLeft > 0')
+        try:
+            page.wait_for_function('document.querySelector(".table-scroll").scrollLeft > 0')
+        finally:
+            print('TABLE_KEYBOARD_AFTER='+json.dumps(scroll_state()), flush=True)
         captured = []
         def respond(route):
             if 'semester=' in route.request.url:
