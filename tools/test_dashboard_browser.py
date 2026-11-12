@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
@@ -271,10 +272,7 @@ class DashboardBrowserTests(unittest.TestCase):
                 self.assertLessEqual(gap['gap'],gap['limit'])
                 page.close()
 
-    def test_native_get_selection_and_table_keyboard_without_js(self):
-        page = self.page('graded', width=390, javascript=False)
-        region = page.get_by_role('region', name='Semester performance')
-        self.assertEqual(region.locator('tbody tr').count(), 2)
+    def assert_keyboard_horizontal_scroll(self, page, region, timeout=5):
         region.focus()
         def scroll_state():
             return region.evaluate("""e => ({clientWidth:e.clientWidth,
@@ -286,11 +284,36 @@ class DashboardBrowserTests(unittest.TestCase):
                 visibility:document.visibilityState,
                 tableWidth:e.querySelector('table').getBoundingClientRect().width})""")
         print('TABLE_KEYBOARD_BEFORE='+json.dumps(scroll_state()), flush=True)
+        before = scroll_state()
+        self.assertGreater(before['scrollWidth'], before['clientWidth'])
+        self.assertTrue(before['focused'])
+        self.assertEqual(before['overflowX'], 'auto')
         page.keyboard.press('ArrowRight')
-        try:
-            page.wait_for_function('document.querySelector(".table-scroll").scrollLeft > 0')
-        finally:
-            print('TABLE_KEYBOARD_AFTER='+json.dumps(scroll_state()), flush=True)
+        # Browser-side rAF polling can stop in java_script_enabled=False contexts.
+        # Read native state through separate protocol evaluations instead.
+        deadline = time.monotonic() + timeout
+        while region.evaluate('e=>e.scrollLeft') <= before['scrollLeft'] and time.monotonic() < deadline:
+            time.sleep(.05)
+        after = scroll_state()
+        print('TABLE_KEYBOARD_AFTER='+json.dumps(after), flush=True)
+        self.assertGreater(after['scrollLeft'], before['scrollLeft'])
+        self.assertTrue(after['focused'])
+
+    def test_keyboard_scroll_probe_rejects_blocked_arrow_keys(self):
+        # Test-only mutation: prove focus/overflow alone cannot satisfy movement.
+        page = self.page('graded', width=390)
+        region = page.get_by_role('region', name='Semester performance')
+        region.evaluate("e=>e.addEventListener('keydown',window.blockArrow=e=>e.preventDefault())")
+        with self.assertRaisesRegex(AssertionError, 'not greater than'):
+            self.assert_keyboard_horizontal_scroll(page, region, timeout=.3)
+        region.evaluate("e=>e.removeEventListener('keydown',window.blockArrow)")
+        self.assert_keyboard_horizontal_scroll(page, region)
+
+    def test_native_get_selection_and_table_keyboard_without_js(self):
+        page = self.page('graded', width=390, javascript=False)
+        region = page.get_by_role('region', name='Semester performance')
+        self.assertEqual(region.locator('tbody tr').count(), 2)
+        self.assert_keyboard_horizontal_scroll(page, region)
         captured = []
         def respond(route):
             if 'semester=' in route.request.url:
