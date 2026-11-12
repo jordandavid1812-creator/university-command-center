@@ -1,0 +1,25 @@
+theme,pair,foreground,background,ratio,required,result
+light,primary text / surface,#172A2A,#FFFFFF,14.99,4.5,pass
+light,muted text / canvas,#536466,#F7F8F6,5.83,4.5,pass
+light,primary button label / fill,#FFFFFF,#176B5B,6.38,4.5,pass
+light,primary hover label / fill,#FFFFFF,#105646,8.60,4.5,pass
+light,link / surface,#176B5B,#FFFFFF,6.38,4.5,pass
+light,active nav text / fill,#105646,#E5F3EC,7.52,4.5,pass
+light,control boundary / surface,#7B8D86,#FFFFFF,3.50,3,pass
+light,focus / canvas,#925A00,#F7F8F6,5.35,3,pass
+light,success text / fill,#146344,#E7F4EC,6.40,4.5,pass
+light,warning text / fill,#7A4B00,#FFF3D6,6.72,4.5,pass
+light,error text / fill,#A52839,#FFF0F1,6.41,4.5,pass
+light,info text / fill,#254C87,#EDF3FC,7.65,4.5,pass
+dark,primary text / surface,#F0F5F2,#172321,14.67,4.5,pass
+dark,muted text / canvas,#B4C4BC,#101918,9.85,4.5,pass
+dark,primary button label / fill,#10251D,#87D4BD,9.34,4.5,pass
+dark,primary hover label / fill,#10251D,#A2E2CE,10.97,4.5,pass
+dark,link / surface,#87D4BD,#172321,9.38,4.5,pass
+dark,active nav text / fill,#A2E2CE,#203E32,7.96,4.5,pass
+dark,control boundary / surface,#76988A,#172321,5.10,3,pass
+dark,focus / surface,#E8B75C,#172321,8.75,3,pass
+dark,success text / fill,#9DE3BE,#173A2B,8.45,4.5,pass
+dark,warning text / fill,#F2D28D,#3C301B,8.82,4.5,pass
+dark,error text / fill,#FFADB6,#3F222A,8.08,4.5,pass
+dark,info text / fill,#B4D0FF,#20314C,8.35,4.5,pass
