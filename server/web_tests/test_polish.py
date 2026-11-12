@@ -23,7 +23,14 @@ class WebsitePolishTests(WebsiteCase):
         response = self.client_a.get('/')
         self.assertNotContains(response, 'Start with one semester')
         self.assertContains(response, '?status=overdue')
+        # The seeded assignment is due 11 Nov 2026; pin the request's local date so
+        # this test does not start failing once that fixture date is in the past.
+        with patch('student_web.views.timezone.localdate', return_value=date(2026, 11, 11)):
+            response = self.client_a.get('/')
         self.assertContains(response, 'Review 0 overdue assignments')
+        with patch('student_web.views.timezone.localdate', return_value=date(2026, 11, 12)):
+            overdue = self.client_a.get('/')
+        self.assertContains(overdue, 'Review 1 overdue assignments')
 
     def test_course_search_matches_code_and_name_case_insensitively(self):
         self.seed()
