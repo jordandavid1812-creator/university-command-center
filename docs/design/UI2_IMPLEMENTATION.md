@@ -139,3 +139,14 @@ Hosted CI is reported with the exact head/run after completion, not predeclared 
 ## Native table-keyboard test follow-up
 
 [Actual browser diagnostics and reproducible polling probe](UI2_TABLE_KEYBOARD_DIAGNOSTICS.md) explain the no-JavaScript wait correction. Native focus, genuine overflow and keyboard movement remain required; a blocked-key mutation proves the assertion rejects failed scrolling. UI2 now has 12 browser methods; UI1 and premium-auth assertions are unchanged. U1–U4 remain intact and owner approval remains recorded.
+
+## Final independent-review conditions
+
+Claude's review of `bbcec0da4554032887811e0c359e1c9f8181224a` returned **APPROVE WITH CONDITIONS**. The U1–U4 implementation, keyboard-scrolling correction, calculations, isolation and zero-additional-query evidence remain unchanged. The 359 regression /27 browser results above are historical evidence for that reviewed head; documentation-only successor CI is recorded separately in PR #44.
+
+| Condition | Disposition and acceptance task |
+| --- | --- |
+| **P44-1 — shared metadata typography** | **Outstanding owner decision.** [UI1's temporary 12px exception](UI1_IMPLEMENTATION_REVIEW.md) committed to aligning shared supporting metadata to the 14px `--type-meta` token in UI2. That commitment is not completed by this PR. **Proposed disposition: defer to UI10 — Integrated Frontend Quality; not owner-approved.** Record explicit owner approval before treating the schedule change as accepted. Until then this review condition remains open; no approval is inferred from U2 approval, this documentation task or passing CI. Preserve the distinction between supporting metadata and intentional 12px eyebrows/captions. |
+| **P44-2 — enlarged-text table headers** | The pre-existing mid-word wrapping of performance-table headers at enlarged text is an explicit **UI6 acceptance task**, not a resolved defect. On the actual GPA/CGPA comparison tables, verify readable header words at 150%/200% text, meaningful column widths, and keyboard-accessible local scrolling when the genuine two-dimensional table overflows; preserve complete values, semantic headers and focus order. Include 1280/1440 desktop and mobile/reflow evidence. No shared CSS or table implementation is changed here. |
+
+Independent review of the corrected exact documentation head remains required, followed by separate owner merge authorization. No UI3, implementation redesign or security change is included.
