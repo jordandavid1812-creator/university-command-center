@@ -13,6 +13,8 @@
   --color-border-subtle:#D9E0DC;
   --color-border-control:#7B8D86;
   --color-focus:#925A00;
+  --color-focus-inverse:#E8B75C;
+  --color-shadow:rgb(23 42 42 / 2%);
   --color-success-text:#146344;
   --color-success-bg:#E7F4EC;
   --color-warning-text:#7A4B00;
@@ -136,9 +138,9 @@ a,button,summary {
   background:var(--accent);
   color:var(--color-on-primary);
   border-radius:12px;
-  flex:0 0 42px;
-  width:42px;
-  height:42px;
+  flex:0 0 2.625rem;
+  width:2.625rem;
+  height:2.625rem;
   font-weight:800;
   letter-spacing:-1px
 }
@@ -170,6 +172,7 @@ a,button,summary {
   color:var(--color-active-text);
   font-weight:700
 }
+.nav-link.active:hover { text-decoration:underline; text-decoration-thickness:2px; }
 .nav-mark {
   font-size:.75rem;
   color:inherit;
@@ -256,7 +259,7 @@ a,button,summary {
 .hero .eyebrow {
   color:var(--color-inverse-text)
 }
-.hero :focus-visible { outline-color:#E8B75C; }
+.hero :focus-visible { outline-color:var(--color-focus-inverse); }
 .hero-link {
   color:var(--color-surface);
   font-weight:650
@@ -342,7 +345,7 @@ h3 {
   border-radius:var(--radius);
   margin-bottom:24px;
   min-width:0;
-  box-shadow:0 2px 6px #17243b03
+  box-shadow:0 2px 6px var(--color-shadow)
 }
 .two-columns {
   display:grid;
@@ -393,7 +396,7 @@ h3 {
   background:var(--color-error-text);
   border-color:var(--color-error-text)
 }
-.button.danger:hover { background:var(--color-error-text); border-color:var(--color-error-text); }
+.button.danger:hover { background:var(--color-error-text); border-color:var(--color-error-text); text-decoration:underline; }
 .button:disabled {
   opacity:.55;
   cursor:not-allowed
@@ -936,8 +939,7 @@ legend {
   .action-row>.button {
     width:100%
   }
-  .hero :focus-visible { outline-color:#E8B75C; }
-.hero-link {
+  .hero-link {
     padding:5px 0
   }
   .deadline-list li {
@@ -1006,9 +1008,11 @@ legend {
 }
 
 /* Existing page composition stays intact in UI1. */
-.dashboard-heading { align-items:flex-start; gap:var(--space-6); }
+/* Reserve readable heading space; actions move to a new row at text zoom. */
+.dashboard-heading { align-items:flex-start; flex-wrap:wrap; gap:var(--space-6); }
+.dashboard-heading > div:first-child { flex:1 1 28rem; min-width:0; }
 .dashboard-heading h1 { font-size:clamp(1.5rem,2.5vw,2rem); }
-.dashboard-heading .action-row { flex-shrink:0; margin:0; }
+.dashboard-heading .action-row { flex:0 1 auto; max-width:100%; margin:0; }
 .onboarding { border-left:4px solid var(--accent); margin-bottom:var(--space-6); }
 .onboarding h2 { margin-bottom:var(--space-2); }
 .onboarding ol { padding-left:var(--space-6); margin:var(--space-2) 0; }

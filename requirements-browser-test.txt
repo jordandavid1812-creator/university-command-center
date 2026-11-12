@@ -1,0 +1,2 @@
+# Test-only; never install in the application image.
+playwright==1.65.0
