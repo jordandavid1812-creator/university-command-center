@@ -41,7 +41,10 @@ prove transaction outcome or revoke any prior session.
 The owner's original seven approved principles are quoted below. The related
 [PR #57](https://github.com/jordandavid1812-creator/university-command-center/pull/57)
 at `ef661d0cd984334101944b42f16c54abfeaaa582` records the original decision;
-the current owner follow-up confirms its authority and the later clarifications.
+the [owner confirmation comment #6851072382](https://github.com/jordandavid1812-creator/university-command-center/pull/54#issuecomment-6851072382),
+posted by `jordandavid1812-creator` on 13 November 2026, confirms the original
+approval and later B1c clarifications. It expressly limits confirmation to design
+policy, without implementation, merge, PR closure, activation or deployment authority.
 
 > 1. Preserve existing handled contracts.
 > 2. Use the Revision 5 bounded SQLSTATE classification algorithm.
@@ -50,6 +53,12 @@ the current owner follow-up confirms its authority and the later clarifications.
 > 5. Classify opaque and unknown exception chains conservatively.
 > 6. Use template-free, database-independent error responses.
 > 7. Include `Retry-After` only for `OUTAGE`.
+
+Principle 3 above preserves the original owner quotation exactly; it is not
+rewritten to add the word “handling”. Revision 5 §6.4 describes the underlying
+exception separately: “Programming errors at the role check stay 503.” The review's
+phrase “role-boundary handling contract” describes that contract but is not a
+correction to the owner's quoted words. Neither wording expands the policy.
 
 ### Later explicit owner clarifications — separately approved
 
@@ -380,7 +389,9 @@ acceptance work; existing hosted CI proves baseline preservation only.
 | R3 | Unknown OperationalError-family defect matrix and instance-read-removal production routing mutation required; B1b masking and single walker unchanged. |
 | R4 (informational) | No new classifier-failure event type; existing diagnostic limitation recorded for possible future review. |
 
-The owner reports a final independent **APPROVE (design only)** review of the
-preceding head `652af3795308cb3baa643e736f0fdd6a265ef030`. These R1–R3 follow-ups
-require focused verification at the corrected exact head; that historical design
-approval is not code approval or an implementation work order.
+Claude's **involved-author design reviews** returned **APPROVE (design only)**
+for `652af3795308cb3baa643e736f0fdd6a265ef030` and the R1–R3 follow-up head
+`d1ce46be8afd8fe58e1d07a12cba3fdcc8f2aeab`. Claude authored Revision 5 and PR #57
+and reviewed B1a/B1b; these reviews are not independent security approval.
+Focused verification of this attribution-only correction remains appropriate;
+no historical design review is code approval or an implementation work order.
