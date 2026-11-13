@@ -1,6 +1,8 @@
-# B1b logging privacy — proposed design amendment
+# B1b logging privacy — design amendment and owner decision record
 
-Status: **DESIGN ONLY; D-B1-4(a–f) PENDING; no implementation authorized.**
+Status: **DESIGN ONLY; D-B1-4(a–f) OWNER-APPROVED; no implementation authorized.**
+This decision-record update requires separate independent review; it is not a
+review approval or authority to merge this PR.
 Baseline: master `3a4fff14421d8f79422df901027213da75a7cecc` (merged B1a).
 This amendment resolves B1B-1–B1B-7 and subsequent design findings N1–N4,
 and takes precedence for B1b details that
@@ -30,27 +32,42 @@ logging. CPython's default Handler.handleError can print raw record arguments an
 tracebacks to stderr. A root logger filter does not filter propagated children.
 B1a's AccountsConfig/checks only provide the timer flag and E101.
 
-## Owner decisions — recommendations, not approvals
+## Owner decisions — approved design, separate execution gates
 
-All six entries below are **PENDING**. Previous approval of B1a or its D-B1-5
-slice does not approve this logging policy or its new hooks/email gate.
+**Owner decision recorded 13 November 2026 (Africa/Lagos).** Source: the project
+owner's explicit “MASTER SECURITY COMPLETION AND LAUNCH EXECUTION PROMPT” work
+order in this conversation, under “CONFIRMED OWNER DECISIONS” and “START NOW”.
+It states: **“D-B1-4(a–f) are APPROVED”** and **“These are approved design decisions,
+not blanket authorization to merge, implement, activate or deploy.”** The same
+work order authorizes Phase 1 documentation only and explicitly includes sanitized
+sys.excepthook, threading.excepthook and sys.unraisablehook.
 
-| Decision | State | Recommendation requiring explicit owner approval |
+This supersedes the PENDING labels at `48631a0` for these six decisions only. It
+does not mean the new documentation head has already passed independent review.
+
+| Decision | State | Approved design scope |
 | --- | --- | --- |
-| D-B1-4(a) | **PENDING** | Enforce the six protected profiles below; preserve the excluded/offline profiles. Future Stage C must explicitly opt in. |
-| D-B1-4(b) | **PENDING** | Fixed-label output only, accepting lost messages, traceback detail and reduced troubleshooting information. |
-| D-B1-4(c) | **PENDING** | Minimal exact-type frozen FailureEvent and plain Enum foundation; no B1c classifier or live event emission. |
-| D-B1-4(d) | **PENDING** | Startup graph validation plus source audits/code review; prohibit runtime reconfiguration without claiming Python logging is immutable. |
-| D-B1-4(e) | **PENDING** | Sanitized stderr output, replacement lastResort, removal of raw development request lines and admin-email handlers; tolerate safe loss of a log when its stream fails. |
-| D-B1-4(f) | **PENDING** | Fail-closed exact-class E105 allow-list and ordinary (not deploy-only) secure-profile E104/E105 checks; sanitized process/thread hooks with mandatory N1 containment; optional unraisable hook only if explicitly selected. Accept documented bypass boundaries. External logging, retention/export and deployment acceptance stay operational work. |
+| D-B1-4(a) | **APPROVED** | Enforce the six protected profiles; preserve excluded/offline profiles. Future Stage C must explicitly opt in. |
+| D-B1-4(b) | **APPROVED** | Fixed-label output, accepting diagnostic/message/traceback loss. |
+| D-B1-4(c) | **APPROVED** | Minimal exact-type frozen FailureEvent with plain Enums; no B1c classifier or live event emission. |
+| D-B1-4(d) | **APPROVED** | Startup graph enforcement plus source audits/code review; no guaranteed runtime immutability. |
+| D-B1-4(e) | **APPROVED** | Sanitized stderr/lastResort, loss of development request lines, removal of admin-email handlers and safe log loss on stream failure. |
+| D-B1-4(f) | **APPROVED** | Ordinary secure E104/E105 checks, initially empty exact-class email allow-list, and sanitized main/thread/**unraisable** hooks with mandatory N1 containment. Documented raw-output risks accepted only for synthetic development/planning; external logging and retention remain operational gates. |
 
-D-B1-6 remains a later classification decision. Existing B1a approvals are neither
-rescinded nor expanded. Implementation requires independent design review and
-separate owner authorization, even if this documentation PR is merged.
+The owner selected **inclusion** of sys.unraisablehook; it is no longer an optional
+B1b scope choice. No real email backend, provider, production timer or deployment
+is approved. D-B1-6 remains a later classification decision. Prior B1a approvals
+are neither rescinded nor expanded.
+
+**Execution gates remain closed:** independently review this updated design head;
+then obtain owner authorization to merge that exact reviewed head. Separately
+obtain a B1b implementation work order before any production-code change. Each
+later implementation merge, activation, infrastructure, staging or launch requires
+its own applicable gate. No B1b–B1d implementation is authorized by this record.
 
 ## B1B-1: independent email channel and proposed E105
 
-**N2 proposal, pending D-B1-4(f):** `accounts.E105` uses a fail-closed
+**N2 design policy, owner-approved under D-B1-4(f), not implemented:** `accounts.E105` uses a fail-closed
 **exact-class allow-list**, initially empty. No backend class is approved by this
 document. A future separately reviewed decision may authorize **one** exact
 backend class; store that identity in reviewed code, not an arbitrary environment
@@ -93,13 +110,15 @@ Development remains compatible with console/file email and synthetic data only.
 Test profiles may retain in-memory email. No transport, outbox or email-setting
 change is part of B1b. Console stdout and file messages remain raw channels in
 non-secure profiles; never treat logging sanitation as email redaction.
-Policy requires D-B1-4(f) approval.
+The owner approved this design policy under D-B1-4(f); implementation and
+real-backend approval remain separate gates.
 
 ## B1B-2/B1B-3: protected lifecycle and raw exception hooks
 
 Only `log_privacy.configure(namespace)` sets `UCC_LOG_PRIVACY="enforce"`.
 Call it from auth_common. During **protected settings configuration**, install
-safe `logging.lastResort`, `sys.excepthook` and `threading.excepthook`, before
+safe `logging.lastResort`, `sys.excepthook`, `threading.excepthook` and
+`sys.unraisablehook`, before
 AccountsConfig.ready. Ready validates their identities and the final logging
 graph rather than waiting until then to replace lastResort. Configuration is
 idempotent and must not wrap a previous hook repeatedly. Early-loaded handler/
@@ -141,16 +160,16 @@ a shared helper's propagation rule cannot override the hook containment boundary
 Subprocess tests must distinguish original exception types from injected emission
 failures and assert both output privacy and exit/thread behavior.
 
-**N3 optional defense in depth, PENDING D-B1-4(f):** a sanitized
-`sys.unraisablehook` may additionally cover unraisable errors (for example finalizer
-failures). It is not approved or automatically included. If selected, install it
-at the same protected configuration phase and apply the **same all-BaseException
-containment**. Never print err_msg, repr(object), traceback or exception message;
+**N3 owner-selected defense in depth, APPROVED under D-B1-4(f):** include a
+sanitized `sys.unraisablehook` in the future B1b scope for unraisable errors (for
+example finalizer failures). It is not implemented here. Install it at the same
+protected configuration phase and apply the **same all-BaseException containment**. Never print err_msg, repr(object), traceback or exception message;
 retain no object/exception reference. Return without altering program exit/lifetime
 semantics. Require sentinel and injected-hook-failure subprocess tests. It does
 not cover native/fatal errors, bootstrap failures or arbitrary direct output.
-Excluded profiles retain their original unraisable hook. Until explicitly approved
-and implemented, unraisable output remains outside the proposed minimum policy.
+Excluded profiles retain their original unraisable hook. Until the separately
+authorized implementation and its tests pass, existing unraisable output remains
+unprotected; design approval alone does not install the hook.
 
 The pre-settings bootstrap boundary is unavoidable here. Early lastResort protects
 otherwise-unhandled logging **after** configure is called; it cannot retroactively
@@ -173,12 +192,12 @@ paths can still print directly. Name and test the actual output mechanism:
   os._exit, SIGKILL and custom wrappers that print exceptions themselves.
 - Raw stdout/stderr, uncaptured warnings, non-integer SystemExit messages and
   external web-server/proxy/email-backend output.
-- Later replaced hooks/handlers and unraisable output unless the optional sanitized
-  unraisable hook is explicitly approved and implemented.
+- Later replaced hooks/handlers; unraisable output remains raw until the approved
+  sanitized hook is implemented, and remains excluded in inactive profiles.
 
 Hooks cannot retroactively sanitize any of these writes. Keep trusted synthetic
 operation only until operational acceptance. N1 containment is a safety requirement;
-new hook/activation policies still require D-B1-4(f) approval.
+D-B1-4(f) approves the hook design, not implementation or activation.
 
 ## B1B-4: outer label and shared bounded walk
 
@@ -288,7 +307,7 @@ not just assertLogs. Seed distinct synthetic sentinels and assert none escape.
 | Walker | Explicit cause versus context, suppression, cycles, 16/17 nodes, opaque outer/inner wrappers, recognized/unrecognized subclasses, ExceptionGroup/BaseExceptionGroup, str/repr traps and malformed attributes; N4 class-code precedence over instance data, missing/malformed/raising class SQLSTATE attributes, lookup mismatch and raising diagnostics with placeholder output. |
 | Emission | One write per safe line; re-entry through a stream or serializer; constant fallback only for preparation failure; failed/short stream writes produce no second write; no raw default handleError; process controls propagate in the normal handler only, never out of exception-hook bodies. |
 | Early/uncaught | Fresh process logs after protected configure but before configure_logging/ready. For **each main and thread hook**, inject KeyboardInterrupt, SystemExit, GeneratorExit and ordinary Exception from emission. A sentinel-bearing original exception must never appear on stderr, nor raw `Original exception was`/`Exception ignored` sensitive details. Original main failure stays non-zero; original worker failure terminates only its worker and main continues normally. Test original process controls separately. Mutation restoring unsafe hook propagation must be exercised and make these assertions fail. |
-| Optional unraisable hook | If owner selects it: synthetic finalizer/unraisable sentinel, object repr/err_msg traps, all four injected emission failures, no raw `Exception ignored` details, no retained references and unchanged exit behavior. Otherwise assert it remains unchanged and document the gap. |
+| Included unraisable hook | Required by the owner-approved scope: synthetic finalizer/unraisable sentinel, object repr/err_msg traps, all four injected emission failures, no raw `Exception ignored` details, no retained references and unchanged exit behavior. Assert excluded profiles retain their original hook. No claim of protection before implementation. |
 | Profiles/email | Exact protected graph/hooks/lastResort. Both `check` **and** `check --deploy --settings=config.settings.web_secure` report E105 with an empty allow-list, console/file, subclasses, delegating wrappers, unknown/unimportable backend classes; E104 catches either DEBUG flag without --deploy. Use no-network test-only exact-class approval fixture for a positive case, never production approval. Reject a subclass of that fixture. Development/locmem compatibility retained; excluded profiles get no E104/E105 errors; registration cannot be skipped by missing logging policy. |
 | Direct-output boundaries | Capture and distinguish --traceback re-raise reaching the hook from CommandError/command-caught print output; socketserver.handle_error, wsgiref log_exception, unittest output and pre-settings failures. Use synthetic data only; do not falsely count these channels as sanitized or change server/command behavior in B1b. |
 | Exclusions | Fresh subprocess per auth_migration/development/runtime/test/security_test: original logging/hooks retained, no E102/E103/E105 leakage; check and migration plan plus disposable provisioning work. Protected clear_auth_artifacts keeps B1a timers; no invented exemption. |
@@ -302,13 +321,14 @@ R5-T2 source: [independent Revision 5 review, PR #42](https://github.com/jordand
 
 Future B1b changes: exception_chain, logging and log_privacy modules; minimal
 AccountsConfig/check/config wiring, secure flags, ordinary E104/E105 checks and contained exception-hook setup
-(optional unraisable only if owner selects it);
+(including the owner-selected unraisable hook);
 focused tests and documentation. No database queries in configuration/sanitizer,
 no new credentials, dependencies, backend transport or exception-routing changes.
 Stage C's eventual preflight must run E101–E105 under its exact profile. Logging
 retention/export, Gunicorn/Caddy redaction and reliable recovery remain separate.
 
-Accept only after owner decisions, separate implementation authorization,
+Design decisions D-B1-4(a–f) are approved. Accept implementation only after its
+separate authorization,
 independent code review, full D/G/F gates, R5-T2, negative controls and exact-head
 hosted evidence. Any secret at a covered sink, unsafe graph, missing exercise,
 profile leakage or historical regression blocks acceptance; do not weaken tests.
@@ -329,13 +349,13 @@ accepted staging or public readiness. Stop for separate design review.
 | Finding | Design disposition |
 | --- | --- |
 | N1 | Mandatory all-BaseException containment at hook boundaries; normal handler propagation kept separate. Main/thread failure and unsafe-propagation mutation requirements added. |
-| N2 | Empty-or-one reviewed exact-class allow-list; ordinary secure E104/E105 checks with registration/execution, command and WSGI boundaries explicit. Policy pending owner approval. |
-| N3 | --traceback paths classified by their real output mechanism; named raw server/command/test/bootstrap/external channels; optional contained unraisable hook remains pending. |
+| N2 | Empty-or-one reviewed exact-class allow-list; ordinary secure E104/E105 checks with registration/execution, command and WSGI boundaries explicit. Design policy approved; implementation and real-backend approval still gated. |
+| N3 | --traceback paths classified by their real output mechanism; named raw server/command/test/bootstrap/external channels; contained unraisable hook is now explicitly included by owner design approval, not implemented. |
 | N4 | Validated recognized-class SQLSTATE first; no diagnostic-instance fallback in the initial proposal; malformed/missing/raising attribute tests and safe placeholders required. |
 
-No N1–N4 policy is implemented here. D-B1-4(a–f) remain PENDING. Before an
-implementation work order, the owner must approve the E105 identity/activation
-policy and explicitly include or exclude the optional unraisable hook. If the
-allow-list remains empty, secure checks are intentionally blocked; there is no
-implicitly approved email provider/backend. Remaining raw-output boundaries and
-runtime mutability are not removed by these corrections.
+No N1–N4 policy is implemented here. D-B1-4(a–f) are owner-approved as design
+choices, and sys.unraisablehook is included. The initially empty allow-list still
+blocks secure email checks until a real backend is separately reviewed, approved
+and configured. Raw-output boundaries and runtime mutability remain. Independent
+review of this documentation update and exact-head merge approval are next;
+B1b implementation requires a separate explicit authorization.
