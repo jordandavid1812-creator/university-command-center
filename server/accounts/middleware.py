@@ -19,3 +19,32 @@ class DatabaseRoleBoundaryMiddleware:
         except (ImproperlyConfigured, DatabaseError):
             return HttpResponse('The service is not configured safely.', status=503)
         return self.get_response(request)
+
+
+class AuthFailureMiddleware:
+    """View exceptions only; response-phase failures use both URL-root handlers."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_exception(self, request, exception):
+        from .failure_classification import classify_database_failure
+        from .failure_response import failure_response
+        from .logging import FailureCategory, FailureEvent, EventKind
+        import logging
+        try:
+            result = classify_database_failure(exception)
+        except Exception:
+            category, code = FailureCategory.DEFECT, None
+        else:
+            if result.category not in (FailureCategory.OUTAGE,
+                                      FailureCategory.CONNECTION_UNAVAILABLE,
+                                      FailureCategory.CONFIGURATION):
+                return None
+            category, code = result.category, result.sqlstate
+        logging.getLogger('accounts.failures').error(
+            'failure', extra={'request': request,
+                              'ucc_event': FailureEvent(EventKind.FAILURE, category, code)})
+        return failure_response(category)

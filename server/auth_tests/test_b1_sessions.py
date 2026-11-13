@@ -150,8 +150,8 @@ class SessionUnitTests(AuthenticationCase):
             with transaction.atomic(using='default'):
                 Session.objects.using('default').select_for_update().get(pk=old)
                 response=pool.submit(thread_call(request)).result(timeout=15)
-        self.assertEqual(response.status_code,400)
-        # L-3: the 400 must come from a real lock timeout on the response session UPDATE.
+        self.assertEqual(response.status_code,503)
+        # L-3: the 503 must come from a real lock timeout on the response session UPDATE.
         self.assertEqual(len(errors),1)
         self.assertTrue(errors[0][0].startswith('UPDATE "django_session" SET'))
         self.assertEqual(errors[0][1],'55P03')
@@ -169,7 +169,7 @@ class SessionUnitTests(AuthenticationCase):
             with transaction.atomic(using='default'):
                 Student.objects.using('default').select_for_update().get(pk=self.a.pk)
                 response=pool.submit(thread_call(request)).result(timeout=15)
-        self.assertEqual(response.status_code,500);self.no_new_cookie(response,old)
+        self.assertEqual(response.status_code,503);self.no_new_cookie(response,old)
         self.assertEqual(Session.objects.using('auth').get(pk=old).get_decoded()[SESSION_KEY],str(self.a.pk))
         self.assertTrue(Student.objects.using('auth').get(pk=self.a.pk).check_password(PASSWORD))
 
@@ -207,16 +207,16 @@ class SessionUnitTests(AuthenticationCase):
                             if phase=='L0':AuthThrottle.objects.using('default').select_for_update().get(pk=bucket)
                             else:Student.objects.using('default').select_for_update().get(pk=self.a.pk)
                             response,raised=pool.submit(thread_call(request)).result(timeout=15)
-                    self.assertEqual(response.status_code,500)
+                    self.assertEqual(response.status_code,503)
                     # L-3: exactly the nominated statement failed with a real lock timeout,
-                    # and that exception (not another error) produced the 500.
+                    # and that exception (not another error) produced the classified response.
                     self.assertEqual(len(errors),1)
                     statement,state_code=errors[0]
                     self.assertEqual(state_code,'55P03')
                     if phase=='L0':self.assertTrue(statement.startswith('INSERT INTO accounts_auththrottle'))
                     else:self.assertTrue(statement.startswith('SELECT') and 'FROM "accounts_student"' in statement
                                          and statement.endswith('FOR UPDATE'))
-                    self.assertEqual(raised,['55P03'])
+                    self.assertEqual(raised,[])  # B1c consumes the proven outage before got_request_exception.
                     self.no_new_cookie(response,old)
                     after=list(Session.objects.using('auth').values_list('session_key','session_data','expire_date'))
                     self.assertEqual(after,before)
