@@ -129,6 +129,14 @@ jobs:
           PGTESTDATABASE: test_ucc_b1a_web
           PYTHONPATH: tools
         run: python server/manage.py test auth_tests.test_b1_settings auth_tests.test_b1_database auth_tests.test_b1_sessions auth_tests.test_b1_measurements b1a_negative_controls --settings=config.settings.web_test -v 2
+      - name: B1b logging privacy under website root with production mutation controls
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_b1b_logging
+          PYTHONPATH: tools
+        run: python server/manage.py test auth_tests.test_b1b_logging auth_tests.test_b1b_profiles auth_tests.test_b1b_integration b1b_negative_controls --settings=config.settings.web_test -v 2
       - name: Student website integration, calculations and accessibility structure tests
         env:
           PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
