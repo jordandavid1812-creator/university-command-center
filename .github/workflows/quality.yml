@@ -74,6 +74,7 @@ jobs:
       UCC_AUTH_ROLE: ucc_auth_ci
       UCC_SECURITY_SCRATCH_DATABASE: ucc_security_scratch
       UCC_DISPOSABLE_TEST_CLUSTER: '1'
+      UCC_TEST_DBA_USER: ucc_ci
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -137,6 +138,14 @@ jobs:
           PGTESTDATABASE: test_ucc_b1b_logging
           PYTHONPATH: tools
         run: python server/manage.py test auth_tests.test_b1b_logging auth_tests.test_b1b_profiles auth_tests.test_b1b_integration b1b_negative_controls --settings=config.settings.web_test -v 2
+      - name: B1c classification, rendering and transaction gates under website root
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_b1c_web
+          PYTHONPATH: tools
+        run: python server/manage.py test auth_tests.test_b1c_classification auth_tests.test_b1c_database auth_tests.test_b1c_transactions b1c_negative_controls --settings=config.settings.web_test -v 2
       - name: Student website integration, calculations and accessibility structure tests
         env:
           PGUSER: ${{ env.UCC_MIGRATION_ROLE }}

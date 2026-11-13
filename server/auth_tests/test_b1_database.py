@@ -178,7 +178,7 @@ class DatabaseTimerTests(AuthenticationCase):
                 Student.objects.using('default').select_for_update().get(pk=self.a.pk)
                 locked.set()
                 status,commits=future.result(timeout=15)
-        self.assertEqual(status,500);self.assertEqual(commits,0)
+        self.assertEqual(status,503);self.assertEqual(commits,0)
         saved=self.observe('SELECT password FROM accounts_student WHERE id=%s',[self.a.pk])[0][0]
         self.assertNotEqual(saved,weak);self.assertTrue(check_password(PASSWORD,saved))
         self.assertEqual(self.observe('SELECT attempts FROM accounts_auththrottle'),[(1,)])
@@ -198,7 +198,7 @@ class DatabaseTimerTests(AuthenticationCase):
         with ThreadPoolExecutor(max_workers=1) as pool:
             with transaction.atomic(using='default'):
                 AuthThrottle.objects.using('default').select_for_update().get(pk=row.pk)
-                self.assertEqual(pool.submit(thread_call(login)).result(timeout=15),(500,1))
+                self.assertEqual(pool.submit(thread_call(login)).result(timeout=15),(503,1))
         self.assertEqual(self.observe('SELECT attempts FROM accounts_auththrottle WHERE bucket=%s',[row.pk]),[(1,)])
 
     def test_explicit_rollback_and_real_commit_then_lost_ack_are_distinct(self):

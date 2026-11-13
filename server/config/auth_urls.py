@@ -15,3 +15,6 @@ account_patterns = [
     path('academic/assignments/<uuid:identifier>/delete/', views.delete_assignment, name='delete-assignment'),
 ]
 urlpatterns = [path('accounts/', include((account_patterns, 'accounts')))]
+
+handler400 = 'accounts.failure_handlers.auth_bad_request'
+handler500 = 'accounts.failure_handlers.auth_server_error'

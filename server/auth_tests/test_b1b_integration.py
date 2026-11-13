@@ -58,14 +58,14 @@ class RequestSinkTests(AuthenticationCase):
             with transaction.atomic(using='default'):
                 Session.objects.using('default').select_for_update().get(pk=key)
                 response=pool.submit(thread_call(lambda:self.login(client))).result(timeout=15)
-        self.assertEqual(response.status_code,400);self.assert_private(stream)
+        self.assertEqual(response.status_code,503);self.assert_private(stream)
         self.assertIn('55P03',stream.getvalue())
         stream=StringIO()
         def delayed(execute,sql,params,many,context):
             if 'INSERT INTO accounts_auththrottle' in sql:execute('SELECT pg_sleep(6)',None,False,context)
             return execute(sql,params,many,context)
         with self.sink(stream),connections['auth'].execute_wrapper(delayed):response=self.login(client)
-        self.assertEqual(response.status_code,500);self.assert_private(stream);self.assertIn('57014',stream.getvalue())
+        self.assertEqual(response.status_code,503);self.assert_private(stream);self.assertIn('57014',stream.getvalue())
 
     def test_real_idle_termination_logs_only_known_labels(self):
         connection=connections['auth'];stream=StringIO()

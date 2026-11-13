@@ -15,6 +15,23 @@ class EventKind(Enum):
 
 class FailureCategory(Enum):
     UNCLASSIFIED = 'UNCLASSIFIED'
+    OUTAGE = 'OUTAGE'
+    CONNECTION_UNAVAILABLE = 'CONNECTION_UNAVAILABLE'
+    CONFIGURATION = 'CONFIGURATION'
+    DEFECT = 'DEFECT'
+    DATABASE_UNPROVEN = 'DATABASE_UNPROVEN'
+    NOT_DATABASE = 'NOT_DATABASE'
+
+
+_CATEGORY_LABELS = {
+    FailureCategory.UNCLASSIFIED: 'UNCLASSIFIED',
+    FailureCategory.OUTAGE: 'OUTAGE',
+    FailureCategory.CONNECTION_UNAVAILABLE: 'CONNECTION_UNAVAILABLE',
+    FailureCategory.CONFIGURATION: 'CONFIGURATION',
+    FailureCategory.DEFECT: 'DEFECT',
+    FailureCategory.DATABASE_UNPROVEN: 'DATABASE_UNPROVEN',
+    FailureCategory.NOT_DATABASE: 'NOT_DATABASE',
+}
 
 
 @dataclass(frozen=True)
@@ -89,7 +106,7 @@ def safe_record(record):
     if (type(event) is FailureEvent and type(event.event) is EventKind
             and type(event.category) is FailureCategory):
         fields['event'] = EventKind.FAILURE.value
-        fields['category'] = FailureCategory.UNCLASSIFIED.value
+        fields['category'] = _CATEGORY_LABELS[event.category]
         fields['sqlstate'] = '-' if event.sqlstate is None else (
             event.sqlstate if known_sqlstate(event.sqlstate) else 'XXXXX')
     safe = logging.LogRecord(fields['logger'], 0, '', 0, 'ucc-log', None, None)

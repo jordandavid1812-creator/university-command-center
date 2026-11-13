@@ -6,6 +6,8 @@ from pathlib import Path
 def configure(namespace):
     from accounts.log_privacy import configure as configure_privacy
     configure_privacy(namespace)
+    from accounts.failure_response import validate_retry_after
+    namespace["UCC_FAILURE_RETRY_AFTER"] = validate_retry_after(namespace.get("UCC_FAILURE_RETRY_AFTER", 5))
     required = namespace["required"]
     namespace["INSTALLED_APPS"] = namespace["INSTALLED_APPS"] + ["django.contrib.sessions"]
     namespace["DATABASES"]["auth"] = deepcopy(namespace["DATABASES"]["default"])
@@ -19,6 +21,7 @@ def configure(namespace):
         "django.middleware.common.CommonMiddleware",
         "django.middleware.csrf.CsrfViewMiddleware",
         "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "accounts.middleware.AuthFailureMiddleware",
         "django.middleware.clickjacking.XFrameOptionsMiddleware",
     ]
     namespace["TEMPLATES"] = [{
