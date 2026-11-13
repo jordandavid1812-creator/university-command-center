@@ -74,19 +74,33 @@ because its planning topics overlap merged code.
 
 ### D-B1-6 authority reconciliation
 
-Keep the exact original policy quotation in
-[canonical #54](https://github.com/jordandavid1812-creator/university-command-center/blob/5a8429a456a0fe7d8be25c51dfc16fd5f6eb3753/docs/security/B1C_IMPLEMENTATION_PROPOSAL.md)
-unchanged. In particular:
+Two owner-attributed repository records differ. These are quotations of those
+**records**, not a determination of the original owner's verbatim instruction:
 
-> Return HTTP 500 for reachable programming defects except the existing role-boundary contract.
+| Durable repository source | Recorded principle 3 |
+| --- | --- |
+| [PR #54 at 5a8429a](https://github.com/jordandavid1812-creator/university-command-center/blob/5a8429a456a0fe7d8be25c51dfc16fd5f6eb3753/docs/security/B1C_IMPLEMENTATION_PROPOSAL.md) | “Return HTTP 500 for reachable programming defects except the existing role-boundary contract.” |
+| [PR #57 at ef661d0](https://github.com/jordandavid1812-creator/university-command-center/blob/ef661d0cd984334101944b42f16c54abfeaaa582/docs/security/B1C_CLASSIFICATION_DECISION_RECORD.md) | “Return HTTP 500 for reachable programming defects, except the existing role-boundary handling contract.” |
 
+The reviewer also reports that the instruction originally delivered to Claude
+included “handling”; a later owner-relayed restatement omitted it. Those private
+versions do not establish source priority here. **Original verbatim wording remains
+unresolved pending an owner GitHub comment explicitly selecting/restating it.**
+Do not silently edit either attributed source or describe one as the authenticated
+original. The semantic classification policy is not changed by this provenance gap.
 Revision5 §6.4 separately says “Programming errors at the role check stay 503.”
-Do not insert “handling” into the owner's quotation to match explanatory wording.
+
 The [owner confirmation #6851072382](https://github.com/jordandavid1812-creator/university-command-center/pull/54#issuecomment-6851072382)
 confirms the seven principles and later academic-wrapper503, existing400,
 query/template-independent new500/503, synthetic Retry-After5/1–300 and guarded
-node.sqlstate clarifications. That comment is design-only; the later explicit
-work orders separately authorized implementation and this exact merge.
+node.sqlstate clarifications, but **does not restate principle 3 verbatim**. It
+therefore supports policy approval, not adjudication between the two quotations.
+That comment is design-only; the later explicit work orders separately authorized
+implementation and this exact merge.
+
+The same provenance correction is recommended for PR54 before its merge; it has
+**not** been applied there because this work order forbids rewriting other PRs
+without separate authorization. This PR changes only the reconciliation report.
 
 #57's class-first plus diag fallback, broad truncated-chain prohibition,
 classifier-error-to-unproven fallback and “no duplicate django.request” guidance
@@ -109,15 +123,21 @@ The following is proposed wording/scope, **not owner-approved copy**.
 
 | ID | Exact trigger | Exact proposed text |
 | --- | --- | --- |
-| W1 | Resolved `accounts:reset-confirm`, POST, B1-handled DB-origin500/503, whether before, during or after an uncertain write | We could not confirm whether your password changed. Try signing in with the password you submitted. If needed, request a new reset link. |
+| W1 | Resolved `accounts:reset-confirm`, POST, B1-handled DB-origin500/503, whether before, during or after an uncertain write | We could not confirm whether your password changed. Your previous password or the new password you submitted may still work. When sign-in is available, try signing in rather than submitting this form again. |
 | W2 | Resolved `accounts:verify`, POST, same DB-origin failures | We could not confirm whether verification completed. Try signing in. If verification is still required, request another verification email. |
-| W3 | Resolved `accounts:password-change`, POST, same DB-origin failures | We could not confirm whether your password changed. Sign in again using the password you submitted. If needed, use password recovery. |
+| W3 | Resolved `accounts:password-change`, POST, same DB-origin failures | We could not confirm whether your password changed. Your previous password or the new password you submitted may still work. When sign-in is available, try signing in rather than submitting this form again. |
 | W0 | GET/form-load failures for those resolved routes | This page is unavailable. Try again later. |
 | W4 (additional target requiring explicit approval) | Existing web-root `student_web.views.server_error` on those three resolved POST routes after a non-DB failure | Select the corresponding W1–W3 text, retaining its existing500/template route; replace only its false “operation could not be completed” claim. All other routes remain unchanged. |
 
 W2 is explicitly **POST only**, narrowing #55's ambiguous “verification request”
 phrase. GET cannot claim a submitted password or completed verification attempt.
-Confirm these triggers and exact text, including recovery advice, with the owner.
+Confirm these triggers and exact text with the owner. W1/W3 now explicitly allow
+the previous password to remain valid and do not make email recovery the default.
+No password is guaranteed to work (concurrent changes/deactivation remain possible).
+Recovery guidance requires a separately verified available path: E105 has no
+approved real backend, and requesting another link currently invalidates older
+ones (RB-5). W2's proposed resend advice also needs that availability decision;
+it is not an assertion that email delivery works or has been approved.
 No automatic resubmission, success/failure assertion or recovery-delivery promise.
 The default auth-root non-DB500 already makes no completion claim; preserve it.
 W4 is outside the original accounts-only wording target and must be approved
@@ -268,7 +288,8 @@ would still not authorize any of them or approve email transport.
 
 | Decision | Recommendation / current status |
 | --- | --- |
-| Documentation #54 | Authorize a historical-status banner/update and focused recheck, then decide its exact-head merge separately |
+| Documentation #54 | Authorize matching provenance correction plus historical-status reconciliation and focused recheck; no edit/merge performed here |
+| Original principle 3 | Owner must explicitly identify the original wording in a durable GitHub comment; policy approval remains confirmed, verbatim attribution unresolved |
 | Documentation #55/#56 | Authorize status reconciliation and separate design review; no merge or execution yet |
 | Competing #57 | Authorize closure without merge after preserving canonical54/owner-comment provenance, or request a corrected archival alternative |
 | B1d W0–W3 | Approve/revise exact text, POST/GET triggers and narrow provenance/constant-group scope above; pending |
@@ -282,3 +303,26 @@ scope decisions, then issue a separate, bounded B1d implementation work order.
 Do not start B2/device/counter integration to “help” B1d. Each later implementation
 needs its own draft PR, real restricted PG17 evidence, disclosed review and owner
 exact-head merge decision. Only PR58 merge was authorized and executed here.
+
+
+## Review follow-up F1–F3
+
+Claude reviewed `c04f50b94a05300aacc300fb81ae94f33b02f6b3`, returned REQUEST CHANGES
+for Medium F1, and disclosed authorship/review involvement. The merge/source/CI
+facts were verified; none changes in this follow-up.
+
+- **F1:** Both differing records are now attributed with immutable source links;
+  no version is labelled the authenticated original and no instruction prohibits
+  the alternative wording. Comment #6851072382 is not misrepresented as a verbatim
+  quotation. Original-source confirmation and PR54's separately authorized matching
+  correction remain outstanding. An acknowledgement that does not select a
+  version or supply a source URL cannot resolve this ambiguity.
+- **F2:** W1/W3 remain unapproved proposals; previous-password validity is explicit,
+  repeated submissions are discouraged, and email recovery is not the default.
+  Recovery/resend guidance depends on verified availability and RB-5 review.
+- **F3:** PR57 closure remains a recommendation requiring separate owner authority;
+  no source PR was rewritten or closed.
+
+No B1d code, policy expansion, further merge, email approval or activation occurs
+through these documentation corrections. Request focused re-review of this head;
+passing documentation CI is not B1d implementation evidence.
