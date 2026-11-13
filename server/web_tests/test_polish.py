@@ -20,7 +20,10 @@ class WebsitePolishTests(WebsiteCase):
 
     def test_existing_workspace_does_not_repeat_first_time_onboarding(self):
         self.seed()
-        response = self.client_a.get('/')
+        # The seeded assignments are due 2026-11-11, so freeze the dashboard's
+        # Lagos "today" before that date; otherwise the count depends on the clock.
+        with patch('student_web.views.timezone.localdate', return_value=date(2026, 11, 10)):
+            response = self.client_a.get('/')
         self.assertNotContains(response, 'Start with one semester')
         self.assertContains(response, '?status=overdue')
         # The seeded assignment is due 11 Nov 2026; pin the request's local date so
