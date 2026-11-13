@@ -1,6 +1,6 @@
 # Package A — B1c classification and safe rendering
 
-**DESIGN ONLY. D-B1-6 PENDING. No implementation/merge/activation authority.**
+**DESIGN ONLY. D-B1-6 seven principles APPROVED; implementation NOT authorized. No implementation/merge/activation authority.**
 Base: `e4bbf8b51bd0ea5a3173c2f4e2b4f4b7b1974cd6`. B1a and B1b are merged;
 [master push run 43380783580](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/43380783580)
 passed all four jobs. Inspected DB logs: PostgreSQL 17.12; 33 foundation + 46
@@ -13,7 +13,7 @@ Authority and ordering: [Revision 5 §6.1–6.14](STAGE_B_IMPLEMENTATION_PLAN.md
 [approved B1b amendment](B1B_LOGGING_DESIGN_AMENDMENT.md) and
 [B1b implementation evidence](B1B_IMPLEMENTATION_EVIDENCE.md). D-B1-4 approvals
 are retained. This work order authorizes documentation only. Independent review,
-D-B1-6 approval and a separate implementation work order precede code changes.
+policy reconciliation and a separate implementation work order precede code changes.
 
 ## Actual source and threats
 
@@ -34,19 +34,37 @@ rollback/revocation claims; automatic retries duplicating writes; unknown/opaque
 chains incorrectly treated as proven outages. A correct error status does not
 prove transaction outcome or revoke any prior session.
 
-## D-B1-6 owner decision record — all items PENDING
+## D-B1-6 owner decision record — APPROVED POLICY
 
-| Choice | Proposed policy awaiting owner approval |
-| --- | --- |
-| Classification | Deterministic six-category policy and whole-chain pass precedence below; opaque/truncated provenance limits accepted. |
-| 400 exception | Genuine deletion and other Django-only session UPDATE failures may remain original 400; **proven** driver programming defects must be minimal 500. |
-| Preserved contracts | Role guard's existing 503 even for ProgrammingError; handled registration and academic contracts unchanged. |
-| Rendering/headers | Minimal no-query/template responses; no-store; Retry-After only for B1 OUTAGE (existing throttle 429 headers unchanged). Proposed **5 seconds**, synthetic candidate only, bounded positive integer 1–300; no automatic retry of security writes. |
-| Diagnostics/limits | B1b typed category extension, safe SQLSTATE transport and unknown-state masking; DEBUG behavior and resource/transport limits below. |
+The owner approved these seven principles (confirmed in the current documentation
+correction work order; related [PR #57](https://github.com/jordandavid1812-creator/university-command-center/pull/57)
+at `ef661d0cd984334101944b42f16c54abfeaaa582` records them):
 
-This record is not approval. The proposed Retry-After value is new policy input
-for review, not an existing production setting. D-B1-6 approval does not authorize
-implementation or merging. No email backend, quota or device policy is approved.
+1. Preserve existing handled contracts.
+2. Use the Revision 5 bounded SQLSTATE classifier.
+3. Reachable programming defects return 500, except preserved handling described below.
+4. Preserve Django-only genuine session-deletion 400 behavior.
+5. Handle opaque and unknown chains conservatively.
+6. B1c-generated failure responses are template-free and database-independent.
+7. Retry-After is restricted to OUTAGE.
+
+Approval is policy only, not permission to implement or merge. The current owner
+work order explicitly clarifies academic-wrapper and existing-handler400
+compatibility. Operational Retry-After values remain **PENDING Stage C measurement**.
+No email backend, quota, device activation or deployment is approved.
+
+### Retry-After validation (P6)
+
+Use **5 seconds in synthetic development**. Accept only an exact built-in int or
+an exact built-in str fully matching ASCII `[0-9]+`, with numeric value **1–300**.
+Bound string length before conversion (at most three digits; leading zeros within
+that bound are accepted), and normalize accepted values to decimal header text.
+Reject bool, float, subclasses, signs, whitespace, non-ASCII digits, units, zero,
+negative, malformed and overlong input. Reject invalid configuration at startup;
+never silently round or substitute a value. Test 1/300, 0/301, `'5'`, `'005'`,
+Unicode digits and hostile/subclass objects. Mutate range, bool exclusion, ASCII
+validation and category gating independently. No automatic retry of security writes.
+Production values require later Stage C evidence and owner operational approval.
 
 ## Classifier contract and precedence
 
@@ -75,19 +93,40 @@ Sanitizer outer OTHER labeling does not confer database provenance. Apply:
    bare Django OperationalError/InterfaceError, opaque inner stop and truncation
    before a driver. These are not proof of an outage.
 
-**SQLSTATE source distinction requiring D-B1-6 review:** B1b's class_sqlstate is
-intentionally a known-class/lookup privacy filter. Do not use it as the sole
-classifier predicate and accidentally discard a syntactically valid new driver
-state. Proposed classifier reads a valid driver class attribute first; if absent
-or malformed, a guarded `node.sqlstate` read on a psycopg.Error node only may supply
-the state, as R5's driver pass requires. Never read diag, message, args or traceback.
-Attribute failures mean no state at that node; unknown well-formed states still
-follow the prefix/default-DEFECT policy. Logging retains its stricter known-state
-lookup mask (XXXXX); classification may therefore know a code the sink suppresses.
-Do not weaken B1b's privacy helper. Include mismatched class/instance state tests.
-An internal classifier bug must not be swallowed into a spurious 400/503: adapters
-fall back to a minimal 500 on ordinary classification failure. Process controls
-propagate. Tests distinguish malformed driver data from classifier-code defects.
+### SQLSTATE source and classifier failure boundaries (P4)
+
+Use the existing B1b bounded walker once. For each reached psycopg.Error node,
+read **guarded `node.sqlstate`**, accepting only an exact str with five ASCII
+`[0-9A-Z]` characters. Do not independently prefer a class attribute or read
+`diag.sqlstate`, args, messages or tracebacks. psycopg normally exposes known
+codes through class attributes and unknown codes through instance attributes;
+normal attribute resolution supplies both. A synthetic class/instance mismatch
+uses the instance-visible code, not a second class-only priority rule. Never
+inspect SQLSTATE on a Django-only node. The whole-walk pass precedence above holds.
+
+An ordinary exception raised by this narrowly guarded SQLSTATE attribute read
+means no state at that node; pass 1 still checks deeper nodes before pass 2.
+Malformed/missing attributes follow the same rule. This is distinct from an
+unexpected walker/classifier failure: **propagate ordinary classifier failures to
+the adapter**, which renders a minimal 500, never falls back to original 400 or
+an invented outage category. Do not reclassify that failure recursively or log
+its raw exception. Process-control BaseExceptions propagate in normal adapters.
+
+B1b `class_sqlstate`/lookup validation remains unchanged: unknown codes are masked
+as XXXXX at the sink even if the classifier knows them. Unknown valid states
+outside approved outage/configuration sets are DEFECT, never false 503 outages.
+Tests cover unknown codes, malformed/non-string/raising attributes, class/instance
+mismatch, hostile traversal attributes, cycles and opaque boundaries. A malformed
+state on a genuine no-state OperationalError may still take the approved pass-2
+CONNECTION_UNAVAILABLE path; it is not proof of a particular SQLSTATE.
+
+Read-only psycopg 3.3.8 observation: `_class_for_state` maps 08ZZZ/28ZZZ/53ZZZ to
+OperationalError, XX999 to InternalError, ZZ999 to DatabaseError. Constructing
+these with `info={DiagnosticField.SQLSTATE: code.encode()}` populates both
+`node.sqlstate` and `node.diag.sqlstate`; the family class attribute remains None.
+`Error.__init__` performs that transfer. This supports direct node access without
+an extra diagnostic read. Constructed evidence is **not** real PostgreSQL fault
+injection. Reproduce with the locked environment; retain real PG17 tests below.
 
 ## Adapters, responses and typed events
 
@@ -105,16 +144,33 @@ propagate. Tests distinguish malformed driver data from classifier-code defects.
   handler400. NOT_DATABASE delegates to the existing root's handler. A real 42703
   or 42P01 behind SessionInterrupted can **never** be classified into original 400.
 - Preserve role middleware, registration IntegrityError and handled academic
-  responses before B1c interception. No catch-all changes to successful login,
+  responses before B1c interception. **Academic-wrapper compatibility exception:**
+  accounts.views.academic_errors returns JSON 503 for DatabaseError on
+  accounts:academic/course/delete-assignment. student_web.views.protected returns
+  a templated 503 on its dashboard, list, CRUD, overview/predictor/planner/settings
+  routes. A 42703/42P01 raised inside the protected view body therefore stays 503;
+  exceptions outside that catch scope still follow their actual Django boundary.
+  This is an explicit exception to general defect-to-500, preserved for B1c.
+  Follow-up independent security review of wrapper scope, defect status and
+  DB-dependent error rendering is required before any separately authorized change.
+  No catch-all changes to successful login,
   sessions, authentication, CSRF or ownership. No retries/compensating writes.
+- Preserve existing handler400 rendering on both roots: auth delegates to Django
+  defaults.bad_request (400.html when available, built-in fallback otherwise);
+  web delegates to student_web.views.bad_request/error_page and
+  student_web/error.html. Do not claim these preserved handlers are template-free
+  or necessarily database-independent. Genuine deletion does not prove other
+  database work will succeed. If an existing handler fails, Django's handler500
+  boundary applies. Template-free/zero-query guarantees apply to B1c-generated
+  500/503 only; tests separately assert preserved 400 behavior.
 - failure_response builds constant UTF-8 bodies by category/status/allowlisted
   route group. Route selection uses an already available fixed resolver view name,
   not paths/token kwargs/headers, reverse or new URL resolution. Builder accesses
   no user/session/messages/templates/context processors or connection. Literal
   `/accounts/login/` only. B1 responses set no-store and content-type/charset.
   Retry-After is present only for OUTAGE within B1-generated responses; existing
-  429 behavior is preserved. B1c supplies the R5 uncertain variant placeholder;
-  exact reset/verify/change wording and exhaustive claims belong to Package B.
+  429 behavior is preserved. B1c uses generic category responses only; uncertain-
+  outcome wording, including reset/verify/change variants, belongs exclusively to B1d.
 - Builder catches Exception, retaining the selected status in a constant plain
   fallback. Never catch process controls here: B1b's all-BaseException rule applies
   to exception hooks only. If fallback fails, Django's handler500/WSGI behavior
@@ -126,6 +182,17 @@ propagate. Tests distinguish malformed driver data from classifier-code defects.
   exception/message/path extra; unknown SQLSTATE is masked at the sink. Returned
   responses that Django logs later may produce separate framework lines; assert
   one typed consumed event, not one total logging line for the entire request.
+  Event policy: exactly one accounts.failures event for each process_exception-
+  consumed 503, with its classified OUTAGE/CONNECTION_UNAVAILABLE/CONFIGURATION.
+  If process_exception itself encounters an ordinary classifier failure, it
+  consumes a minimal 500 and emits exactly one DEFECT event with sqlstate=None
+  (diagnostic mapping only, not a fabricated database Classification).
+  Handler400/500 never emit typed events, including their classifier-error 500
+  fallback; retain Django's independently emitted sanitized django.request
+  response records. Nonconsumed defects/unproven/non-DB paths have no new typed
+  event. Never attach raw classifier exceptions, paths or request metadata extras.
+  Assert final sink bytes, category mappings, unknown-code masking and absence
+  of password/token/cookie/Authorization/IP/SQL/traceback sentinels.
 
 ## Complete R5 B matrix — mandatory future execution
 
@@ -145,6 +212,16 @@ propagate. Tests distinguish malformed driver data from classifier-code defects.
 | view_versus_middleware_routing | View → process_exception; response middleware → handler500; UPDATE wrapper → handler400; INSERT/exists → handler500; active exception inspected correctly |
 | existing_contracts_preserved | Role-guard ProgrammingError stays existing 503; generic registration IntegrityError and handled academic responses unchanged |
 | consumed_exception_emits_typed_event | Exactly one typed accounts.failures event for a consumed failure; category and validated/masked code actually appear at final B1b sink |
+
+### Additional real PostgreSQL timeout rows (P5)
+
+Under **both auth and web URL roots**, force real **57014** using the B1a auth
+statement timer and real **25P03** using its idle-in-transaction timer on account
+routes. Record actual driver class, nested state, transaction phase, fresh-observer
+state and connection recovery; assert OUTAGE, minimal 503, Retry-After=5,
+no-store, sink privacy and CK1–CK4 as applicable. Do not substitute constructed
+exceptions or role-boundary failures for these route tests. Synchronize via backend
+state/locks with bounded test deadlines, not arbitrary timing-only sleeps.
 
 ## Complete R5 C matrix — mandatory future execution
 
@@ -193,8 +270,8 @@ serialization extension; focused tests/docs only. No migration, grant, successfu
 session transaction change, device wiring or quotas. Any defect in existing B1b
 must be separately reviewed, not silently fixed under this package.
 
-Unresolved approval: D-B1-6 including state extraction and synthetic Retry-After.
-Then independent design review, explicit B1c work order, draft implementation PR,
+D-B1-6 seven principles are APPROVED; no policy approval authorizes code.
+Next: independent review of these clarifications, explicit B1c work order, draft implementation PR,
 PG17/negative/CI evidence, independent code review and separate exact-head merge
 approval. Codex authored this proposal and B1b; request a separate reviewer and
 disclose prior involvement. Documentation CI is not approval of the algorithm.
@@ -205,3 +282,32 @@ compensating writes. Existing 400/500 behavior returns; stop serving real data.
 Residuals: opaque provenance, uncertain commits/orphans/prior authority, unbounded
 COMMIT/HTTP delivery, raw external output, debug pages, resource exhaustion and
 account enumeration beyond body constancy. B1d and operational acceptance remain.
+
+## Correction and reconciliation register
+
+| Finding | Disposition in this document |
+| --- | --- |
+| P1 / A1 policy status | Seven principles approved; node.sqlstate rule is precise; operational values remain pending. |
+| P2 / A2 wrappers | Explicit preserved academic defect-to-503 compatibility exception; later review required. |
+| P3 / A6 handler400 | Both roots retain actual template behavior; B1c 500/503 guarantees are separate. |
+| P4 / A4/A7 | Narrow attribute failures differ from classifier bugs; adapter minimal500; exact event ownership and sanitized framework logs specified. |
+| P5 | Real PG17 57014 and 25P03 under both roots added, not claimed executed. |
+| P6 / A3 | Synthetic 5 seconds, strict 1–300 validation and production mutation requirements specified. |
+| A5 | No uncertain-outcome wording in B1c; B1d remains separately gated. |
+| A8 | Middleware follows AuthenticationMiddleware; existing handled contracts retain precedence. |
+
+PR #57 at the cited head contains statements **not adopted here**: class-first
+plus diag fallback, a blanket “no duplicate django.request line”, and catching
+classifier defects into unproven results that could preserve 400. Its “unknown
+state produces false 503” example must be qualified: 08/28/53 are already approved
+503 families; XX999/ZZ999 map to non-Operational families and pass 2 DEFECT. Direct
+node access is still necessary for correct category/header and future-family
+handling. Its blanket truncated-chain prohibition also needs qualification:
+visible approved driver evidence within the bounded prefix remains decisive;
+truncation before proof is unproven. Request focused independent corrections to
+PR #57; this work does not modify that branch.
+
+Codex authored the original PR #54 proposal and participated in B1b; this update
+is an author correction, **not independent approval of PR #54**. Request a separate
+reviewer for the corrected exact head. All proposed B1c evidence remains future
+acceptance work; existing hosted CI proves baseline preservation only.
