@@ -4,6 +4,8 @@ from pathlib import Path
 
 
 def configure(namespace):
+    from accounts.log_privacy import configure as configure_privacy
+    configure_privacy(namespace)
     required = namespace["required"]
     namespace["INSTALLED_APPS"] = namespace["INSTALLED_APPS"] + ["django.contrib.sessions"]
     namespace["DATABASES"]["auth"] = deepcopy(namespace["DATABASES"]["default"])

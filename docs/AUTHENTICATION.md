@@ -411,3 +411,67 @@ preserve TLS/roles. Reverting B1a does not undo committed writes, change operato
 DB defaults or authorize reversing migrations. See
 [B1a implementation evidence](security/B1A_IMPLEMENTATION_EVIDENCE.md) for tests
 and remaining limitations.
+
+## B1b: fixed-label diagnostics in protected profiles
+
+The B1b implementation installs logging privacy through `auth_common.configure`
+for auth/web development, secure and test profiles. Migration, foundation,
+restricted-role historical and offline runtime profiles remain excluded. Start a
+fresh process per profile: settings overrides do not undo process-global hooks.
+
+The root sink emits only fixed labels (logger, level, method, route, typed event,
+category, known SQLSTATE/exception label) and bounded numeric status. It does not
+format messages, args, SQL, traceback text, credentials or request metadata. The
+sink uses one write per line and a shared per-thread re-entry guard. Ordinary
+preparation failures have a constant fallback; failed/short stream writes are not
+retried. Normal-handler process controls propagate. All three uncaught hooks
+contain **every BaseException from their own machinery**, preserving original
+process/thread exit behavior and avoiding CPython's raw exception fallback.
+`sys.unraisablehook` is included. No traceback/object reference is retained.
+
+`logging.lastResort` and the process/thread/unraisable hooks are installed during
+protected settings configuration, before app startup. `AccountsConfig.ready`
+validates the final graph and hook identities. No runtime graph middleware, error
+classifier, new status mapping or event emission is introduced. Typed FailureEvent
+has only the minimal FAILURE/UNCLASSIFIED values; B1c is still separate work.
+
+| Check | Activation / purpose |
+| --- | --- |
+| E101 | Existing B1a opt-in; unchanged database-option validation |
+| E102 | Logging enforce mode; ADMINS must be empty |
+| E103 | Logging enforce mode; safe root/lastResort, handler/filter/formatter graph and all three hook identities |
+| E104 | Ordinary check when UCC_SECURE_PROFILE is True; both DEBUG flags must be False |
+| E105 | Ordinary secure-profile check; configured email backend must be the exact identity of an approved class |
+
+E104/E105 are **not deploy-only** and are registered independently of logging
+enforcement. Both `check` and `check --deploy` under `web_secure` intentionally
+fail E105 today: `APPROVED_EMAIL_BACKENDS=()` and **no actual backend is approved**.
+Console/file, subclasses, wrappers, unknown/unimportable classes and selecting
+SMTP/locmem do not bypass this. Do not populate the allow-list, skip the check or
+configure a provider without its separate review/authorization. Development/test
+email behavior is unchanged, including console output in development.
+
+Checks execute only when the command/framework requests them; WSGI setup does not
+automatically run system checks. Future secure preflight must enforce E101–E105
+under its exact profile. Use auth_migration for authorized offline provisioning;
+clear_auth_artifacts under auth_development still uses protected timers/logging.
+No role or schema change is required by B1b.
+
+The graph guard is a startup snapshot. Application source audits prohibit later
+handler/filter/formatter/level/propagation/hook reconfiguration; arbitrary Python
+or operator/dependency changes can still bypass it. Historical assertLogs fixtures
+are a controlled test-only exception. Do not hot-reconfigure the serving graph.
+
+Privacy boundaries remain: pre-settings/bootstrap, direct CommandError/command
+prints, socketserver.handle_error, wsgiref log_exception, unittest failure output,
+native/fatal errors, non-integer SystemExit text, raw stdout/stderr, development
+email, Gunicorn/proxy logs and external retention/export. `--traceback` re-raises
+that reach an installed hook are sanitized; directly printed errors are not.
+`test --debug-sql` is disposable synthetic data only. No staging or real-data
+readiness is implied; B1c/B1d and operational controls remain incomplete.
+
+Rollback: stop serving, revert the B1b modules/wiring and restart processes to
+restore their original logging/hooks. No migration reversal, grants, password or
+session rewrites are needed. Rollback restores less-private diagnostics; it is not
+permission to serve real data. Blocked/partial stream writes and diagnostic loss
+remain accepted development limitations. See [B1b evidence](security/B1B_IMPLEMENTATION_EVIDENCE.md).
