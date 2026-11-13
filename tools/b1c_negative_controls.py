@@ -113,6 +113,8 @@ class B1cNegativeControls(TransactionTestCase):
                 except (ValueError,TypeError):return 5
             with patch.object(fr,'validate_retry_after',validate):yield
         self.control('retry_validation_coercion',pure.ResponseTests,'test_retry_after_strict_validation',coerce)
+        self.control('runtime_invalid_retry_header_coerced',pure.ResponseTests,
+                     'test_runtime_invalid_retry_after_retains_safe_outage_response',coerce)
 
         @contextmanager
         def swallow(hits):

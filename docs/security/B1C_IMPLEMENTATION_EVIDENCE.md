@@ -76,7 +76,7 @@ and existing restricted-role steps, and adds the B1c website-root step. Its exis
 | A5 | Existing real Student lock plus flush DELETE fault, pre-COMMIT cookie deletion with prior server key valid, real-COMMIT-then-error with password/session deletion persisted. No compensating writes. |
 | A3/A4 S1/E1–E3 | Reset N/SA and verify N, Student-write/token-write faults, real Student and AccountToken locks, pre-COMMIT rollback versus real-COMMIT acknowledgement loss. Token consumption/password or verification updates are checked together; same-plaintext reset separately proves that password validity is not unchanged encoded-hash/session authority. |
 | D | Final sink bytes omit token/password/header/cookie/IP/SQL/traceback sentinels; typed event count/category/unknown-code masking and separate Django response records asserted. B1b tests retained. |
-| Negative controls |18 B1c production mutants: instance-read removal fails actual routing; wrong pass order/outage/config sets/bound/opaque gate; missing cache/charset, incorrect Retry-After/coercion, template access/process-control swallowing; defect400, unproven503, missing/duplicate typed events/category serialization/log-mask leakage. Runner self-tests reject no-op/unexercised/error/skipped/bad-baseline results. Existing15 B1a and14 B1b controls retained. |
+| Negative controls |19 B1c production mutants: instance-read removal fails actual routing; wrong pass order/outage/config sets/bound/opaque gate; missing cache/charset, incorrect Retry-After/coercion, template access/process-control swallowing; defect400, unproven503, missing/duplicate typed events/category serialization/log-mask leakage. Runner self-tests reject no-op/unexercised/error/skipped/bad-baseline results. Existing15 B1a and14 B1b controls retained. |
 
 Mutation results require a passing baseline, proven production-path exercise,
 assertion failure, and no errors/skips. A missing-header mutant initially caused a
@@ -99,8 +99,8 @@ Disposable localhost PostgreSQL17, fresh separated roles and no real student dat
 Legacy113, foundation33, isolation46, website91 and browsers10+5+12 passed locally;
 dependency audit found no known vulnerabilities; migration drift found no changes.
 Final B1c focused runs and baseline controls are recorded in the draft PR alongside
-hosted exact-head job/log evidence. The completed implementation adds39 auth tests
-to the existing201 (240 total;523 regressions across all suites), plus the separate
+hosted exact-head job/log evidence. The completed implementation adds40 auth tests
+to the existing201 (241 total;524 regressions across all suites), plus the separate
 website-root executions and mutation runner cases. Actual CI totals take precedence
 if discovery differs; no planned test is claimed executed before a completed run.
 
@@ -137,3 +137,31 @@ owner merge authorization.
 Rollback: revert this B1c code/settings/URL/category delta and restart trusted
 synthetic development, retaining B1a/B1b, schema, roles and stored sessions/data.
 No migration reversal, credential rewrite, retry or compensating data operation.
+
+
+## Review follow-up C1–C6
+
+Reviewed original head: `c4dd3f0392ca1f5fcdbfedc7521accd4aa403475`.
+Claude returned APPROVE with three Low and three informational items, disclosing
+Revision5/PR #57 authorship and prior B1a/B1b/PR #54 involvement. This is an
+involved-author code review, not verified organizational reviewer separation.
+
+| Finding | Disposition |
+| --- | --- |
+| C1 Low | Reproduced invalid runtime Retry-After escaping both renderer paths. Optional-header failures now omit Retry-After, retaining constant503/no-store/charset without templates; startup validation remains strict and no default operational value is substituted. Process controls still propagate. Tests cover invalid values in main/fallback and both-root adapters; a production coercion mutant must fail these assertions. |
+| C2 Low | Every N/AN/SA/SX/DA L0/L1 row now asserts exactly one final-sink accounts.failures event with OUTAGE,55P03 and accounts:login, alongside the existing failing-SQL, cookie, session and credential assertions. |
+| C3 Low | Under the web root, dashboard snapshot faults (Django DatabaseError and ProgrammingError with a psycopg42703 cause) retain the existing HTML503, generic body and no Retry-After, with no typed consumed event. The JSON wrapper contract is still tested separately. |
+| C4 Info | A typed event records the consumed failure classification, **not** final response construction or client delivery. It is emitted before rendering; recursive renderer/resource failures can still result in a different HTTP outcome. Logging order is unchanged; no new event type or delivery guarantee is introduced. |
+| C5 Info | Standalone wrong UPDATE/INSERT-handler, wrong-COMMIT-hook and added-retry B1c mutants remain deferred, as permitted by the review. Existing response-path assertions and B1a commit/retry controls remain; they are not claimed equivalent to every omitted mutation. |
+| C6 Info | Removed the unused courses.list mock from the course-retrieve compatibility test. |
+
+The new test increases the primary auth suite by one (240→241) and the regression
+total523→524. Website-root B1c43→44; new B1c mutation scenarios18→19. These are
+expected discovery counts until final exact-head logs confirm them. Earlier
+523/43/18 evidence belongs to the original reviewed head and is not reused as
+fresh CI evidence. The PR description records completed local and hosted runs.
+
+Only failure_response.py, the three focused test files, the B1c mutation module
+and this evidence document change in the follow-up. No successful authentication,
+transactions, cookie lifecycle, DB schema/privileges, academic code, logging policy,
+B1d wording, security activation or deployment changes.

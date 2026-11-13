@@ -1,6 +1,8 @@
 """B1a observes Django's existing session units; it does not change their policy."""
 from concurrent.futures import ThreadPoolExecutor
 import sys
+import logging
+from io import StringIO
 from unittest.mock import patch
 from django.core.signals import got_request_exception
 from django.conf import settings
@@ -202,7 +204,8 @@ class SessionUnitTests(AuthenticationCase):
                     def request():
                         with capture_auth_errors(errors),RequestExceptions() as raised:
                             return self.login(client),raised.states
-                    with ThreadPoolExecutor(max_workers=1) as pool:
+                    sink=StringIO()
+                    with patch.object(logging.getLogger().handlers[0],'stream',sink),ThreadPoolExecutor(max_workers=1) as pool:
                         with transaction.atomic(using='default'):
                             if phase=='L0':AuthThrottle.objects.using('default').select_for_update().get(pk=bucket)
                             else:Student.objects.using('default').select_for_update().get(pk=self.a.pk)
@@ -217,6 +220,10 @@ class SessionUnitTests(AuthenticationCase):
                     else:self.assertTrue(statement.startswith('SELECT') and 'FROM "accounts_student"' in statement
                                          and statement.endswith('FOR UPDATE'))
                     self.assertEqual(raised,[])  # B1c consumes the proven outage before got_request_exception.
+                    typed=[line for line in sink.getvalue().splitlines() if 'logger=accounts.failures ' in line]
+                    self.assertEqual(len(typed),1)
+                    self.assertIn('category=OUTAGE sqlstate=55P03',typed[0])
+                    self.assertIn('route=accounts:login ',typed[0])
                     self.no_new_cookie(response,old)
                     after=list(Session.objects.using('auth').values_list('session_key','session_data','expire_date'))
                     self.assertEqual(after,before)

@@ -25,7 +25,15 @@ def _plain_response(body, status, category):
     response = HttpResponse(body, status=status, content_type='text/plain; charset=utf-8')
     response['Cache-Control'] = 'no-store'
     if category is FailureCategory.OUTAGE:
-        response['Retry-After'] = str(validate_retry_after(settings.UCC_FAILURE_RETRY_AFTER))
+        try:
+            retry_after = validate_retry_after(settings.UCC_FAILURE_RETRY_AFTER)
+        except Exception:
+            # Startup still rejects invalid configuration. If settings fail/change
+            # at runtime, omit this optional header rather than lose the safe503.
+            # Do not substitute an operational value or catch process controls.
+            pass
+        else:
+            response['Retry-After'] = str(retry_after)
     return response
 
 

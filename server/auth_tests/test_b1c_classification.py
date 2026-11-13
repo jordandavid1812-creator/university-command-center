@@ -1,5 +1,6 @@
 """B1c pure classification, rendering, adapters and fixed-byte sink contracts."""
 from io import StringIO
+from contextlib import nullcontext
 import logging
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -203,3 +204,24 @@ class ResponseTests(SimpleTestCase):
         self.assert_headers(AuthFailureMiddleware(lambda r:None).process_exception(request,Hostile()),C.DEFECT)
         self.assert_headers(fh.auth_bad_request(request,Hostile()),C.DEFECT)
         self.assert_headers(fh.web_bad_request(request,Hostile()),C.DEFECT)
+
+    def test_runtime_invalid_retry_after_retains_safe_outage_response(self):
+        request=RequestFactory().get('/accounts/login/')
+        for value in (True,0,301,'5s','SECRET'):
+            with override_settings(UCC_FAILURE_RETRY_AFTER=value),patch('django.template.loader.get_template') as templates:
+                for broken_builder in (False,True):
+                    with patch.object(fr,'_build',side_effect=RuntimeError('SECRET')) if broken_builder else nullcontext():
+                        response=fr.failure_response(C.OUTAGE)
+                    self.assertEqual(response.status_code,503)
+                    self.assertEqual(response.get('Cache-Control'),'no-store')
+                    self.assertEqual(response.get('Content-Type'),'text/plain; charset=utf-8')
+                    self.assertNotIn('Retry-After',response)
+                    self.assertNotIn(b'SECRET',response.content)
+                for handler in (fh.auth_bad_request,fh.web_bad_request):
+                    response=handler(request,unknown('55P03'))
+                    self.assertEqual(response.status_code,503);self.assertNotIn('Retry-After',response)
+                templates.assert_not_called()
+        # Normal-path process-control semantics apply to the optional header too.
+        for control in (KeyboardInterrupt,SystemExit,GeneratorExit):
+            with patch.object(fr,'validate_retry_after',side_effect=control):
+                with self.assertRaises(control):fr.failure_response(C.OUTAGE)

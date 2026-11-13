@@ -18,7 +18,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.core import mail
 from django.core.exceptions import BadRequest
-from django.db import connections, transaction, DatabaseError, OperationalError
+from django.db import connections, transaction, DatabaseError, OperationalError, ProgrammingError
 from django.http import HttpResponse
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -219,11 +219,25 @@ class FailureRouteTests(AuthenticationCase):
         self.assertEqual(response.status_code,503);self.assertNotIn('Retry-After',response)
         self.assertIn(b'not configured safely',response.content)
         self.login(client)
-        with patch('academics.services.courses.list',side_effect=__import__('django.db',fromlist=['ProgrammingError']).ProgrammingError()):
-            # API course retrieve is protected by academic_errors in both profiles.
-            with patch('academics.services.courses.retrieve',side_effect=OperationalError()):
-                from uuid import uuid4
-                self.assertEqual(client.get(reverse('accounts:course',args=[uuid4()])).status_code,503)
+        # API course retrieve is protected by academic_errors in both profiles.
+        with patch('academics.services.courses.retrieve',side_effect=OperationalError()):
+            from uuid import uuid4
+            self.assertEqual(client.get(reverse('accounts:course',args=[uuid4()])).status_code,503)
+        if settings.ROOT_URLCONF=='config.web_urls':
+            stream=StringIO()
+            with patch.object(logging.getLogger().handlers[0],'stream',stream):
+                for code in (None,'42703'):
+                    error=OperationalError(S) if code is None else ProgrammingError(S)
+                    if code:error.__cause__=unknown(code)
+                    with patch('student_web.views.data.snapshot',side_effect=error) as snapshot:
+                        response=client.get(reverse('student_web:dashboard'))
+                    snapshot.assert_called_once()
+                    self.assertEqual(response.status_code,503)
+                    self.assertTrue(response['Content-Type'].startswith('text/html'))
+                    self.assertContains(response,'Please try again',status_code=503)
+                    self.assertNotIn('Retry-After',response)
+                    self.assertNotIn(S.encode(),response.content)
+            self.assertNotIn('logger=accounts.failures ',stream.getvalue())
         from django.db import IntegrityError
         with patch('accounts.tokens.Student.save',side_effect=IntegrityError()):
             response=client.post(reverse('accounts:register'),{'username':'synthetic-new','email':'new@example.invalid','password1':PASSWORD,'password2':PASSWORD})
