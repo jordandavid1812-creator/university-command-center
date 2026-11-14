@@ -98,7 +98,7 @@ def require_runtime_role(connection):
                    OR r.rolinherit OR NOT r.rolcanlogin
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
-                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial') AND relowner=r.oid)
+                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile') AND relowner=r.oid)
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
                    OR {support}
@@ -114,10 +114,10 @@ def require_runtime_role(connection):
         cursor.execute("""
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname IN
-            ('academics_semester','academics_course','academics_assignment','academics_studymaterial')
+            ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile')
             AND c.relrowsecurity AND c.relforcerowsecurity
         """)
-        if cursor.fetchone()[0] != 4:
+        if cursor.fetchone()[0] != 5:
             raise ImproperlyConfigured("All academic tables must have forced RLS enabled.")
 
 

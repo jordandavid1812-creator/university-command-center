@@ -4,8 +4,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
-from django.db.models.functions import Trim, Upper
-from django.db.models.lookups import LessThanOrEqual
+from django.db.models.functions import Length, Trim, Upper
+from django.db.models.lookups import GreaterThanOrEqual, LessThanOrEqual
 from academic_logic import GRADE_POINTS, checked_grade
 from .fields import ExactCreditField
 from .validators import validate_credits
@@ -139,6 +139,7 @@ class StudyMaterial(ValidatedRecord):
         constraints = [
             models.CheckConstraint(condition=~models.Q(title__regex=r"^\s*$"),
                                    name="material_title_nonempty"),
+            models.UniqueConstraint(fields=["id", "owner"], name="material_id_owner_unique"),
             models.CheckConstraint(condition=~models.Q(original_filename__regex=r"^\s*$")
                                    & ~models.Q(original_filename__regex=r"[/\\]"),
                                    name="material_filename_simple"),
@@ -146,4 +147,28 @@ class StudyMaterial(ValidatedRecord):
                                    name="material_file_type_valid"),
             models.CheckConstraint(condition=models.Q(size_bytes__gte=1, size_bytes__lte=MAX_MATERIAL_BYTES),                                   name="material_size_range"),
             models.CheckConstraint(condition=models.Q(record_version__gte=1),                                   name="material_version_positive"),
+        ]
+
+
+class MaterialFile(ValidatedRecord):
+    """The stored bytes of one study material. Never edited; delete the material to remove it."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                              related_name="material_files")
+    material = models.OneToOneField(StudyMaterial, on_delete=models.CASCADE, related_name="stored_file")
+    content = models.BinaryField()
+    sha256 = models.CharField(max_length=64)
+
+    def clean(self):
+        if self.material_id and self.owner_id and not StudyMaterial.objects.using(self._state.db).filter(
+                pk=self.material_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"material": "Material must belong to the file owner."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=GreaterThanOrEqual(Length("content"), 1),
+                                   name="materialfile_not_empty"),
+            models.CheckConstraint(condition=LessThanOrEqual(Length("content"), MAX_MATERIAL_BYTES),
+                                   name="materialfile_size_limit"),
+            models.CheckConstraint(condition=models.Q(sha256__regex=r"^[0-9a-f]{64}$"),
+                                   name="materialfile_sha256_hex"),
         ]
