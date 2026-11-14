@@ -9,7 +9,6 @@ from django.db import IntegrityError
 from django.db.models import F
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from .models import Assignment, Course, Semester, StudyMaterial 
 from .models import Assignment, Course, Semester, StudyMaterial
 from .ownership import database_alias, require_identity, student_transaction
 
