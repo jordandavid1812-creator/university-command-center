@@ -7,6 +7,7 @@ from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
+from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 from academic_logic import academic_summary, predicted_summary, target_plan
@@ -194,7 +195,9 @@ def delete(request, identity, kind, identifier):
 @protected()
 def material_list(request, identity):
     courses = {course.pk: course for course in queries.options(identity, 'course')}
-    rows = [{'material': item, 'course': courses.get(item.course_id)} for item in services.materials.list(identity)]
+    stored = services.materials.stored_ids(identity)
+    rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in stored}
+            for item in services.materials.list(identity)]
     return render(request, 'student_web/materials.html', {'rows': rows})
 
 
@@ -216,18 +219,36 @@ def material_upload(request, identity):
     if request.method == 'POST':
         if form.is_valid():
             try:
-                services.materials.create(identity, title=form.cleaned_data['title'],
-                                          course_id=form.cleaned_data['course_id'], **form.file_facts)
+                services.materials.create_with_file(
+                    identity, title=form.cleaned_data['title'], course_id=form.cleaned_data['course_id'],
+                    original_filename=form.file_facts['original_filename'],
+                    file_type=form.file_facts['file_type'], content=form.file_content)
+            except services.StorageQuotaExceeded:
+                form.add_error('file', 'Your study material storage is full (50 files or 200 MiB). '
+                                       'Delete materials you no longer need to make room.')
+                status = 400
             except services.InvalidRecord:
                 form.add_error(None, 'This material could not be saved. Check the fields and try again.')
                 status = 400
             else:
-                messages.success(request, 'Material checked and saved. The file itself is not stored yet.')
+                messages.success(request, 'Material checked and stored privately.')
                 return redirect('student_web:material-list')
         else:
             status = 400
     return render(request, 'student_web/material_upload.html', {'form': form, 'courses_empty': not courses},
                   status=status)
+
+
+@protected()
+def material_download(request, identity, identifier):
+    material, content = services.materials.read_file(identity, identifier)
+    content_type = 'application/pdf' if material.file_type == 'pdf' else 'text/plain; charset=utf-8'
+    response = HttpResponse(content, content_type=content_type)
+    # Always download, never display inside the site; stop type guessing and active content.
+    response['Content-Disposition'] = content_disposition_header(True, material.original_filename)
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    return response
 
 
 @protected(('POST',))

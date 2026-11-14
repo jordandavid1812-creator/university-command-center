@@ -67,12 +67,13 @@ class MaterialUploadForm(StrictForm):
     title = forms.CharField(max_length=200, label='Material title', help_text='For example, Week 3 lecture notes.')
     course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available.')
     file = forms.FileField(max_length=255, label='File',
-                           help_text='PDF or UTF-8 TXT, up to 10 MiB. The file is checked; for now only its details are saved.')
+                           help_text='PDF or UTF-8 TXT, up to 10 MiB. The file is checked, then stored privately for you.')
 
     def __init__(self, *args, courses, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
         self.file_facts = None
+        self.file_content = None
 
     def clean(self):
         values = super().clean()
@@ -91,6 +92,7 @@ class MaterialUploadForm(StrictForm):
             self.add_error('file', str(error))
             return values
         self.file_facts = {'original_filename': upload.name, 'file_type': extension[1:], 'size_bytes': len(content)}
+        self.file_content = content
         return values
 
 
