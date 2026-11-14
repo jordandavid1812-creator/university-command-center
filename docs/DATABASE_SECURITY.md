@@ -18,6 +18,14 @@ principal and session/password-bound capabilities; they cannot mint from a Stude
 instance. Academic RLS/roles/context remain as described here. Auth web settings
 configure a separate restricted account/session role, never a migration connection.
 
+## Study materials update
+
+Two more student-owned tables use the same signed context, forced RLS and
+same-owner foreign keys: `academics_studymaterial` and `academics_materialfile`.
+Runtime grants for stored files exclude UPDATE entirely, and `require_runtime_role`
+now requires forced RLS on five academic tables. See
+[STUDY_MATERIALS.md](STUDY_MATERIALS.md).
+
 ## Trusted ownership boundary (historical 2B fixture adapter)
 
 `academics.ownership.identity_for_verified_student(principal)` is an INTERNAL
