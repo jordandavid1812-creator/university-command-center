@@ -1,7 +1,8 @@
-﻿"""Basic upload metadata checks; these do not verify file contents."""
+"""Basic upload metadata checks; these do not verify file contents."""
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
+PDF_SIGNATURE = b"%PDF-"
 
 
 def validate_upload_metadata(filename, size):
@@ -52,3 +53,16 @@ def validate_text_content(content):
         raise ValueError("The text file contains unsupported control characters.")
 
     return text
+
+
+def validate_pdf_content(content):
+    """Check bounded bytes start like a PDF. This does not prove the PDF is safe."""
+    if not isinstance(content, bytes):
+        raise ValueError("PDF content must be supplied as bytes.")
+
+    validate_upload_metadata("material.pdf", len(content))
+
+    if not content.startswith(PDF_SIGNATURE):
+        raise ValueError("Choose a real PDF file.")
+
+    return content

@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from server.student_web.upload_validation import (
     MAX_UPLOAD_BYTES,
@@ -8,12 +8,8 @@ from server.student_web.upload_validation import (
 
 class TestUploadValidation(unittest.TestCase):
     def test_allowed_extensions(self):
-        self.assertEqual(
-            validate_upload_metadata("NOTES.PDF", 100), ".pdf"
-        )
-        self.assertEqual(
-            validate_upload_metadata("notes.txt", 100), ".txt"
-        )
+        self.assertEqual(validate_upload_metadata("NOTES.PDF", 100), ".pdf")
+        self.assertEqual(validate_upload_metadata("notes.txt", 100), ".txt")
 
     def test_size_limit(self):
         self.assertEqual(
@@ -30,8 +26,14 @@ class TestUploadValidation(unittest.TestCase):
 
     def test_invalid_names(self):
         for filename in (
-            None, "", " ", "../notes.pdf", r"folder\notes.pdf",
-            "notes\n.pdf", "notes\x00.pdf", "a" * 256 + ".pdf",
+            None,
+            "",
+            " ",
+            "../notes.pdf",
+            r"folder\notes.pdf",
+            "notes\n.pdf",
+            "notes\x00.pdf",
+            "a" * 256 + ".pdf",
         ):
             with self.subTest(filename=filename):
                 with self.assertRaises(ValueError):
@@ -44,6 +46,32 @@ class TestUploadValidation(unittest.TestCase):
                     validate_upload_metadata(filename, 100)
 
 
+class TestPdfContent(unittest.TestCase):
+    def validate(self, content):
+        from server.student_web.upload_validation import validate_pdf_content
+
+        return validate_pdf_content(content)
+
+    def test_real_pdf_header(self):
+        content = b"%PDF-1.7\n%synthetic test file\n"
+        self.assertEqual(self.validate(content), content)
+
+    def test_rejects_files_that_are_not_pdfs(self):
+        for content in (b"Hello", b"MZ\x90\x00", b" %PDF-1.7", b"%PDF"):
+            with self.subTest(content=content):
+                with self.assertRaises(ValueError):
+                    self.validate(content)
+
+    def test_rejects_wrong_type_empty_and_oversized(self):
+        for content in ("%PDF-1.7", None, b"", b"%PDF-" + b"a" * MAX_UPLOAD_BYTES):
+            with self.subTest(
+                kind=type(content).__name__,
+                length=len(content) if content is not None else None,
+            ):
+                with self.assertRaises(ValueError):
+                    self.validate(content)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -51,6 +79,7 @@ if __name__ == "__main__":
 class TestTextContent(unittest.TestCase):
     def validate(self, content):
         from server.student_web.upload_validation import validate_text_content
+
         return validate_text_content(content)
 
     def test_readable_utf8(self):
