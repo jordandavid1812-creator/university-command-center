@@ -11,7 +11,8 @@ def navigation(request):
             ('dashboard', 'Dashboard', '01'), ('course-list', 'Courses', '02'),
             ('semester-list', 'Semesters', '03'), ('assignment-list', 'Assignments', '04'),
             ('overview', 'GPA & CGPA', '05'), ('predictor', 'GPA Predictor', '06'),
-            ('planner', 'Target CGPA Planner', '07'), ('settings', 'Account settings', '08'),
+            ('planner', 'Target CGPA Planner', '07'), ('material-list', 'Study materials', '08'),
+            ('settings', 'Account settings', '09'),
         ):
             url = reverse('student_web:' + name)
             items.append({'url': url, 'label': label, 'mark': mark,

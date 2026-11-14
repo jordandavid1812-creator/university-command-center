@@ -27,7 +27,7 @@ class MaterialUploadPageTests(WebsiteCase):
     def test_valid_upload_saves_checked_file_facts(self):
         self.seed()
         response = self.post_file(self.course_a)
-        self.assertRedirects(response, self.url(), fetch_redirect_response=False)
+        self.assertRedirects(response, reverse('student_web:material-list'), fetch_redirect_response=False)
         saved = services.materials.list(self.identity_a)
         self.assertEqual([(m.title, m.original_filename, m.file_type, m.size_bytes) for m in saved],
                          [('Week 1 notes', 'notes.txt', 'txt', 15)])

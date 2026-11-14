@@ -53,7 +53,7 @@ ROUTES = (
     'student_web:semester-create', 'student_web:semester-edit', 'student_web:semester-delete',
     'student_web:course-create', 'student_web:course-edit', 'student_web:course-delete',
     'student_web:assignment-create', 'student_web:assignment-edit', 'student_web:assignment-delete',
-    'student_web:material-upload',
+    'student_web:material-upload', 'student_web:material-list', 'student_web:material-delete',
 )
 _EXACT_LOGGERS = ('django.request', 'django.security.csrf', 'django.security.SuspiciousSession',
                   'django.server', 'accounts.failures', 'py.warnings')

@@ -101,6 +101,7 @@ KINDS = {
     'semester': (services.semesters, forms.SemesterForm, 'semester-list'),
     'course': (services.courses, forms.CourseForm, 'course-list'),
     'assignment': (services.assignments, forms.AssignmentForm, 'assignment-list'),
+    'material': (services.materials, None, 'material-list'),
 }
 
 
@@ -175,8 +176,9 @@ def delete(request, identity, kind, identifier):
                 status = 409
             except services.InvalidRecord:
                 detail = {'semester': 'This semester still contains courses. Move or remove them before deleting the semester.',
-                          'course': 'This course still has assignments. Remove those assignments before deleting the course.',
-                          'assignment': 'This assignment could not be deleted. Reload and try again.'}
+                          'course': 'This course still has assignments or study materials. Remove them before deleting the course.',
+                          'assignment': 'This assignment could not be deleted. Reload and try again.',
+                          'material': 'This material could not be deleted. Reload and try again.'}
                 form.add_error(None, detail[kind])
                 status = 400
             else:
@@ -187,6 +189,13 @@ def delete(request, identity, kind, identifier):
     label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
     return render(request, 'student_web/delete.html', {'form': form, 'kind': kind, 'record_label': label,
                   'conflict': status == 409, 'cancel_url': reverse('student_web:' + destination)}, status=status)
+
+
+@protected()
+def material_list(request, identity):
+    courses = {course.pk: course for course in queries.options(identity, 'course')}
+    rows = [{'material': item, 'course': courses.get(item.course_id)} for item in services.materials.list(identity)]
+    return render(request, 'student_web/materials.html', {'rows': rows})
 
 
 def upload_too_large(request):
@@ -214,7 +223,7 @@ def material_upload(request, identity):
                 status = 400
             else:
                 messages.success(request, 'Material checked and saved. The file itself is not stored yet.')
-                return redirect('student_web:material-upload')
+                return redirect('student_web:material-list')
         else:
             status = 400
     return render(request, 'student_web/material_upload.html', {'form': form, 'courses_empty': not courses},
