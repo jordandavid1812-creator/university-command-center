@@ -18,6 +18,16 @@ principal and session/password-bound capabilities; they cannot mint from a Stude
 instance. Academic RLS/roles/context remain as described here. Auth web settings
 configure a separate restricted account/session role, never a migration connection.
 
+## Study materials update
+
+Two more student-owned tables use the same signed context, forced RLS and
+same-owner foreign keys: `academics_studymaterial` and `academics_materialfile`.
+Runtime grants for stored files exclude UPDATE entirely, and `require_runtime_role`
+now requires forced RLS on five academic tables and refuses TRUNCATE, REFERENCES,
+TRIGGER or stored-file UPDATE grants. After `migrate`, re-run `configure_runtime`
+before starting the website. See
+[STUDY_MATERIALS.md](STUDY_MATERIALS.md).
+
 ## Trusted ownership boundary (historical 2B fixture adapter)
 
 `academics.ownership.identity_for_verified_student(principal)` is an INTERNAL
@@ -113,7 +123,7 @@ side channel or denial-of-service attempt.
 | --- | --- |
 | Cluster DBA | Creates separate roles/database. Superusers and BYPASSRLS roles can bypass RLS; never use them for application requests. Keep credentials outside the runtime process. |
 | Migrator | Owns the dedicated DB/schema/tables/private verifier/key. No SUPERUSER, BYPASSRLS, CREATEROLE or role memberships. Normal provisioning does not require CREATEDB. FORCE RLS applies, but the owner can alter schema/policies and read keys, so it is still privileged and must never serve requests. |
-| Runtime | LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE, no memberships or owned objects. CONNECT, schema USAGE, verifier EXECUTE and SELECT/INSERT/DELETE plus column-limited UPDATE on ONLY the three academic tables. No account/key/migration table access, DDL, TRUNCATE or TEMP privileges. |
+| Runtime | LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE, no memberships or owned objects. CONNECT, schema USAGE, verifier EXECUTE and SELECT/INSERT/DELETE plus column-limited UPDATE on ONLY the academic tables (semester, course, assignment, and since study materials, studymaterial and materialfile, which has no UPDATE at all). No account/key/migration table access, DDL, TRUNCATE or TEMP privileges. |
 
 `configure_runtime` checks role flags, memberships and object ownership, revokes
 PUBLIC app-database access and schema creation, clears the role's app schema/table

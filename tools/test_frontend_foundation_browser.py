@@ -186,7 +186,7 @@ class FoundationBrowserTests(unittest.TestCase):
         self.assertTrue(page.locator('.mobile-nav nav').is_visible())
         page.keyboard.press('Tab')
         self.assertEqual(page.locator(':focus').inner_text(), 'Dashboard')
-        for _ in range(8):  # remaining seven routes, then the POST Logout button
+        for _ in range(9):  # remaining eight routes, then the POST Logout button
             page.keyboard.press('Tab')
             self.assertTrue(page.locator(':focus').evaluate('(e)=>!!e.closest(".mobile-nav nav")'))
         self.assertEqual(page.locator(':focus').inner_text(), 'Logout')

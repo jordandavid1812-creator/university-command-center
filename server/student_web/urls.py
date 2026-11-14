@@ -11,6 +11,10 @@ urlpatterns = [
     path('predictor/', views.predictor, name='predictor'),
     path('planner/', views.planner, name='planner'),
     path('settings/', views.settings, name='settings'),
+    path('materials/new/', views.material_upload, name='material-upload'),
+    path('materials/', views.material_list, name='material-list'),
+    path('materials/<uuid:identifier>/delete/', views.delete, {'kind': 'material'}, name='material-delete'),
+    path('materials/<uuid:identifier>/download/', views.material_download, name='material-download'),
 ]
 for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments')):
     urlpatterns += [

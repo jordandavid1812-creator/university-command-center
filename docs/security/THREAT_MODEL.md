@@ -18,14 +18,14 @@ this document says a control "holds", it means the control was tested (see
 flowchart LR
     B[Browser] -->|HTTP, cookies, CSRF token| MW[Django middleware: Security, Session, RoleBoundary, CSRF, Auth, XFrame]
     MW --> AV[accounts.views: register, login, verify, reset, password change]
-    MW --> SW[student_web.views: dashboard, CRUD, predictor, planner]
+    MW --> SW[student_web.views: dashboard, CRUD, predictor, planner, study materials]
     AV -->|auth alias| AUTHDB[(accounts_student, accounts_accounttoken, accounts_auththrottle, django_session)]
     SW --> P[principal_for_request: reloads server session, checks password hash, active, verified]
     P --> CAP[TrustedStudent capability: HMAC, 5 min, bound to session key and auth hash]
     CAP --> SVC[academics.services and academics.queries]
     SVC -->|default/runtime alias| TX[student_transaction: signs xid and backend pid, SET LOCAL]
     TX --> RLS[ucc_security.current_student, SECURITY DEFINER, forced RLS]
-    RLS --> ACAD[(academics_semester, academics_course, academics_assignment)]
+    RLS --> ACAD[(academics_semester, academics_course, academics_assignment, academics_studymaterial, academics_materialfile)]
     MIG[Offline migrator: migrate, configure_runtime, configure_auth_role] -.-> ACAD
     MIG -.-> KEY[(ucc_security.context_key)]
     AV -->|on_commit| MAIL[Email backend: console or locmem only]

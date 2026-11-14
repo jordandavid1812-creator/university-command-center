@@ -3,9 +3,11 @@ from django.contrib import messages
 from django.db import DatabaseError
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
+from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 from academic_logic import academic_summary, predicted_summary, target_plan
@@ -100,6 +102,7 @@ KINDS = {
     'semester': (services.semesters, forms.SemesterForm, 'semester-list'),
     'course': (services.courses, forms.CourseForm, 'course-list'),
     'assignment': (services.assignments, forms.AssignmentForm, 'assignment-list'),
+    'material': (services.materials, None, 'material-list'),
 }
 
 
@@ -174,8 +177,9 @@ def delete(request, identity, kind, identifier):
                 status = 409
             except services.InvalidRecord:
                 detail = {'semester': 'This semester still contains courses. Move or remove them before deleting the semester.',
-                          'course': 'This course still has assignments. Remove those assignments before deleting the course.',
-                          'assignment': 'This assignment could not be deleted. Reload and try again.'}
+                          'course': 'This course still has assignments or study materials. Remove them before deleting the course.',
+                          'assignment': 'This assignment could not be deleted. Reload and try again.',
+                          'material': 'This material could not be deleted. Reload and try again.'}
                 form.add_error(None, detail[kind])
                 status = 400
             else:
@@ -186,6 +190,69 @@ def delete(request, identity, kind, identifier):
     label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
     return render(request, 'student_web/delete.html', {'form': form, 'kind': kind, 'record_label': label,
                   'conflict': status == 409, 'cancel_url': reverse('student_web:' + destination)}, status=status)
+
+
+@protected()
+def material_list(request, identity):
+    courses = {course.pk: course for course in queries.options(identity, 'course')}
+    stored = services.materials.stored_ids(identity)
+    rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in stored}
+            for item in services.materials.list(identity)]
+    return render(request, 'student_web/materials.html', {'rows': rows})
+
+
+def upload_too_large(request):
+    try:
+        return int(request.META.get('CONTENT_LENGTH') or 0) > django_settings.FILE_UPLOAD_MAX_MEMORY_SIZE
+    except ValueError:
+        return True
+
+
+@protected(('GET', 'POST'))
+def material_upload(request, identity):
+    if request.method == 'POST' and upload_too_large(request):
+        return error_page(request, 'File too large', 'Choose a PDF or TXT file no larger than 10 MiB.', 413)
+    courses = queries.options(identity, 'course')
+    bound = (request.POST, request.FILES) if request.method == 'POST' else ()
+    form = forms.MaterialUploadForm(*bound, courses=courses)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            try:
+                services.materials.create_with_file(
+                    identity, title=form.cleaned_data['title'], course_id=form.cleaned_data['course_id'],
+                    original_filename=form.file_facts['original_filename'],
+                    file_type=form.file_facts['file_type'], content=form.file_content)
+            except services.StorageQuotaExceeded:
+                form.add_error('file', 'Your study material storage is full (50 files or 200 MiB). '
+                                       'Delete materials you no longer need to make room.')
+                status = 400
+            except services.InvalidRecord:
+                form.add_error(None, 'This material could not be saved. Check the fields and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Material checked and stored privately.')
+                return redirect('student_web:material-list')
+        else:
+            status = 400
+    return render(request, 'student_web/material_upload.html', {'form': form, 'courses_empty': not courses},
+                  status=status)
+
+
+@protected()
+def material_download(request, identity, identifier):
+    try:
+        material, content = services.materials.read_file(identity, identifier)
+    except services.StoredFileDamaged:
+        return error_page(request, 'File unavailable', 'This stored file failed an integrity check, so it was '
+                          'not sent. Delete it and upload it again.', 500)
+    content_type = 'application/pdf' if material.file_type == 'pdf' else 'text/plain; charset=utf-8'
+    response = HttpResponse(content, content_type=content_type)
+    # Always download, never display inside the site; stop type guessing and active content.
+    response['Content-Disposition'] = content_disposition_header(True, material.original_filename)
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    return response
 
 
 @protected(('POST',))

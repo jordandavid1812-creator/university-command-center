@@ -4,7 +4,7 @@ from django import forms
 from academic_logic import checked_credits, checked_target, checked_grade, GRADE_POINTS
 from academics.models import Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
-
+from .upload_validation import MAX_UPLOAD_BYTES, validate_pdf_content, validate_text_content, validate_upload_metadata
 
 class StrictForm(forms.Form):
     def __getitem__(self, name):
@@ -62,6 +62,38 @@ class AssignmentForm(StrictForm):
     def __init__(self, *args, courses, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+
+class MaterialUploadForm(StrictForm):
+    title = forms.CharField(max_length=200, label='Material title', help_text='For example, Week 3 lecture notes.')
+    course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available.')
+    file = forms.FileField(max_length=255, label='File',
+                           help_text='PDF or UTF-8 TXT, up to 10 MiB. The file is checked, then stored privately for you.')
+
+    def __init__(self, *args, courses, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+        self.file_facts = None
+        self.file_content = None
+
+    def clean(self):
+        values = super().clean()
+        upload = values.get('file')
+        if upload is None:
+            return values
+        try:
+            extension = validate_upload_metadata(upload.name, upload.size)
+            upload.seek(0)
+            content = upload.read(MAX_UPLOAD_BYTES + 1)
+            if extension == '.pdf':
+                validate_pdf_content(content)
+            else:
+                validate_text_content(content)
+        except ValueError as error:
+            self.add_error('file', str(error))
+            return values
+        self.file_facts = {'original_filename': upload.name, 'file_type': extension[1:], 'size_bytes': len(content)}
+        self.file_content = content
+        return values
 
 
 def versioned(form):

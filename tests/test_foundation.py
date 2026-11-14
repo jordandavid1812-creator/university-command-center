@@ -195,9 +195,15 @@ class TestFoundation(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         paths = ["courses.json", "assignments.json.bak.3", "records.bak", "venv/example", ".venv-test/example",
                  ".env", ".env.production", ".streamlit/secrets.toml", ".ucc-save"]
-        result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=root,
-                                input="\n".join(paths) + "\n", text=True, capture_output=True, check=True)
-        self.assertEqual(set(result.stdout.splitlines()), set(paths))
+        result = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--stdin", "-z"],
+            cwd=root,
+            input=b"\0".join(path.encode("utf-8") for path in paths) + b"\0",
+            capture_output=True,
+            check=True,
+        )
+        ignored = result.stdout.decode("utf-8").split("\0")
+        self.assertEqual(set(ignored[:-1]), set(paths))
 
 
 @unittest.skipIf(AppTest is None, "Install web requirements to run Streamlit regression tests")

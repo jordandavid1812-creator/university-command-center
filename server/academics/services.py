@@ -3,13 +3,15 @@
 Each operation requires a trusted capability, filters by owner and runs under RLS.
 Return evaluated records/lists; never return a lazy queryset outside the transaction.
 """
+import hashlib
 import uuid
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
-from django.db.models import F
+from django.db import IntegrityError, connections
+from django.db.models import Count, F, Sum
+from django.db.models.functions import Length
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from .models import Assignment, Course, Semester
+from .models import Assignment, Course, MaterialFile, Semester, StudyMaterial
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -26,6 +28,26 @@ class RecordConflict(Exception):
 class InvalidRecord(ValueError):
     def __init__(self):
         super().__init__("Invalid record.")
+
+
+# Per-student storage limits for stored study files (owner decision, step 5).
+MAX_FILES_PER_STUDENT = 50
+MAX_STORED_BYTES_PER_STUDENT = 200 * 1024 * 1024
+
+
+def fingerprint(content):
+    """SHA-256 of stored file bytes, as 64 lower-case hex characters."""
+    return hashlib.sha256(content).hexdigest()
+
+
+class StoredFileDamaged(Exception):
+    def __init__(self):
+        super().__init__("A stored file failed its integrity check.")
+
+
+class StorageQuotaExceeded(Exception):
+    def __init__(self):
+        super().__init__("Your study material storage is full. Delete materials to make room.")
 
 
 def record_id(value):
@@ -152,3 +174,66 @@ courses = StudentRecords(Course, {"semester_id", "original_code", "name", "credi
                          ("semester_id", Semester))
 assignments = StudentRecords(Assignment, {"course_id", "title", "due_date", "completed"},
                              ("course_id", Course))
+
+
+class MaterialRecords(StudentRecords):
+    """File facts are set once at upload; afterwards only title and course may change."""
+    updatable = frozenset({"course_id", "title"})
+
+    def update(self, identity, identifier, *, version, **fields):
+        if not fields.keys() <= self.updatable:
+            raise InvalidRecord()
+        return super().update(identity, identifier, version=version, **fields)
+
+    def create_with_file(self, identity, *, title, course_id, original_filename, file_type, content):
+        """Save a checked material and its bytes together, or neither."""
+        if type(content) is not bytes:
+            raise InvalidRecord()
+        try:
+            with student_transaction(identity):
+                owner = require_identity(identity)
+                alias = database_alias()
+                with connections[alias].cursor() as cursor:
+                    # One upload at a time per student, so two uploads cannot both pass the quota.
+                    cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                                   ["ucc-material-quota:" + str(owner)])
+                usage = self._records(owner).filter(stored_file__isnull=False).aggregate(
+                    count=Count("id"), total=Sum(Length("stored_file__content")))
+                if (usage["count"] + 1 > MAX_FILES_PER_STUDENT
+                        or (usage["total"] or 0) + len(content) > MAX_STORED_BYTES_PER_STUDENT):
+                    raise StorageQuotaExceeded()
+                material = self.create(identity, title=title, course_id=course_id, original_filename=original_filename,
+                                       file_type=file_type, size_bytes=len(content))
+                stored = MaterialFile(owner_id=owner, material_id=material.pk, content=content,
+                                      sha256=fingerprint(content))
+                stored._state.db = alias
+                self._validate_record(stored)
+                MaterialFile.objects.using(alias).bulk_create([stored])
+                return material
+        except IntegrityError:
+            raise InvalidRecord() from None
+
+    def read_file(self, identity, identifier):
+        """Return (material, bytes) for the owner only; the fingerprint must still match."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            material = self._get(owner, identifier)
+            try:
+                stored = MaterialFile.objects.using(database_alias()).get(owner_id=owner, material_id=material.pk)
+            except MaterialFile.DoesNotExist:
+                raise RecordNotFound() from None
+            content = bytes(stored.content)
+            if fingerprint(content) != stored.sha256:
+                raise StoredFileDamaged()
+            return material, content
+
+    def stored_ids(self, identity):
+        """IDs of this student's materials that have a stored file."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            return set(MaterialFile.objects.using(database_alias()).filter(owner_id=owner)
+                       .values_list("material_id", flat=True))
+
+
+materials = MaterialRecords(StudyMaterial, {"course_id", "title", "original_filename", "file_type", "size_bytes"},
+                            ("course_id", Course))
