@@ -9,7 +9,8 @@ from django.db import IntegrityError
 from django.db.models import F
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from .models import Assignment, Course, Semester
+from .models import Assignment, Course, Semester, StudyMaterial 
+from .models import Assignment, Course, Semester, StudyMaterial
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -152,3 +153,17 @@ courses = StudentRecords(Course, {"semester_id", "original_code", "name", "credi
                          ("semester_id", Semester))
 assignments = StudentRecords(Assignment, {"course_id", "title", "due_date", "completed"},
                              ("course_id", Course))
+
+
+class MaterialRecords(StudentRecords):
+    """File facts are set once at upload; afterwards only title and course may change."""
+    updatable = frozenset({"course_id", "title"})
+
+    def update(self, identity, identifier, *, version, **fields):
+        if not fields.keys() <= self.updatable:
+            raise InvalidRecord()
+        return super().update(identity, identifier, version=version, **fields)
+
+
+materials = MaterialRecords(StudyMaterial, {"course_id", "title", "original_filename", "file_type", "size_bytes"},
+                            ("course_id", Course))
