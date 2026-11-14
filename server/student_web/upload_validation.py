@@ -27,3 +27,28 @@ def validate_upload_metadata(filename, size):
         raise ValueError("Choose a file no larger than 10 MiB.")
 
     return extension
+
+
+def validate_text_content(content):
+    """Validate bounded UTF-8 text bytes and return the decoded text."""
+    if not isinstance(content, bytes):
+        raise ValueError("Text content must be supplied as bytes.")
+
+    validate_upload_metadata("material.txt", len(content))
+
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise ValueError("Choose a TXT file saved with UTF-8 encoding.") from None
+
+    if not text.strip():
+        raise ValueError("Choose a text file containing readable text.")
+
+    if any(
+        (ord(character) < 32 and character not in "\t\n\r")
+        or 127 <= ord(character) <= 159
+        for character in text
+    ):
+        raise ValueError("The text file contains unsupported control characters.")
+
+    return text

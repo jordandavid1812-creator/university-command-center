@@ -46,3 +46,37 @@ class TestUploadValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTextContent(unittest.TestCase):
+    def validate(self, content):
+        from server.student_web.upload_validation import validate_text_content
+        return validate_text_content(content)
+
+    def test_readable_utf8(self):
+        text = "Lecture notes: café\nSecond line\tExample"
+        self.assertEqual(self.validate(text.encode("utf-8")), text)
+
+    def test_utf8_bom(self):
+        self.assertEqual(self.validate(b"\xef\xbb\xbfNotes"), "Notes")
+
+    def test_empty_or_whitespace(self):
+        for content in (b"", b" \r\n\t", b"\xef\xbb\xbf"):
+            with self.subTest(content=content):
+                with self.assertRaises(ValueError):
+                    self.validate(content)
+
+    def test_invalid_encoding_and_controls(self):
+        for content in (b"\xff", b"Notes\x00", b"Notes\x1b", b"Notes\x7f"):
+            with self.subTest(content=content):
+                with self.assertRaises(ValueError):
+                    self.validate(content)
+
+    def test_invalid_type_and_oversized_content(self):
+        for content in ("Notes", None, b"a" * (MAX_UPLOAD_BYTES + 1)):
+            with self.subTest(
+                kind=type(content).__name__,
+                length=len(content) if content is not None else None,
+            ):
+                with self.assertRaises(ValueError):
+                    self.validate(content)
