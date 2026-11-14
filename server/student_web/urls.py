@@ -11,6 +11,7 @@ urlpatterns = [
     path('predictor/', views.predictor, name='predictor'),
     path('planner/', views.planner, name='planner'),
     path('settings/', views.settings, name='settings'),
+        path('materials/new/', views.material_upload, name='material-upload'),
 ]
 for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments')):
     urlpatterns += [

@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.db import DatabaseError
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
@@ -186,6 +187,38 @@ def delete(request, identity, kind, identifier):
     label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
     return render(request, 'student_web/delete.html', {'form': form, 'kind': kind, 'record_label': label,
                   'conflict': status == 409, 'cancel_url': reverse('student_web:' + destination)}, status=status)
+
+
+def upload_too_large(request):
+    try:
+        return int(request.META.get('CONTENT_LENGTH') or 0) > django_settings.FILE_UPLOAD_MAX_MEMORY_SIZE
+    except ValueError:
+        return True
+
+
+@protected(('GET', 'POST'))
+def material_upload(request, identity):
+    if request.method == 'POST' and upload_too_large(request):
+        return error_page(request, 'File too large', 'Choose a PDF or TXT file no larger than 10 MiB.', 413)
+    courses = queries.options(identity, 'course')
+    bound = (request.POST, request.FILES) if request.method == 'POST' else ()
+    form = forms.MaterialUploadForm(*bound, courses=courses)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            try:
+                services.materials.create(identity, title=form.cleaned_data['title'],
+                                          course_id=form.cleaned_data['course_id'], **form.file_facts)
+            except services.InvalidRecord:
+                form.add_error(None, 'This material could not be saved. Check the fields and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Material checked and saved. The file itself is not stored yet.')
+                return redirect('student_web:material-upload')
+        else:
+            status = 400
+    return render(request, 'student_web/material_upload.html', {'form': form, 'courses_empty': not courses},
+                  status=status)
 
 
 @protected(('POST',))
