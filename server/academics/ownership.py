@@ -99,6 +99,13 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile') AND relowner=r.oid)
+                   -- Grants configure_runtime never gives: TRUNCATE/REFERENCES/TRIGGER anywhere
+                   -- academic, and any UPDATE on stored files (they are never edited).
+                   OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile']) AS t(name)
+                       WHERE has_table_privilege(current_user, to_regclass('public.' || t.name),
+                                                 'TRUNCATE, REFERENCES, TRIGGER'))
+                   OR COALESCE(has_any_column_privilege(current_user,
+                       to_regclass('public.academics_materialfile'), 'UPDATE'), false)
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
                    OR {support}

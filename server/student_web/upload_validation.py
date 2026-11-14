@@ -17,6 +17,9 @@ def validate_upload_metadata(filename, size):
     ):
         raise ValueError("Use a simple filename without folders or control characters.")
 
+    if "." not in filename or not filename.rsplit(".", 1)[0].strip():
+        raise ValueError("Choose a PDF or TXT file.")
+
     extension = "." + filename.rsplit(".", 1)[-1].lower()
     if extension not in ALLOWED_EXTENSIONS:
         raise ValueError("Choose a PDF or TXT file.")
@@ -46,7 +49,7 @@ def validate_text_content(content):
         raise ValueError("Choose a text file containing readable text.")
 
     if any(
-        (ord(character) < 32 and character not in "\t\n\r")
+        (ord(character) < 32 and character not in "\t\n\r\f")
         or 127 <= ord(character) <= 159
         for character in text
     ):

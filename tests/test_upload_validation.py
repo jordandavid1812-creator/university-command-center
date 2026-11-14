@@ -72,10 +72,6 @@ class TestPdfContent(unittest.TestCase):
                     self.validate(content)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestTextContent(unittest.TestCase):
     def validate(self, content):
         from server.student_web.upload_validation import validate_text_content
@@ -109,3 +105,20 @@ class TestTextContent(unittest.TestCase):
             ):
                 with self.assertRaises(ValueError):
                     self.validate(content)
+
+
+class TestFilenameAndTextEdgeCases(unittest.TestCase):
+    def test_names_need_a_base_name_and_a_dot(self):
+        for filename in ("pdf", "txt", ".pdf", " .txt"):
+            with self.subTest(filename=filename):
+                with self.assertRaises(ValueError):
+                    validate_upload_metadata(filename, 5)
+
+    def test_form_feed_page_breaks_are_allowed_in_text(self):
+        from server.student_web.upload_validation import validate_text_content
+
+        self.assertEqual(validate_text_content(b"Page 1\fPage 2"), "Page 1\fPage 2")
+
+
+if __name__ == "__main__":
+    unittest.main()

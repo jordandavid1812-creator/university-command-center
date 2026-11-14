@@ -241,7 +241,11 @@ def material_upload(request, identity):
 
 @protected()
 def material_download(request, identity, identifier):
-    material, content = services.materials.read_file(identity, identifier)
+    try:
+        material, content = services.materials.read_file(identity, identifier)
+    except services.StoredFileDamaged:
+        return error_page(request, 'File unavailable', 'This stored file failed an integrity check, so it was '
+                          'not sent. Delete it and upload it again.', 500)
     content_type = 'application/pdf' if material.file_type == 'pdf' else 'text/plain; charset=utf-8'
     response = HttpResponse(content, content_type=content_type)
     # Always download, never display inside the site; stop type guessing and active content.

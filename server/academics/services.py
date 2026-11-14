@@ -8,6 +8,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections
 from django.db.models import Count, F, Sum
+from django.db.models.functions import Length
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from .models import Assignment, Course, MaterialFile, Semester, StudyMaterial
@@ -32,6 +33,16 @@ class InvalidRecord(ValueError):
 # Per-student storage limits for stored study files (owner decision, step 5).
 MAX_FILES_PER_STUDENT = 50
 MAX_STORED_BYTES_PER_STUDENT = 200 * 1024 * 1024
+
+
+def fingerprint(content):
+    """SHA-256 of stored file bytes, as 64 lower-case hex characters."""
+    return hashlib.sha256(content).hexdigest()
+
+
+class StoredFileDamaged(Exception):
+    def __init__(self):
+        super().__init__("A stored file failed its integrity check.")
 
 
 class StorageQuotaExceeded(Exception):
@@ -187,14 +198,14 @@ class MaterialRecords(StudentRecords):
                     cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
                                    ["ucc-material-quota:" + str(owner)])
                 usage = self._records(owner).filter(stored_file__isnull=False).aggregate(
-                    count=Count("id"), total=Sum("size_bytes"))
+                    count=Count("id"), total=Sum(Length("stored_file__content")))
                 if (usage["count"] + 1 > MAX_FILES_PER_STUDENT
                         or (usage["total"] or 0) + len(content) > MAX_STORED_BYTES_PER_STUDENT):
                     raise StorageQuotaExceeded()
                 material = self.create(identity, title=title, course_id=course_id, original_filename=original_filename,
                                        file_type=file_type, size_bytes=len(content))
                 stored = MaterialFile(owner_id=owner, material_id=material.pk, content=content,
-                                      sha256=hashlib.sha256(content).hexdigest())
+                                      sha256=fingerprint(content))
                 stored._state.db = alias
                 self._validate_record(stored)
                 MaterialFile.objects.using(alias).bulk_create([stored])
@@ -212,8 +223,8 @@ class MaterialRecords(StudentRecords):
             except MaterialFile.DoesNotExist:
                 raise RecordNotFound() from None
             content = bytes(stored.content)
-            if hashlib.sha256(content).hexdigest() != stored.sha256:
-                raise InvalidRecord()
+            if fingerprint(content) != stored.sha256:
+                raise StoredFileDamaged()
             return material, content
 
     def stored_ids(self, identity):
