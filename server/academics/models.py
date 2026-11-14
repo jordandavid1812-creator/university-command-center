@@ -115,3 +115,35 @@ class Assignment(ValidatedRecord):
             models.CheckConstraint(condition=~models.Q(title__regex=r"^\s*$"), name="assignment_title_nonempty"),
             models.CheckConstraint(condition=models.Q(record_version__gte=1), name="assignment_version_positive"),
         ]
+
+MAX_MATERIAL_BYTES = 10 * 1024 * 1024  # Keep in step with student_web/upload_validation.py.
+
+
+class StudyMaterial(ValidatedRecord):
+    """Information about one uploaded study file. The file itself is stored later."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                              related_name="study_materials")
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="study_materials")
+    title = models.CharField(max_length=200)
+    original_filename = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=3, choices=[("pdf", "PDF"), ("txt", "Text")])
+    size_bytes = models.PositiveIntegerField()
+    record_version = models.PositiveBigIntegerField(default=1)
+
+    def clean(self):
+        if self.course_id and self.owner_id and not Course.objects.using(self._state.db).filter(
+                pk=self.course_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"course": "Course must belong to the material owner."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=~models.Q(title__regex=r"^\s*$"),
+                                   name="material_title_nonempty"),
+            models.CheckConstraint(condition=~models.Q(original_filename__regex=r"^\s*$")
+                                   & ~models.Q(original_filename__regex=r"[/\\]"),
+                                   name="material_filename_simple"),
+            models.CheckConstraint(condition=models.Q(file_type__in=["pdf", "txt"]),
+                                   name="material_file_type_valid"),
+            models.CheckConstraint(condition=models.Q(size_bytes__gte=1, size_bytes__lte=MAX_MATERIAL_BYTES),                                   name="material_size_range"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1),                                   name="material_version_positive"),
+        ]

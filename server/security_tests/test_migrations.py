@@ -21,7 +21,8 @@ class SecurityMigrationTests(TransactionTestCase):
                 cursor.execute("SELECT count(*) FROM pg_constraint WHERE conname IN ('course_semester_same_owner','assignment_course_same_owner')")
                 self.assertEqual(cursor.fetchone(), (2,))
         finally:
-            MigrationExecutor(connection).migrate([("academics", "0004_student_rls")])
+            executor = MigrationExecutor(connection)
+            executor.migrate(executor.loader.graph.leaf_nodes("academics"))
             call_command("configure_runtime", verbosity=0)
         with connection.cursor() as cursor:
             cursor.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname='academics_course'")
