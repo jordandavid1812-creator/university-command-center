@@ -28,7 +28,8 @@ class MaterialHardeningTests(StudentSecurityCase):
         while time.monotonic() < deadline:
             with connections["default"].cursor() as cursor:
                 cursor.execute("""SELECT count(*) FILTER (WHERE granted), count(*) FILTER (WHERE NOT granted)
-                                  FROM pg_locks WHERE locktype = 'advisory'""")
+                                  FROM pg_locks WHERE locktype = 'advisory' AND database =
+                                  (SELECT oid FROM pg_database WHERE datname = current_database())""")
                 if cursor.fetchone() == (granted, waiting):
                     return
             time.sleep(0.05)
