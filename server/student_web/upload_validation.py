@@ -1,4 +1,4 @@
-"""Basic upload metadata checks; these do not verify file contents."""
+"""Study file upload checks: name, extension, size and real content (PDF signature, UTF-8 text)."""
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}

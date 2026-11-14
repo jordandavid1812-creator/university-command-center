@@ -51,7 +51,8 @@ flowchart LR
 ```
 
 - `server/student_web/`: page views, forms, presentation adapter, navigation
-  context and reusable page/components/static assets. It adds no models.
+  context and reusable page/components/static assets. The 4A/4B pages add no
+  models; study materials add two tables (see [STUDY_MATERIALS.md](STUDY_MATERIALS.md)).
 - `server/academics/queries.py`: bounded, owner-scoped read services for evaluated
   pages, dropdowns, analysis snapshots and SQL workload aggregates. Every operation
   uses the existing signed student transaction and explicit owner filter. It never
@@ -67,7 +68,9 @@ All student views reuse `student_required`: ownership comes from a verified live
 session, not request owner IDs or constructed Student instances. The web profiles
 inherit distinct runtime/auth roles, password/session binding, role safety checks,
 forced RLS and signed transaction/backend context. No migration credentials are
-configured in a web profile and no new database grants are needed.
+configured in a web profile. The 4A/4B pages need no new database grants; study
+materials need the grants in [STUDY_MATERIALS.md](STUDY_MATERIALS.md), applied by
+re-running `configure_runtime` after `migrate`.
 
 New read services filter by owner in addition to RLS. Related course/semester
 metadata is fetched with bounded joins to avoid template N+1 queries. Dashboard

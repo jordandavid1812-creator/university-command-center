@@ -120,7 +120,7 @@ MAX_MATERIAL_BYTES = 10 * 1024 * 1024  # Keep in step with student_web/upload_va
 
 
 class StudyMaterial(ValidatedRecord):
-    """Information about one uploaded study file. The file itself is stored later."""
+    """Details of one uploaded study file. Its bytes are stored separately in MaterialFile."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                               related_name="study_materials")
     course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="study_materials")
@@ -145,8 +145,10 @@ class StudyMaterial(ValidatedRecord):
                                    name="material_filename_simple"),
             models.CheckConstraint(condition=models.Q(file_type__in=["pdf", "txt"]),
                                    name="material_file_type_valid"),
-            models.CheckConstraint(condition=models.Q(size_bytes__gte=1, size_bytes__lte=MAX_MATERIAL_BYTES),                                   name="material_size_range"),
-            models.CheckConstraint(condition=models.Q(record_version__gte=1),                                   name="material_version_positive"),
+            models.CheckConstraint(condition=models.Q(size_bytes__gte=1, size_bytes__lte=MAX_MATERIAL_BYTES),
+                                   name="material_size_range"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1),
+                                   name="material_version_positive"),
         ]
 
 

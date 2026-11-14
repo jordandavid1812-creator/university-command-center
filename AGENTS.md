@@ -87,3 +87,12 @@ regressions; run real PostgreSQL.
 The opt-in web_tests.benchmark is not part of ordinary discovery/CI latency checks.
 Read docs/MILESTONE_4B_REVIEW.md for accessibility/performance evidence and limits.
 No deployment or Milestone 5 without a new task.
+
+Study materials (PR #60): read docs/STUDY_MATERIALS.md before changing uploads or file storage.
+Uploads stay in memory, 10 MiB per file; never add a disk-spilling upload handler.
+StudyMaterial and MaterialFile keep forced RLS and same-owner foreign keys.
+Stored files are never updated: runtime gets no UPDATE on academics_materialfile.
+Keep the 50 files / 200 MiB per-student quota under the advisory lock; it sums stored bytes.
+Downloads are owner-only attachments with nosniff and a sandbox CSP; never display files inline.
+After migrate, re-run configure_runtime before starting the website.
+No AI provider calls or file content leaving the server without a new reviewed task.

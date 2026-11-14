@@ -15,7 +15,7 @@ def configure(namespace):
     namespace['TIME_ZONE'] = 'Africa/Lagos'
     namespace['DATA_UPLOAD_MAX_MEMORY_SIZE'] = 65536
     namespace['DATA_UPLOAD_MAX_NUMBER_FIELDS'] = 600
-        # Study uploads: 10 MiB file plus 64 KiB for other fields. Keep in memory only;
+    # Study uploads: 10 MiB file plus 64 KiB for other fields. Keep in memory only;
     # never spill to a temporary file on disk. Keep in step with upload_validation.py.
     namespace['FILE_UPLOAD_MAX_MEMORY_SIZE'] = 10 * 1024 * 1024 + 65536
     namespace['FILE_UPLOAD_HANDLERS'] = ['django.core.files.uploadhandler.MemoryFileUploadHandler']
