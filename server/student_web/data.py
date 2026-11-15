@@ -3,8 +3,13 @@ from academic_logic import academic_summary
 from academics.queries import academic_snapshot, dashboard_reads
 
 
-def snapshot(identity):
-    return workspace(*academic_snapshot(identity))
+def snapshot(identity, today=None):
+    """Records for the analysis pages. Given today (the dashboard), the same verified read also
+    returns assignment totals, upcoming work and the greeting name, in one transaction."""
+    if today is None:
+        return workspace(*academic_snapshot(identity))
+    semesters, courses, totals, upcoming, greeting_name = dashboard_reads(identity, today)
+    return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name}
 
 
 def workspace(semesters, courses):
@@ -24,8 +29,3 @@ def present(summary, labels):
         row['display_order'] = semester.display_order if semester else None
     return summary
 
-
-def dashboard(identity, today):
-    """The dashboard's workspace, assignment totals and greeting from one verified read."""
-    semesters, courses, totals, upcoming, greeting_name = dashboard_reads(identity, today)
-    return workspace(semesters, courses), totals, upcoming, greeting_name

@@ -55,15 +55,14 @@ def page_context(page, parameters):
 @protected()
 def dashboard(request, identity):
     today = timezone.localdate()
-    workspace, totals, upcoming, greeting_name = data.dashboard(identity, today)
+    workspace = data.snapshot(identity, today)
     selector = forms.SemesterFilter(request.GET, semesters=workspace['semesters'])
     if not selector.is_valid():
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
     selected = selector.cleaned_data['semester']
     current = next((row for row in workspace['summary']['semesters'] if row['semester'] == selected), None)
     return render(request, 'student_web/dashboard.html', {**workspace, 'selector': selector, 'current': current,
-                  'current_selected': bool(selected), 'totals': totals, 'upcoming': upcoming, 'today': today,
-                  'greeting_name': greeting_name})
+                  'current_selected': bool(selected), 'today': today})
 
 
 @protected()
