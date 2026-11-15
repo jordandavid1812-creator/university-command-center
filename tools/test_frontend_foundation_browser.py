@@ -418,6 +418,15 @@ class FoundationBrowserTests(unittest.TestCase):
         system.emulate_media(color_scheme='dark')
         self.assertEqual(system.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'dark')
 
+    def test_empty_pagination_placeholders_take_no_space_on_phones(self):
+        page = self.page(360, 800, scene='courses')
+        placeholders = page.locator('.pagination > span:empty')
+        self.assertEqual(placeholders.count(), 2)
+        for index in range(2):
+            self.assertEqual(placeholders.nth(index).evaluate('(e)=>getComputedStyle(e).display'), 'none')
+        wide = self.page(1280, 800, scene='courses')
+        self.assertEqual(wide.locator('.pagination > span:empty').first.evaluate('(e)=>getComputedStyle(e).display'), 'block')
+
     def test_printing_stays_light_in_dark_mode(self):
         page = self.page(1280, 500, theme='dark')
         page.emulate_media(media='print')

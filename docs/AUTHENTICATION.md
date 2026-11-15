@@ -294,8 +294,12 @@ Start a NEW process environment containing ONLY application credentials:
 - No DBA/migrator password, role-switch permission or privileged DB alias.
 
 ```sh
-python server/manage.py runserver 127.0.0.1:8000 --settings=config.settings.auth_development
+python tools/serve_local_website.py --settings config.settings.auth_development
 ```
+
+`manage.py runserver` cannot be used with these application credentials: it reads the
+`django_migrations` table, which the restricted roles are deliberately denied. The
+starter serves the same application on 127.0.0.1 only (see STUDENT_WEBSITE.md).
 
 Open http://127.0.0.1:8000/accounts/register/. Development uses the console mail
 backend; the local private terminal shows verification/recovery email links. Do

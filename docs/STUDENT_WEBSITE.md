@@ -176,8 +176,13 @@ the student by display name, or by username when none is set.
 - Runtime grants: SELECT, INSERT and column-limited UPDATE of the five profile fields,
   version and update time. No DELETE, TRUNCATE or owner/ID update. The authentication
   role must not read profiles. Startup checks require forced RLS on six tables.
-- The matric number is personal data: owner-only, never logged, and partly hidden on
-  Account settings (last four characters); the edit form shows it to its owner only.
+- The matric number is personal data: owner-only, never logged, and hidden on Account
+  settings (the last four characters show only for values of 8+ characters); the edit
+  form shows it to its owner only. Startup checks also refuse a runtime DELETE grant.
+- Account settings reads the profile, so it shows the safe 503 page if the academic
+  database is unavailable; logout stays available from the navigation.
+- Two tabs creating a first profile at the same moment: one is saved and the other gets
+  the generic "could not be saved" message. No data is lost.
 - Username and email are not editable here. Email change needs its own reviewed
   security process (AGENTS.md).
 - The dashboard reads its records, assignment totals and greeting name in one verified
@@ -220,8 +225,15 @@ runtime, UCC_AUTH_ROLE/UCC_AUTH_PASSWORD for the separate auth login, database/l
 settings and the private Django/context keys. Do not include migration/DBA credentials.
 
 ```sh
-python server/manage.py runserver 127.0.0.1:8000 --settings=config.settings.web_development
+python tools/serve_local_website.py
 ```
+
+Do not use `manage.py runserver` here: it always reads the `django_migrations` table on
+startup, which the restricted academic runtime login is deliberately denied, so it fails
+with a permission error. `tools/serve_local_website.py` serves the same application with
+Django's development server, only on 127.0.0.1 and only with the `web_development` or
+`auth_development` profile (`--port` changes the port). If startup fails with a
+connection timeout, PostgreSQL is not running.
 
 Open http://127.0.0.1:8000/. Register/verify using PRIVATE local console email output,
 then create a semester, a course and an assignment. The website profile redirects

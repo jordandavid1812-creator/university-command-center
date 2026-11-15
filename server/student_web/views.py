@@ -323,7 +323,8 @@ def settings(request, identity):
     form = forms.DisplayForm(initial={'theme': display_theme(request)})
     profile = services.profiles.current(identity)
     matric = profile.matric_number if profile else ''
-    masked = ('\u2022' * 6 + matric[-4:]) if len(matric) > 4 else ('\u2022' * 6 if matric else '')
+    # Show the last four characters only when at least half of the value stays hidden.
+    masked = ('\u2022' * 6 + matric[-4:]) if len(matric) >= 8 else ('\u2022' * 6 if matric else '')
     return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
                   'masked_matric': masked})
 
