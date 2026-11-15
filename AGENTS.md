@@ -102,3 +102,7 @@ cookie; never in the database or browser storage. Dark values come from docs/des
 in theme-dark.css (screens only). Keep the dark-mode contrast browser tests passing for new colours.
 Student profile (PR #62): academics_studentprofile keeps forced RLS, no DELETE and a masked matric
 number. Username and email are not editable there; email change needs its own reviewed task.
+
+Download my data (PR #65): the export reads only through academics.queries.export_records
+in one signed student_transaction. It never includes file contents or fingerprints, keeps
+credit units as exact decimal strings, and returns 413 with no partial file when too large.

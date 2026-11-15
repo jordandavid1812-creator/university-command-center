@@ -226,7 +226,7 @@ Account settings has three more items:
   other session and that sessions end after 30 minutes or when the browser closes.
   There is no separate "sign out everywhere" button (owner decision).
 
-Tests: `web_tests.test_settings_data` (owner-only content, headers, exact credits,
+Tests: `web_tests.test_settings_data` (owner-only content, no file contents or fingerprints, headers, exact credits, local-date file name,
 sign-in and GET only, forged identities refused, too-large workspace, storage text).
 
 ## Local startup

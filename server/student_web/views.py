@@ -335,7 +335,7 @@ def data_export(request, identity):
     now = timezone.now()
     body = export.document(records, {'username': request.user.username, 'email': request.user.email}, now)
     response = HttpResponse(body, content_type='application/json; charset=utf-8')
-    response['Content-Disposition'] = content_disposition_header(True, f'ucc-my-data-{now:%Y-%m-%d}.json')
+    response['Content-Disposition'] = content_disposition_header(True, f'ucc-my-data-{timezone.localdate(now):%Y-%m-%d}.json')
     response['X-Content-Type-Options'] = 'nosniff'
     response['Content-Security-Policy'] = "default-src 'none'; sandbox"
     return response
