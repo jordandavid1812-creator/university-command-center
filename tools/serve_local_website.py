@@ -38,8 +38,12 @@ def main(argv=None):
     os.environ["DJANGO_SETTINGS_MODULE"] = values.settings
     import django
     django.setup()
+    from django.core.management import call_command
     from django.core.servers.basehttp import run
     from django.core.wsgi import get_wsgi_application
+    # The same system checks runserver performs (project and Django checks, no database
+    # checks). Any error stops here before the website starts.
+    call_command("check")
     print(f"Open http://{HOST}:{values.port}/  ({values.settings}; press Ctrl+C to stop)")
     try:
         run(HOST, values.port, get_wsgi_application(), threading=True)
