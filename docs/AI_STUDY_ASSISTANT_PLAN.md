@@ -2,8 +2,8 @@
 
 Status: **plan only, nothing built.** AGENTS.md says AI provider calls and file
 content leaving the server need a new reviewed task. This document is that task's
-plan. Code starts only after the owner approves it. Revisions 2 and 3 answer the
-first review and the re-review; the [review response](#review-response) tables map
+plan. Code starts only after the owner approves it. Revisions 2, 3 and 4 answer
+the three reviews; the [review response](#review-response) tables map
 each finding to its fix.
 
 ## Owner decisions (2026-11-15)
@@ -43,7 +43,7 @@ Routes (all owner-only; another student's material gives a 404):
 | `/materials/<id>/tools/` | GET | Tools page: four tools, the question box, saved results for this file, today's usage |
 | `/materials/<id>/tools/confirm/` | POST | Shows the confirm page. **Never sends and never counts.** The question travels in this POST body, never in a URL |
 | `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
-| `/ai-requests/<id>/` | GET | One request's state: in progress (with a "reload this page" note), failed (with its category), interrupted, or a redirect to its result |
+| `/ai-requests/<id>/` | GET | One request's state: in progress (with a "reload this page" note), failed (with its category), interrupted, a redirect to its result, or "result deleted" if the student deleted it |
 | `/ai-results/<id>/` | GET | One saved result |
 | `/ai-results/<id>/delete/` | GET/POST | Dedicated delete confirmation (results have no version; see Database) |
 
@@ -71,12 +71,16 @@ The confirm page shows:
 random and signed, bound to the student, material, tool, question and character
 count, and expires after 10 minutes. The request row stores only its **SHA-256
 hash**, under a unique `(owner, consent_token_hash)` constraint, as the project
-already does for authentication tokens. **Send looks the hash up first**, before
-extraction and before any limit check. If a request already exists, Send redirects
+already does for authentication tokens. **Send looks the hash up first**: after
+checking the signature, but **before** rejecting an expired token, and before
+extraction and any limit check. So an old token for a finished request still
+redirects to it. If a request already exists, Send redirects
 to `/ai-requests/<id>/` without sending: the result if finished, the in-progress page
 if the first click is still calling, or the failure page. So a refresh or double
-click sends once, even at 50 used. Every Send response is a redirect
-(POST-redirect-GET).
+click sends once, even at 50 used. If two Sends with the same token both pass the
+lookup at the same moment, the unique constraint stops the second at reservation;
+that unique violation is caught and redirects to the existing request, not to an
+error page. Every Send response is a redirect (POST-redirect-GET).
 
 **One click is one call to one provider.** There are no automatic retries and no
 fallback to the other provider. A failure shows an error page; trying again needs
@@ -121,9 +125,15 @@ Outcomes:
 
 | Table | Holds | Protection |
 | --- | --- | --- |
-| `academics_studyairequest` (the **ledger**) | owner, tool, provider, model, status, characters sent, truncated flag, consent token hash (64 hex characters), error category, created and updated time. **No link to the material.** | Forced RLS `student_owner`; `(id, owner)` unique; `(owner, consent_token_hash)` unique; partial unique index on owner where status = `sent`; CHECKs for tool, provider, status and category values and characters sent 1–60,000. Runtime: SELECT, INSERT, UPDATE of `status`, `error_category`, `updated_at` only; **no DELETE**. |
+| `academics_studyairequest` (the **ledger**) | owner, tool, provider, model (CHECK: the model-name pattern), status, characters sent, truncated flag, consent token hash (64 hex characters), error category, created and updated time. **No link to the material.** | Forced RLS `student_owner`; `(id, owner)` unique; `(owner, consent_token_hash)` unique; partial unique index on owner where status = `sent`; CHECKs for tool, provider, status and category values and characters sent 1–60,000. Runtime: SELECT, INSERT, UPDATE of `status`, `error_category`, `updated_at` only; **no DELETE**. |
 | `academics_studyairesult` | owner, material, request, tool, question, result JSON, shape version, created time | Forced RLS; same-owner FKs `(material_id, owner_id)` → material and `(request_id, owner_id)` → request; **one result per request** (unique `request_id`); CHECKs for tool, question length 0–500 and result size ≤ 64 KiB. Runtime: SELECT, INSERT, DELETE; **no UPDATE**. |
 
+- Fixed value lists (each a CHECK constraint):
+  - tool: `summary`, `quiz`, `flashcards`, `answer`
+  - provider: `gemini`, `grok`
+  - status: `sent`, `succeeded`, `failed`, `interrupted`
+  - error category (empty unless `failed`): `network`, `timeout`, `redirect`,
+    `http_error`, `too_large`, `invalid_response`, `blocked`, `truncated`, `save`
 - The ledger has no material link, so **deleting a material deletes its results
   but never the counted requests**. Today's count cannot be reset. The ledger keeps
   no file name or text.
@@ -140,6 +150,14 @@ Outcomes:
   settings and role (never the runtime), deletes ledger rows older than 365 days
   that have no saved result. The runtime still has no DELETE. With at most 50 rows a
   day, the ledger stays under about 18,300 rows, below the export limit.
+  - Forced RLS applies to the migrator too, so with no student context it would see
+    no rows. The command therefore runs **one transaction** that sets
+    `NO FORCE ROW LEVEL SECURITY` on the ledger, deletes, then restores `FORCE`
+    before commit (`ALTER TABLE` is transactional in PostgreSQL, so a failure rolls
+    all of it back).
+  - It is **offline maintenance**: stop the website first. It prints only a count.
+  - It is **not part of stage 1**. It comes with stage 3, when the export uses the
+    ledger.
 - `require_runtime_role` grows to eight forced-RLS tables. It refuses each stray
   grant: any UPDATE on results, DELETE on the ledger, UPDATE on ledger columns
   other than the three above, and TRUNCATE, REFERENCES or TRIGGER on either. Each
@@ -174,6 +192,11 @@ Outcomes:
   - the parent reads at most 1 MiB of output and kills the child beyond that. It
     decodes strictly as UTF-8, then re-applies the cleaning and the 60,000-character
     cap itself.
+  - the output starts with **one metadata line**, a small JSON object
+    `{"pages_read": n, "pages_total": n, "truncated": true|false}`, then a newline,
+    then the text. The parent validates it strictly (exact keys, non-negative
+    integers, pages read ≤ pages total ≤ 100,000) before using any text. The
+    confirm page's wording comes from these values.
   - exit codes: 0 text, 3 encrypted, 4 no selectable text, 5 unreadable. Anything
     else, a timeout or bad output counts as unreadable.
 
@@ -278,7 +301,8 @@ Outcomes:
 
 1. **Records:** models, migrations, RLS, grants, startup checks, services
    (reserve under the lock, mark status, save result, list, delete), and security
-   tests on real PostgreSQL. No provider code.
+   tests on real PostgreSQL, including the same-token race and the CHECK value
+   lists. No provider code and no `prune_ai_ledger` (stage 3).
 2. **Text:** `pypdf` added to `requirements-django-lock.txt` with hashes; the
    child-process extractor; tests with synthetic TXT and PDFs (malformed,
    encrypted, empty, oversized, very many pages, slow); pip-audit clean.
@@ -298,9 +322,15 @@ Outcomes:
 - Deleting a material leaves today's count unchanged and deletes only its results.
 - The count boundary at 23:59 and 00:00 Lagos time.
 - The 500-result cap is refused at reservation, before any call.
+- Two reservations with the same consent token hash on two real connections: one
+  row is created, and the second gets the existing request (no error).
+- CHECK constraints refuse unknown tool, provider, status, error category and model
+  values.
 - A late step 4 on a row already marked `interrupted` saves nothing.
-- `prune_ai_ledger` removes only old rows without results and refuses to run with
-  runtime settings.
+- `prune_ai_ledger` (stage 3): asserts the old rows without results are **actually
+  gone**, that newer rows and rows with results remain, that forced RLS is back on
+  afterwards, and that it refuses to run with runtime settings. A test that only
+  checks "no error" is not enough.
 - One request in flight per student; a stale `sent` becomes `interrupted` and is
   never retried.
 - No transaction is open during the provider call.
@@ -309,6 +339,11 @@ Outcomes:
 **Consent**
 - GET never sends. The confirm POST never sends or counts. A missing or invalid
   CSRF token never sends.
+- An expired token for an existing request redirects to it. An expired token
+  without one, a forged or a reused token never sends.
+- A succeeded request whose result was deleted shows "result deleted".
+- The confirm page's pages and truncation wording comes from a validated metadata
+  line; a malformed line counts as unreadable.
 - An expired, forged or reused consent token never sends. A refresh or double POST
   sends once. A duplicate token while the first request is still calling shows the
   in-progress page, even at 50 used. Only the token hash is stored.
@@ -403,3 +438,14 @@ Outcomes:
 | L13 Reasoning tokens | Budget confirmed per default model at build time |
 | L14 Ledger blocks export | `prune_ai_ledger` (migration role only), 365 days |
 | L15 DNS outside deadline | Recorded as a known limit |
+
+### Revision 4 (third review)
+
+| Finding | Fix in this plan |
+| --- | --- |
+| M1 `prune_ai_ledger` deletes nothing under forced RLS | One transaction: `NO FORCE`, delete, `FORCE`; offline; test asserts rows gone and RLS restored; moved to stage 3 |
+| L2 Same token, two simultaneous Sends | Unique violation at reservation redirects to the existing request; two-connection test (stage 1) |
+| L3 No place for page facts | One validated JSON metadata line before the text |
+| L4 Deleted result | "Result deleted" state on the request page |
+| L5 Error categories | Exact value lists for tool, provider, status and category; model CHECK (stage 1) |
+| L6 Expiry against an existing request | Lookup after signature check, before expiry rejection |
