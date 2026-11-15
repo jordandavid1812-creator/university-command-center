@@ -6,7 +6,7 @@ querysets or use the migration connection. Mutations remain in academics.service
 from dataclasses import dataclass
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
-from .models import Assignment, Course, Semester
+from .models import Assignment, Course, Semester, StudentProfile
 from .ownership import database_alias, student_transaction
 from .services import InvalidRecord, RecordNotFound, record_id
 
@@ -106,24 +106,41 @@ def academic_snapshot(identity):
     """One bounded course read with joined semester metadata; no float conversion."""
     with student_transaction(identity):
         # The transaction validates the live session and signature before yielding.
-        owner = identity.student_id
-        records = list(_records(Course, owner).select_related('semester').order_by(
-            'semester__display_order', 'semester__created_at', 'semester_id', 'created_at', 'id')[:MAX_COURSES + 1])
-        semesters = list(_records(Semester, owner)[:MAX_SEMESTERS + 1])
-        if len(records) > MAX_COURSES or len(semesters) > MAX_SEMESTERS:
-            raise WorkspaceLimit('Analysis supports up to 1,000 courses and 200 semesters. No partial GPA is shown; your records are unchanged.')
-        return semesters, records
+        return _academic_snapshot(identity.student_id)
+
+
+def _academic_snapshot(owner):
+    records = list(_records(Course, owner).select_related('semester').order_by(
+        'semester__display_order', 'semester__created_at', 'semester_id', 'created_at', 'id')[:MAX_COURSES + 1])
+    semesters = list(_records(Semester, owner)[:MAX_SEMESTERS + 1])
+    if len(records) > MAX_COURSES or len(semesters) > MAX_SEMESTERS:
+        raise WorkspaceLimit('Analysis supports up to 1,000 courses and 200 semesters. No partial GPA is shown; your records are unchanged.')
+    return semesters, records
+
+
+def _assignment_metrics(owner, today):
+    records = _records(Assignment, owner)
+    counts = records.aggregate(total_count=Count('id'), completed_count=Count('id', filter=Q(completed=True)),
+                               pending_count=Count('id', filter=Q(completed=False)),
+                               overdue_count=Count('id', filter=Q(completed=False, due_date__lt=today)))
+    totals = {key.removesuffix('_count'): value for key, value in counts.items()}
+    upcoming = list(records.filter(completed=False, due_date__gte=today).select_related('course').order_by('due_date', 'id')[:5])
+    return totals, upcoming
 
 
 def assignment_metrics(identity, today):
     with student_transaction(identity):
-        records = _records(Assignment, identity.student_id)
-        counts = records.aggregate(total_count=Count('id'), completed_count=Count('id', filter=Q(completed=True)),
-                                   pending_count=Count('id', filter=Q(completed=False)),
-                                   overdue_count=Count('id', filter=Q(completed=False, due_date__lt=today)))
-        totals = {key.removesuffix('_count'): value for key, value in counts.items()}
-        upcoming = list(records.filter(completed=False, due_date__gte=today).select_related('course').order_by('due_date', 'id')[:5])
-        return totals, upcoming
+        return _assignment_metrics(identity.student_id, today)
+
+
+def dashboard_reads(identity, today):
+    """Every dashboard read in ONE verified transaction: records, assignments and greeting name."""
+    with student_transaction(identity):
+        owner = identity.student_id
+        semesters, records = _academic_snapshot(owner)
+        totals, upcoming = _assignment_metrics(owner, today)
+        name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
+        return semesters, records, totals, upcoming, name or ''
 
 
 def code_in_use(identity, code, exclude=None):

@@ -54,16 +54,16 @@ def page_context(page, parameters):
 
 @protected()
 def dashboard(request, identity):
-    workspace = data.snapshot(identity)
+    today = timezone.localdate()
+    workspace, totals, upcoming, greeting_name = data.dashboard(identity, today)
     selector = forms.SemesterFilter(request.GET, semesters=workspace['semesters'])
     if not selector.is_valid():
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
     selected = selector.cleaned_data['semester']
     current = next((row for row in workspace['summary']['semesters'] if row['semester'] == selected), None)
-    today = timezone.localdate()
-    totals, upcoming = queries.assignment_metrics(identity, today)
     return render(request, 'student_web/dashboard.html', {**workspace, 'selector': selector, 'current': current,
-                  'current_selected': bool(selected), 'totals': totals, 'upcoming': upcoming, 'today': today})
+                  'current_selected': bool(selected), 'totals': totals, 'upcoming': upcoming, 'today': today,
+                  'greeting_name': greeting_name})
 
 
 @protected()
@@ -322,7 +322,44 @@ def planner(request, identity):
 def settings(request, identity):
     from .context import display_theme
     form = forms.DisplayForm(initial={'theme': display_theme(request)})
-    return render(request, 'student_web/settings.html', {'display_form': form})
+    profile = services.profiles.current(identity)
+    matric = profile.matric_number if profile else ''
+    masked = ('\u2022' * 6 + matric[-4:]) if len(matric) > 4 else ('\u2022' * 6 if matric else '')
+    return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
+                  'masked_matric': masked})
+
+
+@protected(('GET', 'POST'))
+def profile_edit(request, identity):
+    profile = services.profiles.current(identity)
+    initial = {name: getattr(profile, name) for name in services.profiles.fields} if profile else {}
+    if profile:
+        initial['version'] = profile.record_version
+    form = forms.ProfileForm(request.POST if request.method == 'POST' else None, initial=initial)
+    if profile:
+        forms.versioned(form)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            values = dict(form.cleaned_data)
+            version = values.pop('version', None)
+            try:
+                if profile:
+                    services.profiles.update(identity, profile.pk, version=version, **values)
+                else:
+                    services.profiles.create(identity, **values)
+            except services.RecordConflict:
+                form.add_error(None, 'Your profile changed in another tab. Reload it before saving again.')
+                status = 409
+            except services.InvalidRecord:
+                form.add_error(None, 'These details could not be saved. Check the fields and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Profile saved.')
+                return redirect('student_web:settings')
+        else:
+            status = 400
+    return render(request, 'student_web/profile.html', {'form': form}, status=status)
 
 
 @protected(('POST',))

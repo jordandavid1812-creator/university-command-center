@@ -23,7 +23,8 @@ configure a separate restricted account/session role, never a migration connecti
 Two more student-owned tables use the same signed context, forced RLS and
 same-owner foreign keys: `academics_studymaterial` and `academics_materialfile`.
 Runtime grants for stored files exclude UPDATE entirely, and `require_runtime_role`
-now requires forced RLS on five academic tables and refuses TRUNCATE, REFERENCES,
+now requires forced RLS on the academic tables (six including `academics_studentprofile`,
+see STUDENT_WEBSITE.md) and refuses TRUNCATE, REFERENCES,
 TRIGGER or stored-file UPDATE grants. After `migrate`, re-run `configure_runtime`
 before starting the website. See
 [STUDY_MATERIALS.md](STUDY_MATERIALS.md).

@@ -8,7 +8,7 @@
   <header class="page-heading dashboard-heading dashboard-welcome">
     <div>
       <p class="eyebrow">Academic Studio · Dashboard</p>
-      <h1>Welcome back, {{ student_username }}.</h1>
+      <h1>Welcome back, {{ greeting_name|default:student_username }}.</h1>
       <p>Your actual results and the work ahead, in one place.</p>
     </div>
     <div class="action-row">

@@ -162,6 +162,27 @@ Keep synthetic test data separate from personal records. Do not attempt to fix a
 limit by deleting personal data automatically. Before supporting unusually large
 accounts, review selectors, query plans, pagination and calculation limits together.
 
+## Student profile
+
+Account settings shows an optional profile: display name, university or institution,
+programme, current level (100-700 or Postgraduate) and matric / student ID. Students
+edit it at `/settings/profile/`; every field may be left blank. The dashboard greets
+the student by display name, or by username when none is set.
+
+- Stored in `academics_studentprofile` (migrations 0009 and 0010): one row per student
+  (unique owner), forced row-level security with the same signed `current_student()`
+  policy as other student tables, CHECK constraints for level, matric format and
+  trimmed text, and optimistic versions.
+- Runtime grants: SELECT, INSERT and column-limited UPDATE of the five profile fields,
+  version and update time. No DELETE, TRUNCATE or owner/ID update. The authentication
+  role must not read profiles. Startup checks require forced RLS on six tables.
+- The matric number is personal data: owner-only, never logged, and partly hidden on
+  Account settings (last four characters); the edit form shows it to its owner only.
+- Username and email are not editable here. Email change needs its own reviewed
+  security process (AGENTS.md).
+- The dashboard reads its records, assignment totals and greeting name in one verified
+  transaction (`academics.queries.dashboard_reads`), which lowered its query count.
+
 ## Display modes
 
 Account settings offers **System** (the default), **Light** and **Dark**. The choice is

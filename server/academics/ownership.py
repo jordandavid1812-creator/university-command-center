@@ -98,10 +98,10 @@ def require_runtime_role(connection):
                    OR r.rolinherit OR NOT r.rolcanlogin
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
-                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile') AND relowner=r.oid)
+                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile') AND relowner=r.oid)
                    -- Grants configure_runtime never gives: TRUNCATE/REFERENCES/TRIGGER anywhere
                    -- academic, and any UPDATE on stored files (they are never edited).
-                   OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile']) AS t(name)
+                   OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile']) AS t(name)
                        WHERE has_table_privilege(current_user, to_regclass('public.' || t.name),
                                                  'TRUNCATE, REFERENCES, TRIGGER'))
                    OR COALESCE(has_any_column_privilege(current_user,
@@ -121,10 +121,10 @@ def require_runtime_role(connection):
         cursor.execute("""
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname IN
-            ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile')
+            ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile')
             AND c.relrowsecurity AND c.relforcerowsecurity
         """)
-        if cursor.fetchone()[0] != 5:
+        if cursor.fetchone()[0] != 6:
             raise ImproperlyConfigured("All academic tables must have forced RLS enabled.")
 
 

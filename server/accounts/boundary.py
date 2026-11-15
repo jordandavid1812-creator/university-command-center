@@ -88,6 +88,7 @@ def require_auth_role():
             OR has_any_column_privilege(current_user, 'academics_assignment', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_studymaterial', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_materialfile', 'SELECT')
+            OR has_any_column_privilege(current_user, 'academics_studentprofile', 'SELECT')
             OR {support}
             OR {maintain}
             FROM pg_roles r WHERE rolname=current_user'''

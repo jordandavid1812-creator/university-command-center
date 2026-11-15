@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from django import forms
 from academic_logic import checked_credits, checked_target, checked_grade, GRADE_POINTS
-from academics.models import Course
+from academics.models import LEVEL_CHOICES, MATRIC_PATTERN, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 from .upload_validation import MAX_UPLOAD_BYTES, validate_pdf_content, validate_text_content, validate_upload_metadata
 
@@ -104,6 +104,25 @@ def versioned(form):
 class DeleteForm(StrictForm):
     version = forms.IntegerField(min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
     confirm = forms.BooleanField(label='I confirm I want to delete this record')
+
+
+class ProfileForm(StrictForm):
+    display_name = forms.CharField(max_length=80, required=False, label='Display name',
+                                   help_text='How the app greets you. Leave blank to use your username.')
+    institution = forms.CharField(max_length=150, required=False, label='University or institution')
+    programme = forms.CharField(max_length=150, required=False, label='Programme',
+                                help_text='For example, B.Sc. Computer Science.')
+    level = forms.ChoiceField(required=False, label='Current level', choices=[('', 'Not set')] + LEVEL_CHOICES)
+    matric_number = forms.RegexField(MATRIC_PATTERN, max_length=32, required=False, label='Matric / student ID number',
+                                     help_text='Only you can see this. Letters, digits and / . _ - only.',
+                                     error_messages={'invalid': 'Use letters, digits and / . _ - only.'})
+
+    def clean(self):
+        values = super().clean()
+        for name in ('display_name', 'institution', 'programme'):
+            if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in values.get(name) or ''):
+                self.add_error(name, 'Remove unsupported control characters.')
+        return values
 
 
 class DisplayForm(StrictForm):

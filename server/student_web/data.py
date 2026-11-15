@@ -1,10 +1,13 @@
 """Adapt PostgreSQL records to the established pure academic engine."""
 from academic_logic import academic_summary
-from academics.queries import academic_snapshot
+from academics.queries import academic_snapshot, dashboard_reads
 
 
 def snapshot(identity):
-    semesters, courses = academic_snapshot(identity)
+    return workspace(*academic_snapshot(identity))
+
+
+def workspace(semesters, courses):
     # Joined metadata also handles a semester created concurrently with this read.
     labels = {str(item.pk): item for item in semesters}
     labels.update({str(item.semester_id): item.semester for item in courses})
@@ -20,3 +23,9 @@ def present(summary, labels):
         row['label'] = semester.label if semester else 'Unassigned'
         row['display_order'] = semester.display_order if semester else None
     return summary
+
+
+def dashboard(identity, today):
+    """The dashboard's workspace, assignment totals and greeting from one verified read."""
+    semesters, courses, totals, upcoming, greeting_name = dashboard_reads(identity, today)
+    return workspace(semesters, courses), totals, upcoming, greeting_name
