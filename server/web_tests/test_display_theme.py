@@ -26,6 +26,9 @@ class DisplayThemeTests(WebsiteCase):
         self.assertEqual(cookie.value, 'dark')
         self.assertTrue(cookie['httponly'])
         self.assertEqual(cookie['samesite'], 'Lax')
+        self.assertEqual(cookie['max-age'], 365 * 24 * 60 * 60)
+        from django.conf import settings
+        self.assertEqual(bool(cookie['secure']), settings.SESSION_COOKIE_SECURE)
         page = self.client_a.get(reverse('student_web:settings'))
         self.assertContains(page, 'media="screen"')
         self.assertNotContains(page, SYSTEM_MEDIA)

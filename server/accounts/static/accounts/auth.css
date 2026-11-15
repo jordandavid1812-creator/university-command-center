@@ -37,7 +37,7 @@
   background:var(--color-surface);
   box-shadow:var(--auth-shadow);
 }
-/* Translucency is optional; even over black, this fill is at least #f5f5f5. */
+/* Translucency is optional; the 96% fill keeps text contrast (dark: theme-dark.css). */
 @supports (backdrop-filter:blur(1px)) {
   .auth-page .auth-card {
     background:var(--auth-glass);

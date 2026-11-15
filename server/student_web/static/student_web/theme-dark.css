@@ -1,41 +1,42 @@
-/* Dark display mode: the same colour names as site.css with dark values. Loaded after the
-   page styles only for Dark, or for System when the device prefers dark. Contrast-tested. */
+/* Dark display mode: the designed dark tokens from docs/design/DESIGN_SYSTEM.md, same names as
+   site.css. Loaded after the page styles only for Dark, or for System when the device prefers
+   dark; screens only, so print stays light. Contrast-tested in tools/test_frontend_foundation_browser.py. */
 :root {
-  --color-canvas:#0F1918;
-  --color-surface:#162321;
-  --color-surface-raised:#1D2C2A;
-  --color-text:#E4EEEB;
-  --color-text-muted:#A9BAB6;
-  --color-primary:#5FC4A9;
-  --color-on-primary:#0B1F1A;
-  --color-primary-hover:#86D7C1;
-  --color-active-bg:#1E3B34;
-  --color-active-text:#9BE3CE;
-  --color-border-subtle:#2D3F3C;
-  --color-border-control:#7E9691;
-  --color-focus:#F2B84B;
-  --color-focus-inverse:#8A5400;
+  --color-canvas:#101918;
+  --color-surface:#172321;
+  --color-surface-raised:#20312D;
+  --color-text:#F0F5F2;
+  --color-text-muted:#B4C4BC;
+  --color-primary:#87D4BD;
+  --color-on-primary:#10251D;
+  --color-primary-hover:#A2E2CE;
+  --color-active-bg:#203E32;
+  --color-active-text:#A2E2CE;
+  --color-border-subtle:#41584D;
+  --color-border-control:#76988A;
+  --color-focus:#E8B75C;
+  --color-focus-inverse:#925A00;
   --color-shadow:rgb(0 0 0 / 35%);
-  --color-success-text:#86D9AE;
-  --color-success-bg:#15302A;
-  --color-warning-text:#F4C66E;
-  --color-warning-bg:#382C12;
-  --color-error-text:#FF9EA9;
-  --color-error-bg:#3B1C22;
-  --color-info-text:#A3C3F7;
-  --color-info-bg:#18283F;
-  --color-inverse-surface:#E4EEEB;
-  --color-inverse-text:#0F1918;
+  --color-success-text:#9DE3BE;
+  --color-success-bg:#173A2B;
+  --color-warning-text:#F2D28D;
+  --color-warning-bg:#3C301B;
+  --color-error-text:#FFADB6;
+  --color-error-bg:#3F222A;
+  --color-info-text:#B4D0FF;
+  --color-info-bg:#20314C;
+  --color-inverse-surface:#F0F5F2;
+  --color-inverse-text:#101918;
   color-scheme:dark
 }
 /* These panels define their glass colours on themselves, so override them there too. */
 .dashboard {
-  --dashboard-glass:rgb(22 35 33 / 96%);
+  --dashboard-glass:rgb(23 35 33 / 96%);
   --dashboard-shadow:0 8px 28px rgb(0 0 0 / 35%);
 }
 .auth-page {
-  --auth-glass:rgb(22 35 33 / 96%);
-  --auth-glow:rgb(95 196 169 / 8%);
+  --auth-glass:rgb(23 35 33 / 96%);
+  --auth-glow:rgb(135 212 189 / 8%);
   --auth-shadow:0 24px 72px rgb(0 0 0 / 45%),0 2px 8px rgb(0 0 0 / 30%);
   --auth-button-shadow:0 4px 12px rgb(0 0 0 / 35%);
 }

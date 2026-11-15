@@ -15,6 +15,7 @@ from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
 from . import data, forms
+from .context import DISPLAY_COOKIE, display_theme
 
 
 def error_page(request, title, detail, status):
@@ -319,7 +320,6 @@ def planner(request, identity):
 
 @protected()
 def settings(request, identity):
-    from .context import display_theme
     form = forms.DisplayForm(initial={'theme': display_theme(request)})
     profile = services.profiles.current(identity)
     matric = profile.matric_number if profile else ''
@@ -363,7 +363,6 @@ def profile_edit(request, identity):
 
 @protected(('POST',))
 def display_preference(request, identity):
-    from .context import DISPLAY_COOKIE
     form = forms.DisplayForm(request.POST)
     if not form.is_valid():
         return error_page(request, 'Check your request', 'Choose System, Light or Dark and try again.', 400)
