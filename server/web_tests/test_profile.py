@@ -69,3 +69,29 @@ class ProfilePageTests(WebsiteCase):
         for identity in (None, self.a.pk, {'student_id': self.a.pk}):
             with self.assertRaises(OwnershipRequired):
                 queries.dashboard_reads(identity, date(2026, 12, 1))
+
+    def test_dashboard_verifies_the_student_exactly_once(self):
+        from django.db import connections
+        from django.test.utils import CaptureQueriesContext
+        self.seed()
+        self.save()
+        self.client_a.get(reverse('student_web:dashboard'))
+        with CaptureQueriesContext(connections['runtime']) as queries:
+            self.assertContains(self.client_a.get(reverse('student_web:dashboard')), 'Welcome back, Ada.')
+        verifications = [q for q in queries.captured_queries if 'ucc_security.current_student()' in q['sql']
+                         and q['sql'].lstrip().upper().startswith('SELECT UCC_SECURITY')]
+        self.assertEqual(len(verifications), 1)
+
+    def test_short_matric_numbers_are_fully_hidden(self):
+        self.seed()
+        for value, shown, hidden in (('AB12', '\u2022' * 6, 'AB12'), ('ABC12345', '\u2022' * 6 + '2345', 'ABC1'),
+                                     ('A1234', '\u2022' * 6, '1234')):
+            with self.subTest(value=value):
+                profile = services.profiles.current(self.identity_a)
+                changes = {'matric_number': value}
+                if profile:
+                    changes['version'] = profile.record_version
+                self.assertEqual(self.save(**changes).status_code, 302)
+                page = self.client_a.get(reverse('student_web:settings')).content.decode()
+                self.assertIn(shown + '</dd>', page)
+                self.assertNotIn(hidden + '</dd>', page)

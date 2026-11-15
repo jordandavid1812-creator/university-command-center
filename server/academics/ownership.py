@@ -106,6 +106,9 @@ def require_runtime_role(connection):
                                                  'TRUNCATE, REFERENCES, TRIGGER'))
                    OR COALESCE(has_any_column_privilege(current_user,
                        to_regclass('public.academics_materialfile'), 'UPDATE'), false)
+                   -- Profiles are edited, never deleted.
+                   OR COALESCE(has_table_privilege(current_user,
+                       to_regclass('public.academics_studentprofile'), 'DELETE'), false)
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
                    OR {support}

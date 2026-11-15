@@ -954,6 +954,9 @@ legend {
     align-items:flex-start;
     flex-direction:column
   }
+  .pagination>span:empty {
+    display:none
+  }
 }
 @media(prefers-reduced-motion:reduce) {
   * {

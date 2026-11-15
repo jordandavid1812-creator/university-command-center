@@ -38,3 +38,13 @@ class PaginationLinkTests(WebsiteCase):
         self.assertContains(middle, 'rel="next">Next page</a>')
         following = self.client_a.get(reverse('student_web:course-list') + middle.context['next_url'])
         self.assertContains(following, 'Page 3 of 3')
+
+    def test_placeholders_keep_the_layout_and_previous_link_works(self):
+        self.seed()
+        self.add_courses(26)
+        first = self.client_a.get(reverse('student_web:course-list'))
+        self.assertContains(first, '<span aria-hidden="true"></span>', count=1)
+        last = self.client_a.get(reverse('student_web:course-list'), {'page': 2})
+        self.assertContains(last, '<span aria-hidden="true"></span>', count=1)
+        back = self.client_a.get(reverse('student_web:course-list') + last.context['previous_url'])
+        self.assertContains(back, 'Page 1 of 2')

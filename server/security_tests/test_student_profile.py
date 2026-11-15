@@ -1,5 +1,8 @@
 """Student profiles: owner-only through forced RLS, column-limited updates, never deleted."""
 import uuid
+from django.core.exceptions import ImproperlyConfigured
+from psycopg import sql
+from academics.ownership import require_runtime_role
 from django.db import connections, DatabaseError, transaction
 from academics.ownership import student_transaction
 from academics.services import InvalidRecord, RecordConflict, profiles
@@ -71,3 +74,21 @@ class StudentProfileSecurityTests(StudentSecurityCase):
                     {"display_name": " padded"}, {"owner_id": self.b.student_id}, {"record_version": 9}):
             with self.subTest(bad=bad), self.assertRaises(InvalidRecord):
                 profiles.update(self.a, self.profile_a.pk, version=1, **bad)
+
+    def migrator(self, statement):
+        role = connections["runtime"].settings_dict["USER"]
+        with connections["default"].cursor() as cursor:
+            cursor.execute(sql.SQL(statement).format(role=sql.Identifier(role)))
+
+    def test_startup_check_rejects_stray_delete_grant_and_missing_rls(self):
+        for change, undo in (("GRANT DELETE ON academics_studentprofile TO {role}",
+                              "REVOKE DELETE ON academics_studentprofile FROM {role}"),
+                             ("ALTER TABLE academics_studentprofile NO FORCE ROW LEVEL SECURITY",
+                              "ALTER TABLE academics_studentprofile FORCE ROW LEVEL SECURITY")):
+            self.migrator(change)
+            try:
+                with self.assertRaises(ImproperlyConfigured):
+                    require_runtime_role(connections["runtime"])
+            finally:
+                self.migrator(undo)
+        require_runtime_role(connections["runtime"])
