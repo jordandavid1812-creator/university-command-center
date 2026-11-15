@@ -18,7 +18,7 @@ No personal JSON is read/imported and no public deployment is approved.
 | `/performance/` | Read-only credit-weighted semester GPA and overall CGPA, attempted credits, graded/ungraded counts and accessible native meters/table |
 | `/predictor/` | Select courses with hypothetical grades, compute a selected-course prediction, filter by semester and reset selections without saving |
 | `/planner/` | Decimal target/remaining-credit form, required future average and the engine's achievable/guaranteed/impossible result states |
-| `/settings/` | Verified username/email/status, password-change link and secure POST logout; no email change or account deletion |
+| `/settings/` | Verified username/email/status, password-change link and secure POST logout, profile, display mode, storage used and **Download my data**; no email change or account deletion |
 | `/materials/` | Own study materials: upload checked PDF/TXT files, owner-only attachment downloads, confirmed deletion; 50 files / 200 MiB per student. See [STUDY_MATERIALS.md](STUDY_MATERIALS.md) |
 | `/accounts/...` | Existing registration, verification, login/logout and recovery, presented in the shared website layout |
 
@@ -204,6 +204,30 @@ year); nothing is stored in the database. Unknown cookie values fall back to Sys
   component must keep these tests passing in both modes.
 - Historical test change: the earlier light-only check now expects System to follow
   the device; Light staying light and print staying light are tested separately.
+
+## Your data, storage and sessions
+
+Account settings has three more items:
+
+- **Storage used** shows how many study files are stored and their real size against
+  the per-student quota (50 files, 200 MiB). The same line appears on Study materials.
+  Both come from `services.materials.storage`, which reads the stored-file IDs and the
+  byte total in one verified transaction.
+- **Download my data** (`/settings/export/`, GET only) gives the signed-in student a
+  JSON file of their own account name and email, profile, semesters, courses (credit
+  units as exact decimal strings), assignments and study material details with a
+  `file_stored` flag. File contents are not included. `academics.queries.export_records`
+  reads everything in one signed `student_transaction` under the RLS owner policy; the
+  pure `student_web/export.py` builds the document. The response is an attachment with
+  `nosniff`, a sandbox CSP and never-cache headers. Workspaces above the export limits
+  (the dashboard limits, plus 20,000 assignments and 5,000 materials) get the shared
+  413 page and no partial file.
+- **Signed in somewhere else?** explains that changing the password signs out every
+  other session and that sessions end after 30 minutes or when the browser closes.
+  There is no separate "sign out everywhere" button (owner decision).
+
+Tests: `web_tests.test_settings_data` (owner-only content, headers, exact credits,
+sign-in and GET only, forged identities refused, too-large workspace, storage text).
 
 ## Local startup
 

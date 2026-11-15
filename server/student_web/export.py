@@ -1,0 +1,36 @@
+"""Build the "Download my data" JSON document from already-read records. No I/O here."""
+import json
+
+FORMAT = "university-command-center-export"
+VERSION = 1
+
+
+def _when(value):
+    return value.isoformat() if value else None
+
+
+def document(records, account, exported_at):
+    profile = records["profile"]
+    data = {
+        "format": FORMAT,
+        "version": VERSION,
+        "exported_at": exported_at.isoformat(),
+        "account": {"username": account["username"], "email": account["email"]},
+        "profile": None if profile is None else {
+            "display_name": profile.display_name, "institution": profile.institution,
+            "programme": profile.programme, "level": profile.level, "matric_number": profile.matric_number,
+        },
+        "semesters": [{"id": str(s.pk), "label": s.label, "display_order": s.display_order,
+                       "created_at": _when(s.created_at)} for s in records["semesters"]],
+        "courses": [{"id": str(c.pk), "semester_id": str(c.semester_id), "code": c.original_code,
+                     "name": c.name, "credit_units": str(c.credit_units), "actual_grade": c.actual_grade,
+                     "created_at": _when(c.created_at)} for c in records["courses"]],
+        "assignments": [{"id": str(a.pk), "course_id": str(a.course_id), "title": a.title,
+                         "due_date": a.due_date.isoformat(), "completed": a.completed} for a in records["assignments"]],
+        "study_materials": [{"id": str(m.pk), "course_id": str(m.course_id), "title": m.title,
+                             "original_filename": m.original_filename, "file_type": m.file_type,
+                             "size_bytes": m.size_bytes, "file_stored": m.pk in records["stored"],
+                             "created_at": _when(m.created_at)} for m in records["materials"]],
+        "notes": "Study file contents are not included; download each stored file from Study materials.",
+    }
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
