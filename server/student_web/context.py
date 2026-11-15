@@ -1,6 +1,15 @@
 from django.conf import settings
 from django.urls import reverse
 
+DISPLAY_COOKIE = 'ucc_display'
+DISPLAY_CHOICES = ('system', 'light', 'dark')
+
+
+def display_theme(request):
+    """This browser's display choice; anything unexpected falls back to System."""
+    value = request.COOKIES.get(DISPLAY_COOKIE)
+    return value if value in DISPLAY_CHOICES else 'system'
+
 
 def navigation(request):
     enabled = getattr(settings, 'STUDENT_WEBSITE_ENABLED', False)
@@ -18,4 +27,5 @@ def navigation(request):
             items.append({'url': url, 'label': label, 'mark': mark,
                           'active': request.path == url if name == 'dashboard' else request.path.startswith(url)})
     return {'website_enabled': enabled, 'workspace_authenticated': authenticated,
-            'navigation': items, 'student_username': request.user.username if authenticated else ''}
+            'navigation': items, 'student_username': request.user.username if authenticated else '',
+            'display_theme': display_theme(request)}

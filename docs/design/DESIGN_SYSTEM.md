@@ -107,7 +107,9 @@ Keep full-page edit/delete routes for the first redesign. A future modal is prog
 
 First release follows **prefers-color-scheme** with complete semantic mappings and the correct native `color-scheme` value. Print remains light, readable and free of navigation/actions. Dark mode is available through the OS/browser preference; it is not a new database preference.
 
-Do not add localStorage/sessionStorage: `web_tests.test_polish.test_error_focus_script_does_not_store_private_state` currently forbids them explicitly. A persistent manual theme switch would need a separate decision about a harmless preference mechanism, privacy, historical tests and behavior on auth failure pages. Do not add a nonfunctional appearance control to Settings. The concept's dark panel is a visual specification, not a claim that theme persistence exists.
+Do not add localStorage/sessionStorage: `web_tests.test_polish.test_error_focus_script_does_not_store_private_state` currently forbids them explicitly.
+
+**Owner decision (PR #62, UI9 delivered):** a manual choice is approved. Account settings offers System (default), Light and Dark, saved only in this browser in the `ucc_display` cookie (allowlisted values, HttpOnly, SameSite=Lax, one year, Secure follows the session cookie; no database preference, no JavaScript). The dark mapping is the token table above, in `student_web/static/student_web/theme-dark.css`, loaded only on screens (print stays light). Sign-in and error pages follow the same saved choice; only the colour scheme carries over between people on a shared browser, never personal data. The historical light-only browser check now expects System to follow the device; rendered contrast of every visible text element in dark mode is tested in `tools/test_frontend_foundation_browser.py`.
 
 ## State and interaction language
 

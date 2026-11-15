@@ -11,7 +11,7 @@ from django.db.models import Count, F, Sum
 from django.db.models.functions import Length
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from .models import Assignment, Course, MaterialFile, Semester, StudyMaterial
+from .models import Assignment, Course, MaterialFile, Semester, StudentProfile, StudyMaterial
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -237,3 +237,17 @@ class MaterialRecords(StudentRecords):
 
 materials = MaterialRecords(StudyMaterial, {"course_id", "title", "original_filename", "file_type", "size_bytes"},
                             ("course_id", Course))
+
+
+class ProfileRecords(StudentRecords):
+    """At most one profile per student (unique owner); profiles are edited, never deleted."""
+
+    def current(self, identity):
+        with student_transaction(identity):
+            return self._records(require_identity(identity)).first()
+
+    def delete(self, identity, identifier, *, version):
+        raise InvalidRecord()
+
+
+profiles = ProfileRecords(StudentProfile, {"display_name", "institution", "programme", "level", "matric_number"})

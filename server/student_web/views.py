@@ -15,6 +15,7 @@ from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
 from . import data, forms
+from .context import DISPLAY_COOKIE, display_theme
 
 
 def error_page(request, title, detail, status):
@@ -54,16 +55,15 @@ def page_context(page, parameters):
 
 @protected()
 def dashboard(request, identity):
-    workspace = data.snapshot(identity)
+    today = timezone.localdate()
+    workspace = data.snapshot(identity, today)
     selector = forms.SemesterFilter(request.GET, semesters=workspace['semesters'])
     if not selector.is_valid():
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
     selected = selector.cleaned_data['semester']
     current = next((row for row in workspace['summary']['semesters'] if row['semester'] == selected), None)
-    today = timezone.localdate()
-    totals, upcoming = queries.assignment_metrics(identity, today)
     return render(request, 'student_web/dashboard.html', {**workspace, 'selector': selector, 'current': current,
-                  'current_selected': bool(selected), 'totals': totals, 'upcoming': upcoming, 'today': today})
+                  'current_selected': bool(selected), 'today': today})
 
 
 @protected()
@@ -320,7 +320,58 @@ def planner(request, identity):
 
 @protected()
 def settings(request, identity):
-    return render(request, 'student_web/settings.html')
+    form = forms.DisplayForm(initial={'theme': display_theme(request)})
+    profile = services.profiles.current(identity)
+    matric = profile.matric_number if profile else ''
+    masked = ('\u2022' * 6 + matric[-4:]) if len(matric) > 4 else ('\u2022' * 6 if matric else '')
+    return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
+                  'masked_matric': masked})
+
+
+@protected(('GET', 'POST'))
+def profile_edit(request, identity):
+    profile = services.profiles.current(identity)
+    initial = {name: getattr(profile, name) for name in services.profiles.fields} if profile else {}
+    if profile:
+        initial['version'] = profile.record_version
+    form = forms.ProfileForm(request.POST if request.method == 'POST' else None, initial=initial)
+    if profile:
+        forms.versioned(form)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            values = dict(form.cleaned_data)
+            version = values.pop('version', None)
+            try:
+                if profile:
+                    services.profiles.update(identity, profile.pk, version=version, **values)
+                else:
+                    services.profiles.create(identity, **values)
+            except services.RecordConflict:
+                form.add_error(None, 'Your profile changed in another tab. Reload it before saving again.')
+                status = 409
+            except services.InvalidRecord:
+                form.add_error(None, 'These details could not be saved. Check the fields and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Profile saved.')
+                return redirect('student_web:settings')
+        else:
+            status = 400
+    return render(request, 'student_web/profile.html', {'form': form}, status=status)
+
+
+@protected(('POST',))
+def display_preference(request, identity):
+    form = forms.DisplayForm(request.POST)
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Choose System, Light or Dark and try again.', 400)
+    theme = form.cleaned_data['theme']
+    response = redirect('student_web:settings')
+    response.set_cookie(DISPLAY_COOKIE, theme, max_age=365 * 24 * 60 * 60, httponly=True, samesite='Lax',
+                        secure=django_settings.SESSION_COOKIE_SECURE)
+    messages.success(request, 'Display set to ' + dict(form.fields['theme'].choices)[theme].split(' (')[0] + '.')
+    return response
 
 
 def csrf_failure(request, reason=''):

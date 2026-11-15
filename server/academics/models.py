@@ -174,3 +174,35 @@ class MaterialFile(ValidatedRecord):
             models.CheckConstraint(condition=models.Q(sha256__regex=r"^[0-9a-f]{64}$"),
                                    name="materialfile_sha256_hex"),
         ]
+
+
+LEVEL_CHOICES = [("100", "100 level"), ("200", "200 level"), ("300", "300 level"), ("400", "400 level"),
+                 ("500", "500 level"), ("600", "600 level"), ("700", "700 level"), ("PG", "Postgraduate")]
+MATRIC_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9/._-]{0,31}$"
+NO_EDGE_SPACE = r"^\s|\s$"
+
+
+class StudentProfile(ValidatedRecord):
+    """Optional profile details. Visible and editable only by their owner; one per student."""
+    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                 related_name="academic_profile")
+    display_name = models.CharField(max_length=80, blank=True)
+    institution = models.CharField(max_length=150, blank=True)
+    programme = models.CharField(max_length=150, blank=True)
+    level = models.CharField(max_length=3, blank=True, choices=LEVEL_CHOICES)
+    matric_number = models.CharField(max_length=32, blank=True, validators=[
+        RegexValidator(MATRIC_PATTERN, "Use letters, digits and / . _ - only.")])
+    record_version = models.PositiveBigIntegerField(default=1)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(level__in=[""] + [code for code, _ in LEVEL_CHOICES]),
+                                   name="profile_level_valid"),
+            models.CheckConstraint(condition=models.Q(matric_number="") | models.Q(matric_number__regex=MATRIC_PATTERN),
+                                   name="profile_matric_format"),
+            models.CheckConstraint(condition=~models.Q(display_name__regex=NO_EDGE_SPACE)
+                                   & ~models.Q(institution__regex=NO_EDGE_SPACE)
+                                   & ~models.Q(programme__regex=NO_EDGE_SPACE),
+                                   name="profile_text_trimmed"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1), name="profile_version_positive"),
+        ]

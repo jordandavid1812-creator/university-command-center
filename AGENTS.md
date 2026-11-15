@@ -96,3 +96,9 @@ Keep the 50 files / 200 MiB per-student quota under the advisory lock; it sums s
 Downloads are owner-only attachments with nosniff and a sandbox CSP; never display files inline.
 After migrate, re-run configure_runtime before starting the website.
 No AI provider calls or file content leaving the server without a new reviewed task.
+
+Display modes (PR #62): System (default), Light and Dark are saved only in the allowlisted ucc_display
+cookie; never in the database or browser storage. Dark values come from docs/design/DESIGN_SYSTEM.md
+in theme-dark.css (screens only). Keep the dark-mode contrast browser tests passing for new colours.
+Student profile (PR #62): academics_studentprofile keeps forced RLS, no DELETE and a masked matric
+number. Username and email are not editable there; email change needs its own reviewed task.

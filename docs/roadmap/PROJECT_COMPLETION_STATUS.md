@@ -35,7 +35,7 @@ Statuses describe the specified slice, not a guarantee of production readiness.
 | UI2 dashboard | **IMPLEMENTED BUT UNMERGED** / **BLOCKED BY REVIEW** | PR #44; U1/U3/U4 corrected, U2 owner-approved. See exact-head evidence below; no UI3 dependency may assume UI2 is merged |
 | UI3–UI7 academic presentation | **DESIGNED ONLY** | Existing functional screens remain; proposed narrow PRs below. No redesigned assignment list or new feature is claimed |
 | UI8 remaining settings/auth usability | **DESIGNED ONLY** / **BLOCKED BY SECURITY COORDINATION** | Reuse PR #43; validator-derived password guidance remains deferred. No authority to change auth decisions through presentation work |
-| UI9 system dark theme | **DESIGNED ONLY** | Token proposal exists; current CSS is light mode. No persisted/manual preference approved |
+| UI9 system dark theme | **IMPLEMENTED (PR #62)** | Designed dark tokens in `theme-dark.css`; System (default), Light and Dark saved per browser in an owner-approved cookie; dark contrast audited in browser tests |
 | UI10 full accessibility/product acceptance | **NOT STARTED** as comprehensive acceptance | Automated Chromium evidence exists; no complete physical-device, actual browser zoom, screen-reader or independent WCAG acceptance |
 | Stage A security integration | **BLOCKED BY OWNER/REVIEW** | PR #29 then #26 require separate exact-head merge authorization and combined-release verification; neither is merged |
 | B1a–B1d | **DESIGNED ONLY** / **BLOCKED BY OWNER/SECURITY DEPENDENCIES** | Merged plan §6.11 is not implementation. PR #29 first; D-B1-1…6 decisions and separate increment authorization required. No timeout/classifier/privacy handler implementation found in current settings/accounts sources |
