@@ -35,6 +35,23 @@ class TestServeLocalWebsite(unittest.TestCase):
             with self.subTest(port=port):
                 self.refused(["--port", port])
 
+    def test_main_runs_system_checks_then_serves_only_on_loopback(self):
+        from unittest import mock
+        calls = []
+        django = mock.MagicMock()
+        django.setup.side_effect = lambda: calls.append("setup")
+        management = mock.MagicMock()
+        management.call_command.side_effect = lambda name: calls.append(("check", name))
+        basehttp = mock.MagicMock()
+        basehttp.run.side_effect = lambda host, port, app, threading: calls.append(("run", host, port))
+        modules = {"django": django, "django.core": mock.MagicMock(), "django.core.management": management,
+                   "django.core.servers": mock.MagicMock(), "django.core.servers.basehttp": basehttp,
+                   "django.core.wsgi": mock.MagicMock()}
+        with mock.patch.dict(sys.modules, modules), mock.patch.dict("os.environ"), \
+                mock.patch.object(sys, "path", list(sys.path)), contextlib.redirect_stdout(io.StringIO()):
+            starter.main(["--port", "8001"])
+        self.assertEqual(calls, ["setup", ("check", "check"), ("run", "127.0.0.1", 8001)])
+
     def test_importing_does_not_start_django(self):
         self.assertNotIn("django.core.servers.basehttp", sys.modules)
 

@@ -950,6 +950,8 @@ legend {
   .topbar-label {
     max-width:50%
   }
+}
+@media(max-width:480px) {
   .pagination {
     align-items:flex-start;
     flex-direction:column

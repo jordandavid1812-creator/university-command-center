@@ -427,6 +427,16 @@ class FoundationBrowserTests(unittest.TestCase):
         wide = self.page(1280, 800, scene='courses')
         self.assertEqual(wide.locator('.pagination > span:empty').first.evaluate('(e)=>getComputedStyle(e).display'), 'block')
 
+    def test_common_wider_phones_also_stack_pagination(self):
+        for width in (393, 412, 430, 480):
+            with self.subTest(width=width):
+                page = self.page(width, 800, scene='courses')
+                self.assertEqual(page.locator('.pagination').evaluate('(e)=>getComputedStyle(e).flexDirection'), 'column')
+                self.assertEqual(page.locator('.pagination > span:empty').first.evaluate(
+                    '(e)=>getComputedStyle(e).display'), 'none')
+        tablet = self.page(481, 800, scene='courses')
+        self.assertEqual(tablet.locator('.pagination').evaluate('(e)=>getComputedStyle(e).flexDirection'), 'row')
+
     def test_printing_stays_light_in_dark_mode(self):
         page = self.page(1280, 500, theme='dark')
         page.emulate_media(media='print')

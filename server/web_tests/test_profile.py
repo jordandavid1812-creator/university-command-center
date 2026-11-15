@@ -1,4 +1,5 @@
 """Edit profile: owner-only, optional fields, masked matric number, dashboard greeting."""
+import re
 from django.urls import reverse
 from academics import services
 from .base import WebsiteCase
@@ -84,8 +85,8 @@ class ProfilePageTests(WebsiteCase):
 
     def test_short_matric_numbers_are_fully_hidden(self):
         self.seed()
-        for value, shown, hidden in (('AB12', '\u2022' * 6, 'AB12'), ('ABC12345', '\u2022' * 6 + '2345', 'ABC1'),
-                                     ('A1234', '\u2022' * 6, '1234')):
+        for value, shown in (('AB12', '\u2022' * 6), ('ABC12345', '\u2022' * 6 + '2345'),
+                             ('A1234', '\u2022' * 6), ('ABC1234', '\u2022' * 6)):
             with self.subTest(value=value):
                 profile = services.profiles.current(self.identity_a)
                 changes = {'matric_number': value}
@@ -93,5 +94,7 @@ class ProfilePageTests(WebsiteCase):
                     changes['version'] = profile.record_version
                 self.assertEqual(self.save(**changes).status_code, 302)
                 page = self.client_a.get(reverse('student_web:settings')).content.decode()
-                self.assertIn(shown + '</dd>', page)
-                self.assertNotIn(hidden + '</dd>', page)
+                # The whole matric line is exactly the masked text, so no other characters leak.
+                self.assertIn('<dt>Matric / student ID</dt><dd>' + shown + '</dd>', page)
+                # Ignore random CSRF token values, which could contain short values by chance.
+                self.assertNotIn(value, re.sub(r'value="[^"]*"', '', page))
