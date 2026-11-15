@@ -11,7 +11,11 @@ from django.db.models import Count, F, Sum
 from django.db.models.functions import Length
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from .models import Assignment, Course, MaterialFile, Semester, StudentProfile, StudyMaterial
+import json
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, Course, MaterialFile, Semester,
+                     StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial)
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -262,3 +266,186 @@ class ProfileRecords(StudentRecords):
 
 
 profiles = ProfileRecords(StudentProfile, {"display_name", "institution", "programme", "level", "matric_number"})
+
+
+# AI study assistant records (docs/AI_STUDY_ASSISTANT_PLAN.md, stage 1). No provider code here.
+AI_REQUESTS_PER_DAY = 50
+MAX_AI_RESULTS_PER_STUDENT = 500
+AI_DAY_ZONE = ZoneInfo("Africa/Lagos")
+AI_STALE_AFTER = timedelta(minutes=2)
+_AI_CATEGORIES = frozenset(code for code, _ in AI_ERROR_CATEGORIES)
+
+
+class AiLimitReached(Exception):
+    """Refused before anything is sent. `reason` is "daily", "results" or "busy"."""
+    def __init__(self, reason):
+        super().__init__("AI request refused: " + reason)
+        self.reason = reason
+
+
+class AiRequestClosed(Exception):
+    """The request is no longer in progress (for example it was marked interrupted); nothing was saved."""
+    def __init__(self):
+        super().__init__("This AI request is no longer in progress.")
+
+
+def ai_day_range(now=None):
+    """[start, end) of the current local day (Africa/Lagos) as aware datetimes."""
+    local = (now or timezone.now()).astimezone(AI_DAY_ZONE)
+    start = datetime.combine(local.date(), time.min, tzinfo=AI_DAY_ZONE)
+    return start, start + timedelta(days=1)
+
+
+class AiRecords:
+    """Ledger and saved results. Owner, IDs, status and timestamps are server-owned."""
+
+    def _requests(self, owner):
+        return StudyAiRequest.objects.using(database_alias()).filter(owner_id=owner)
+
+    def _results(self, owner):
+        return StudyAiResult.objects.using(database_alias()).filter(owner_id=owner)
+
+    def _lock(self, owner):
+        with connections[database_alias()].cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["ucc-ai-reserve:" + str(owner)])
+
+    def _mark_stale(self, owner, now):
+        self._requests(owner).filter(status="sent", created_at__lt=now - AI_STALE_AFTER).update(
+            status="interrupted", updated_at=now)
+
+    def find_request(self, identity, consent_token_hash):
+        """The request already made with this consent token, or None."""
+        with student_transaction(identity):
+            return self._requests(require_identity(identity)).filter(
+                consent_token_hash=consent_token_hash).first()
+
+    def reserve(self, identity, *, tool, provider, model, characters_sent, truncated, consent_token_hash):
+        """Record one request before anything is sent. Returns (request, created).
+
+        Under a per-student lock: an existing request with the same consent token is
+        returned unchanged (created=False), so a repeated Send never sends twice.
+        Otherwise stale in-flight requests become interrupted, then the in-flight,
+        daily and saved-result limits are checked, and the new row is inserted.
+        """
+        # First, in its own short transaction, so a refusal below cannot roll it back.
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            self._lock(owner)
+            self._mark_stale(owner, timezone.now())
+        try:
+            with student_transaction(identity):
+                owner = require_identity(identity)
+                self._lock(owner)
+                existing = self._requests(owner).filter(consent_token_hash=consent_token_hash).first()
+                if existing is not None:
+                    return existing, False
+                now = timezone.now()
+                if self._requests(owner).filter(status="sent").exists():
+                    raise AiLimitReached("busy")
+                start, end = ai_day_range(now)
+                if self._requests(owner).filter(created_at__gte=start, created_at__lt=end).count() >= AI_REQUESTS_PER_DAY:
+                    raise AiLimitReached("daily")
+                if self._results(owner).count() >= MAX_AI_RESULTS_PER_STUDENT:
+                    raise AiLimitReached("results")
+                if type(characters_sent) is not int or type(truncated) is not bool:
+                    raise InvalidRecord()
+                request = StudyAiRequest(owner_id=owner, tool=tool, provider=provider, model=model,
+                                         characters_sent=characters_sent, truncated=truncated,
+                                         consent_token_hash=consent_token_hash)
+                request._state.db = database_alias()
+                try:
+                    request.full_clean(exclude=["owner"], validate_unique=False)
+                except ValidationError:
+                    raise InvalidRecord() from None
+                StudyAiRequest.objects.using(database_alias()).bulk_create([request])
+                return request, True
+        except IntegrityError:
+            # The lock makes this unreachable for one student, but if the unique token
+            # constraint ever fires, return the request that already used the token.
+            existing = self.find_request(identity, consent_token_hash)
+            if existing is not None:
+                return existing, False
+            raise InvalidRecord() from None
+
+    def _close(self, owner, request_id, **values):
+        changed = self._requests(owner).filter(pk=record_id(request_id), status="sent").update(
+            updated_at=timezone.now(), **values)
+        if changed != 1:
+            raise AiRequestClosed()
+
+    def fail(self, identity, request_id, category):
+        """Mark an in-progress request failed. Raises AiRequestClosed if it is no longer in progress."""
+        if category not in _AI_CATEGORIES:
+            raise InvalidRecord()
+        with student_transaction(identity):
+            self._close(require_identity(identity), request_id, status="failed", error_category=category)
+
+    def succeed(self, identity, request_id, *, material_id, result, question="", shape_version=1):
+        """Save a checked result and mark its request succeeded, both or neither.
+
+        Only a request still in progress can succeed; otherwise AiRequestClosed and nothing is saved.
+        """
+        try:
+            size = len(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        except (TypeError, ValueError):
+            raise InvalidRecord() from None
+        if size > MAX_AI_RESULT_BYTES:
+            raise InvalidRecord()
+        try:
+            with student_transaction(identity):
+                owner = require_identity(identity)
+                request = self._requests(owner).filter(pk=record_id(request_id)).first()
+                if request is None:
+                    raise RecordNotFound()
+                self._close(owner, request.pk, status="succeeded")
+                saved = StudyAiResult(owner_id=owner, material_id=record_id(material_id), request_id=request.pk,
+                                      tool=request.tool, question=question, result=result,
+                                      shape_version=shape_version)
+                saved._state.db = database_alias()
+                try:
+                    saved.full_clean(exclude=["owner"], validate_unique=False)
+                except ValidationError:
+                    raise InvalidRecord() from None
+                StudyAiResult.objects.using(database_alias()).bulk_create([saved])
+                return saved
+        except IntegrityError:
+            raise InvalidRecord() from None
+
+    def get_request(self, identity, identifier):
+        with student_transaction(identity):
+            try:
+                return self._requests(require_identity(identity)).get(pk=record_id(identifier))
+            except StudyAiRequest.DoesNotExist:
+                raise RecordNotFound() from None
+
+    def get_result(self, identity, identifier):
+        with student_transaction(identity):
+            try:
+                return self._results(require_identity(identity)).get(pk=record_id(identifier))
+            except StudyAiResult.DoesNotExist:
+                raise RecordNotFound() from None
+
+    def results_for(self, identity, material_id):
+        """Saved results for one of the student's materials, newest first."""
+        with student_transaction(identity):
+            return list(self._results(require_identity(identity)).filter(material_id=record_id(material_id))
+                        .order_by("-created_at", "id"))
+
+    def delete_result(self, identity, identifier):
+        """Delete one saved result (its ledger row stays and still counts)."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            deleted, _ = self._results(owner).filter(pk=record_id(identifier)).delete()
+            if not deleted:
+                raise RecordNotFound()
+
+    def usage(self, identity):
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            start, end = ai_day_range()
+            return {"used_today": self._requests(owner).filter(created_at__gte=start, created_at__lt=end).count(),
+                    "daily_limit": AI_REQUESTS_PER_DAY, "results": self._results(owner).count(),
+                    "max_results": MAX_AI_RESULTS_PER_STUDENT}
+
+
+ai = AiRecords()

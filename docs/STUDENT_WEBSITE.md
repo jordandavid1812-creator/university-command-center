@@ -175,7 +175,8 @@ the student by display name, or by username when none is set.
   trimmed text, and optimistic versions.
 - Runtime grants: SELECT, INSERT and column-limited UPDATE of the five profile fields,
   version and update time. No DELETE, TRUNCATE or owner/ID update. The authentication
-  role must not read profiles. Startup checks require forced RLS on six tables.
+  role must not read profiles. Startup checks require forced RLS on six tables (eight
+  since the AI study assistant records; see AI_STUDY_ASSISTANT.md).
 - The matric number is personal data: owner-only, never logged, and hidden on Account
   settings (the last four characters show only for values of 8+ characters); the edit
   form shows it to its owner only. Startup checks also refuse a runtime DELETE grant.
