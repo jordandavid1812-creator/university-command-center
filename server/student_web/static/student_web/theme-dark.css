@@ -1,0 +1,41 @@
+/* Dark display mode: the same colour names as site.css with dark values. Loaded after the
+   page styles only for Dark, or for System when the device prefers dark. Contrast-tested. */
+:root {
+  --color-canvas:#0F1918;
+  --color-surface:#162321;
+  --color-surface-raised:#1D2C2A;
+  --color-text:#E4EEEB;
+  --color-text-muted:#A9BAB6;
+  --color-primary:#5FC4A9;
+  --color-on-primary:#0B1F1A;
+  --color-primary-hover:#86D7C1;
+  --color-active-bg:#1E3B34;
+  --color-active-text:#9BE3CE;
+  --color-border-subtle:#2D3F3C;
+  --color-border-control:#7E9691;
+  --color-focus:#F2B84B;
+  --color-focus-inverse:#8A5400;
+  --color-shadow:rgb(0 0 0 / 35%);
+  --color-success-text:#86D9AE;
+  --color-success-bg:#15302A;
+  --color-warning-text:#F4C66E;
+  --color-warning-bg:#382C12;
+  --color-error-text:#FF9EA9;
+  --color-error-bg:#3B1C22;
+  --color-info-text:#A3C3F7;
+  --color-info-bg:#18283F;
+  --color-inverse-surface:#E4EEEB;
+  --color-inverse-text:#0F1918;
+  color-scheme:dark
+}
+/* These panels define their glass colours on themselves, so override them there too. */
+.dashboard {
+  --dashboard-glass:rgb(22 35 33 / 96%);
+  --dashboard-shadow:0 8px 28px rgb(0 0 0 / 35%);
+}
+.auth-page {
+  --auth-glass:rgb(22 35 33 / 96%);
+  --auth-glow:rgb(95 196 169 / 8%);
+  --auth-shadow:0 24px 72px rgb(0 0 0 / 45%),0 2px 8px rgb(0 0 0 / 30%);
+  --auth-button-shadow:0 4px 12px rgb(0 0 0 / 35%);
+}

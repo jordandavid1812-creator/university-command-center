@@ -320,7 +320,23 @@ def planner(request, identity):
 
 @protected()
 def settings(request, identity):
-    return render(request, 'student_web/settings.html')
+    from .context import display_theme
+    form = forms.DisplayForm(initial={'theme': display_theme(request)})
+    return render(request, 'student_web/settings.html', {'display_form': form})
+
+
+@protected(('POST',))
+def display_preference(request, identity):
+    from .context import DISPLAY_COOKIE
+    form = forms.DisplayForm(request.POST)
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Choose System, Light or Dark and try again.', 400)
+    theme = form.cleaned_data['theme']
+    response = redirect('student_web:settings')
+    response.set_cookie(DISPLAY_COOKIE, theme, max_age=365 * 24 * 60 * 60, httponly=True, samesite='Lax',
+                        secure=django_settings.SESSION_COOKIE_SECURE)
+    messages.success(request, 'Display set to ' + dict(form.fields['theme'].choices)[theme].split(' (')[0] + '.')
+    return response
 
 
 def csrf_failure(request, reason=''):

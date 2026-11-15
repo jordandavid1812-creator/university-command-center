@@ -1,4 +1,4 @@
-/* Academic Studio UI1: light foundation. Dark mode waits for UI9's full audit. */
+/* Academic Studio UI1: light values. Dark values: theme-dark.css (contrast-tested). */
 :root {
   --color-canvas:#F7F8F6;
   --color-surface:#FFFFFF;

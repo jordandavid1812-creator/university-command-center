@@ -106,6 +106,11 @@ class DeleteForm(StrictForm):
     confirm = forms.BooleanField(label='I confirm I want to delete this record')
 
 
+class DisplayForm(StrictForm):
+    theme = forms.ChoiceField(label='Display', widget=forms.RadioSelect, choices=[
+        ('system', 'System (follow this device)'), ('light', 'Light'), ('dark', 'Dark')])
+
+
 class StatusForm(StrictForm):
     version = forms.IntegerField(min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
     completed = forms.ChoiceField(choices=[('true', 'Complete'), ('false', 'Pending')])

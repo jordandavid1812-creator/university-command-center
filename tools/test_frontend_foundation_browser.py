@@ -39,9 +39,11 @@ from playwright.sync_api import sync_playwright, Error as PlaywrightError
 from types import SimpleNamespace
 
 
-def fixture_html(public=False, scene=None):
+def fixture_html(public=False, scene=None, theme=None):
     """Real navigation context and templates, explicitly empty synthetic workspace."""
     request = RequestFactory().get('/accounts/login/' if public else '/')
+    if theme:
+        request.COOKIES['ucc_display'] = theme
     request.resolver_match = resolve(request.path)
     request.student_identity = object()
     request.user = SimpleNamespace(username='Synthetic UI fixture')
@@ -83,6 +85,9 @@ def fixture_html(public=False, scene=None):
                         '<style>' + (REPO / 'server/student_web/static/student_web/dashboard.css').read_text() + '</style>')
     html = html.replace('<link rel="stylesheet" href="/static/accounts/auth.css">',
                         '<style>' + (REPO / 'server/accounts/static/accounts/auth.css').read_text() + '</style>')
+    dark = (asset / 'theme-dark.css').read_text()
+    html = re.sub(r'<link rel="stylesheet" href="/static/student_web/theme-dark.css" media="([^"]*)">',
+                  lambda match: '<style media="' + match.group(1) + '">' + dark + '</style>', html)
     return html.replace('<script defer src="/static/student_web/site.js"></script>',
                         '<script>' + (asset / 'site.js').read_text() + '</script>')
 
@@ -109,13 +114,16 @@ class FoundationBrowserTests(unittest.TestCase):
         cls.browser.close()
         cls.driver.stop()
 
-    def page(self, width, height, public=False, javascript=True, text_percent=100, scene=None):
+    def page(self, width, height, public=False, javascript=True, text_percent=100, scene=None, theme=None):
         context = self.browser.new_context(viewport={'width': width, 'height': height},
                                            java_script_enabled=javascript)
         self.addCleanup(context.close)
         context.set_default_timeout(3000)
         page = context.new_page()
-        html = fixture_html(scene=scene) if scene else (self.public if public else self.html)
+        if theme:
+            html = fixture_html(public=public, scene=scene, theme=theme)
+        else:
+            html = fixture_html(scene=scene) if scene else (self.public if public else self.html)
         html = html.replace("</head>", f"<style>html {{font-size:{text_percent}%}}</style></head>")
         page.set_content(html)
         return page
@@ -338,16 +346,82 @@ class FoundationBrowserTests(unittest.TestCase):
         self.assertEqual(probe.evaluate('(e)=>getComputedStyle(e).transitionDuration'), '0s')
         self.assertEqual(probe.evaluate('(e)=>getComputedStyle(e).scrollBehavior'), 'auto')
 
-    def test_forced_colors_focus_and_light_theme_scope(self):
+    def test_forced_colors_focus_and_system_theme_scope(self):
         page = self.page(1280, 500)
         page.emulate_media(color_scheme='dark', reduced_motion='reduce')
-        self.assertEqual(page.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'light')
+        # Display mode System (the default) follows the device; Light/Dark are tested separately.
+        self.assertEqual(page.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'dark')
         page.emulate_media(forced_colors='active')
         page.keyboard.press('Tab')
         page.keyboard.press('Tab')
         self.assertEqual(page.locator(':focus').evaluate('(e)=>getComputedStyle(e).outlineStyle'), 'solid')
         # Forced-colors is browser-owned and may itself override color-scheme.
         self.assertEqual(page.locator('body').evaluate('(e)=>getComputedStyle(e).transitionDuration'), '0s')
+
+    def low_contrast_text(self, page):
+        """Every visible text element: painted colour against everything painted behind it."""
+        return page.evaluate(r"""() => {
+            const parse = value => { const m = value.match(/^rgba?\(([^)]+)\)$/);
+                const c = m[1].split(',').map(Number); if (c.length === 3) c.push(1); return c; };
+            const blend = (front, back) => front.slice(0, 3).map((v, i) => v * front[3] + back[i] * (1 - front[3]));
+            const lum = c => c.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; })
+                .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+            const ratio = (a, b) => { const [lo, hi] = [lum(a), lum(b)].sort((x, y) => x - y); return (hi + .05) / (lo + .05); };
+            const failures = [];
+            for (const e of document.querySelectorAll('body *')) {
+                const own = [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+                const box = e.getBoundingClientRect();
+                const style = getComputedStyle(e);
+                if (!own || !box.width || !box.height || style.visibility === 'hidden' || e.closest('.sr-only')) continue;
+                const chain = [];
+                for (let n = e; n; n = n.parentElement) { chain.unshift(n); if (parse(getComputedStyle(n).backgroundColor)[3] === 1) break; }
+                let back = [255, 255, 255];
+                for (const n of chain) back = blend(parse(getComputedStyle(n).backgroundColor), back);
+                const ink = blend(parse(style.color), back);
+                const size = parseFloat(style.fontSize), bold = parseInt(style.fontWeight) >= 700;
+                const needed = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+                const value = ratio(ink, back);
+                if (value < needed) failures.push(e.tagName + '.' + e.className + ' "' + e.textContent.trim().slice(0, 30) + '" ' + value.toFixed(2));
+            }
+            return failures;
+        }""")
+
+    def test_dark_mode_text_meets_contrast_on_every_page_type(self):
+        for public, scene in ((False, None), (False, 'courses'), (False, 'errors'), (True, None)):
+            with self.subTest(public=public, scene=scene):
+                page = self.page(1440, 900, public=public, scene=scene, theme='dark')
+                self.assertEqual(page.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'dark')
+                self.assertEqual(self.low_contrast_text(page), [])
+
+    def test_dark_mode_controls_meet_contrast_in_default_and_hover_states(self):
+        def contrast(colors):
+            values = [[float(n) for n in re.findall(r'[\d.]+', c)[:3]] for c in colors]
+            lum = [sum((v / 255 / 12.92 if v / 255 <= .04045 else ((v / 255 + .055) / 1.055) ** 2.4) * w
+                       for v, w in zip(c, (.2126, .7152, .0722))) for c in values]
+            low, high = sorted(lum)
+            return (high + .05) / (low + .05)
+
+        page = self.page(1440, 900, theme='dark')
+        for selector in ('.nav-link.active', '.button:not(.secondary)', '.button.secondary', '.nav-link'):
+            with self.subTest(selector=selector):
+                self.assertGreaterEqual(contrast(self.painted_colors(page.locator(selector).first)), 4.5)
+                page.locator(selector).first.hover()
+                self.assertGreaterEqual(contrast(self.painted_colors(page.locator(selector).first)), 4.5)
+
+    def test_light_choice_stays_light_and_system_follows_the_device(self):
+        light = self.page(1280, 500, theme='light')
+        light.emulate_media(color_scheme='dark')
+        self.assertEqual(light.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'light')
+        system = self.page(1280, 500, theme='system')
+        system.emulate_media(color_scheme='light')
+        self.assertEqual(system.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'light')
+        system.emulate_media(color_scheme='dark')
+        self.assertEqual(system.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'dark')
+
+    def test_printing_stays_light_in_dark_mode(self):
+        page = self.page(1280, 500, theme='dark')
+        page.emulate_media(media='print')
+        self.assertEqual(page.locator('html').evaluate('(e)=>getComputedStyle(e).colorScheme'), 'light')
 
 
 if __name__ == '__main__':
