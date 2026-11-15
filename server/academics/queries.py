@@ -6,7 +6,7 @@ querysets or use the migration connection. Mutations remain in academics.service
 from dataclasses import dataclass
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
-from .models import Assignment, Course, Semester, StudentProfile
+from .models import Assignment, Course, MaterialFile, Semester, StudentProfile, StudyMaterial
 from .ownership import database_alias, student_transaction
 from .services import InvalidRecord, RecordNotFound, record_id
 
@@ -14,6 +14,8 @@ PAGE_SIZE = 25
 MAX_COURSES = 1000
 MAX_SEMESTERS = 200
 MAX_PREDICTION_COURSES = 200
+MAX_EXPORT_ASSIGNMENTS = 20000
+MAX_EXPORT_MATERIALS = 5000
 MODELS = {'semester': Semester, 'course': Course, 'assignment': Assignment}
 
 
@@ -149,3 +151,20 @@ def code_in_use(identity, code, exclude=None):
         if exclude is not None:
             records = records.exclude(pk=record_id(exclude))
         return records.exists()
+
+
+def export_records(identity):
+    """Every academic record of one student in ONE verified transaction, or none at all if too large."""
+    with student_transaction(identity):
+        owner = identity.student_id
+        semesters = list(_records(Semester, owner).order_by("display_order", "created_at", "id")[:MAX_SEMESTERS + 1])
+        courses = list(_records(Course, owner).order_by("created_at", "id")[:MAX_COURSES + 1])
+        assignments = list(_records(Assignment, owner).order_by("due_date", "id")[:MAX_EXPORT_ASSIGNMENTS + 1])
+        materials = list(_records(StudyMaterial, owner).order_by("created_at", "id")[:MAX_EXPORT_MATERIALS + 1])
+        stored = set(_records(MaterialFile, owner).values_list("material_id", flat=True))
+        profile = _records(StudentProfile, owner).first()
+    if (len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
+            or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS):
+        raise WorkspaceLimit("Your workspace is too large to export in one file. No file was created.")
+    return {"semesters": semesters, "courses": courses, "assignments": assignments,
+            "materials": materials, "stored": stored, "profile": profile}

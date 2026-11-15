@@ -14,7 +14,7 @@ from academic_logic import academic_summary, predicted_summary, target_plan
 from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
-from . import data, forms
+from . import data, export, forms
 from .context import DISPLAY_COOKIE, display_theme
 
 
@@ -195,10 +195,10 @@ def delete(request, identity, kind, identifier):
 @protected()
 def material_list(request, identity):
     courses = {course.pk: course for course in queries.options(identity, 'course')}
-    stored = services.materials.stored_ids(identity)
-    rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in stored}
+    storage = services.materials.storage(identity)
+    rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in storage['ids']}
             for item in services.materials.list(identity)]
-    return render(request, 'student_web/materials.html', {'rows': rows})
+    return render(request, 'student_web/materials.html', {'rows': rows, 'storage': storage})
 
 
 def upload_too_large(request):
@@ -326,7 +326,19 @@ def settings(request, identity):
     # Show the last four characters only when at least half of the value stays hidden.
     masked = ('\u2022' * 6 + matric[-4:]) if len(matric) >= 8 else ('\u2022' * 6 if matric else '')
     return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
-                  'masked_matric': masked})
+                  'masked_matric': masked, 'storage': services.materials.storage(identity)})
+
+
+@protected()
+def data_export(request, identity):
+    records = queries.export_records(identity)
+    now = timezone.now()
+    body = export.document(records, {'username': request.user.username, 'email': request.user.email}, now)
+    response = HttpResponse(body, content_type='application/json; charset=utf-8')
+    response['Content-Disposition'] = content_disposition_header(True, f'ucc-my-data-{timezone.localdate(now):%Y-%m-%d}.json')
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    return response
 
 
 @protected(('GET', 'POST'))

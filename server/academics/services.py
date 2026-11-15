@@ -227,6 +227,17 @@ class MaterialRecords(StudentRecords):
                 raise StoredFileDamaged()
             return material, content
 
+    def storage(self, identity):
+        """Stored-file IDs plus usage against the per-student quota, in one transaction."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            files = MaterialFile.objects.using(database_alias()).filter(owner_id=owner)
+            ids = set(files.values_list("material_id", flat=True))
+            used = files.aggregate(total=Sum(Length("content")))["total"] or 0
+        return {"ids": ids, "files": len(ids), "bytes": used,
+                "max_files": MAX_FILES_PER_STUDENT, "max_bytes": MAX_STORED_BYTES_PER_STUDENT,
+                "max_mib": MAX_STORED_BYTES_PER_STUDENT // (1024 * 1024)}
+
     def stored_ids(self, identity):
         """IDs of this student's materials that have a stored file."""
         with student_transaction(identity):

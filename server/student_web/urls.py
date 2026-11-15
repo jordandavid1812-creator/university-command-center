@@ -13,6 +13,7 @@ urlpatterns = [
     path('settings/', views.settings, name='settings'),
     path('settings/display/', views.display_preference, name='display-preference'),
     path('settings/profile/', views.profile_edit, name='profile-edit'),
+    path('settings/export/', views.data_export, name='data-export'),
     path('materials/new/', views.material_upload, name='material-upload'),
     path('materials/', views.material_list, name='material-list'),
     path('materials/<uuid:identifier>/delete/', views.delete, {'kind': 'material'}, name='material-delete'),
