@@ -4,13 +4,16 @@ Only `send` can call a provider, and only after the confirm page's POST with a v
 consent token. The call runs with no database transaction open. Every other page only
 reads or deletes the student's own records.
 """
+import logging
 from django.contrib import messages
+from django.db import DatabaseError
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import content_disposition_header
 from academics import services
+from academics.ownership import OwnershipRequired
 from academics.services import AiLimitReached, AiRequestClosed
 from . import ai_consent, ai_providers, forms, text_extraction
 from .views import error_page, protected
@@ -31,6 +34,13 @@ FAILURE_MESSAGES = {
     "blocked": "The AI service declined to answer this request.",
     "truncated": "The AI's answer was cut off before it finished, so it was not saved.",
     "save": "The answer arrived but could not be saved.",
+}
+
+
+STATUS_HINTS = {
+    "4xx": "The service rejected the request itself (a 4xx reply). This usually means the API key or model name "
+           "is wrong, or the account has no quota left.",
+    "5xx": "The service had a problem on its side (a 5xx reply). Try again later.",
 }
 
 
@@ -73,7 +83,8 @@ def confirm(request, identity, identifier):
     tool, question = form.cleaned_data['tool'], form.cleaned_data['question']
     token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters)
     providers = ai_providers.available_providers()
-    send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers)
+    send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers,
+                                 auto_id=False)
     return render(request, 'student_web/ai_confirm.html', {
         'material': material, 'tool': tool, 'tool_name': TOOL_NAMES[tool], 'question': question,
         'amount': text_extraction.describe(extracted), 'send_form': send_form,
@@ -125,11 +136,15 @@ def send(request, identity, identifier):
         return error_page(request, 'Request not sent', LIMIT_MESSAGES[refused.reason], 429)
     if not created:
         return redirect('student_web:ai-request', ledger.pk)
-    # 3. Call the provider with no database transaction open.
+    # 3. Call the provider with no database transaction open. From here on every outcome is
+    #    recorded on the ledger row and the response is a redirect to it.
     try:
         result = ai_providers.ask(data['provider'], data['tool'], extracted.text, data['question'])
     except ai_providers.ProviderError as failure:
-        _close_failed(identity, ledger.pk, failure.category)
+        _close_failed(request, identity, ledger.pk, failure.category, failure.status_class or '')
+        return redirect('student_web:ai-request', ledger.pk)
+    except Exception:  # an unexpected client error: never retried, counted as a network failure
+        _close_failed(request, identity, ledger.pk, 'network')
         return redirect('student_web:ai-request', ledger.pk)
     # 4. Save in a new short transaction, only while the request is still in progress.
     try:
@@ -137,15 +152,19 @@ def send(request, identity, identifier):
                             shape_version=ai_providers.SHAPE_VERSION)
     except AiRequestClosed:
         pass  # already marked interrupted: the late answer is discarded
-    except (services.InvalidRecord, services.RecordNotFound):
-        _close_failed(identity, ledger.pk, 'save')
+    except (services.InvalidRecord, services.RecordNotFound, DatabaseError):
+        _close_failed(request, identity, ledger.pk, 'save')
     return redirect('student_web:ai-request', ledger.pk)
 
 
-def _close_failed(identity, request_id, category):
+def _close_failed(request, identity, request_id, category, status_class=''):
+    """Record a failure. If even that fails (database down, session ended), the row stays
+    'sent' and is shown as interrupted after two minutes; it is never retried."""
+    # Fixed-label log line (route and level only): details live on the ledger row.
+    logging.getLogger('student_web.ai').warning('AI request failed', extra={'request': request})
     try:
-        services.ai.fail(identity, request_id, category)
-    except AiRequestClosed:
+        services.ai.fail(identity, request_id, category, status_class)
+    except (AiRequestClosed, DatabaseError, OwnershipRequired):
         pass
 
 
@@ -167,7 +186,8 @@ def request_status(request, identity, identifier):
     return render(request, 'student_web/ai_request.html', {
         'ledger': ledger, 'status': status, 'tool_name': TOOL_NAMES[ledger.tool],
         'provider_name': ai_providers.PROVIDER_NAMES[ledger.provider],
-        'failure': FAILURE_MESSAGES.get(ledger.error_category, '')}, status=200)
+        'failure': FAILURE_MESSAGES.get(ledger.error_category, ''),
+        'status_hint': STATUS_HINTS.get(ledger.status_class, '')}, status=200)
 
 
 def _checked(saved):

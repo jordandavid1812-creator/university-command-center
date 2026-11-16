@@ -386,12 +386,13 @@ class AiRecords:
                 raise RecordNotFound()
             raise AiRequestClosed()
 
-    def fail(self, identity, request_id, category):
+    def fail(self, identity, request_id, category, status_class=""):
         """Mark an in-progress request failed (RecordNotFound / AiRequestClosed as in _close)."""
-        if category not in _AI_CATEGORIES:
+        if category not in _AI_CATEGORIES or status_class not in ("", "3xx", "4xx", "5xx"):
             raise InvalidRecord()
         with student_transaction(identity):
-            self._close(require_identity(identity), request_id, status="failed", error_category=category)
+            self._close(require_identity(identity), request_id, status="failed", error_category=category,
+                        status_class=status_class)
 
     def succeed(self, identity, request_id, *, material_id, result, question="", shape_version=1):
         """Save a checked result and mark its request succeeded, both or neither.

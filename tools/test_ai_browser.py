@@ -26,6 +26,37 @@ CARDS = {'cards': [{'front': f'Synthetic term {n + 1}', 'back': f'Synthetic mean
 SUMMARY = {'points': ['Cells are the basic unit of life.', '<b>Markup</b> stays plain text.']}
 
 
+def confirm_html():
+    """The real confirm page with two configured providers."""
+    sys.path.insert(0, str(ROOT / 'server'))
+    from student_web.forms import AiSendForm
+    request = RequestFactory().get('/')
+    request.resolver_match = resolve('/')
+    request.student_identity = object()  # Static presentation marker, never a web capability.
+    request.user = NS(username='Synthetic preview')
+    with override_settings(STUDENT_WEBSITE_ENABLED=True):
+        context = foundation.navigation(request)
+    material = NS(pk=uuid.UUID(int=9), title='Synthetic notes')
+    send_form = AiSendForm(initial={'tool': 'summary', 'question': '', 'token': 'synthetic-token-value'},
+                           providers=['gemini', 'grok'], auto_id=False)
+    context.update(request=request, csrf_token='synthetic-csrf', messages=[], material=material, tool='summary',
+                   tool_name='Summary', question='', amount='All 62 characters', send_form=send_form,
+                   providers=[('gemini', 'Gemini (Google)'), ('grok', 'Grok (xAI)')],
+                   usage={'used_today': 1, 'daily_limit': 50, 'results': 0, 'max_results': 500})
+    return inline(render_to_string('student_web/ai_confirm.html', context))
+
+
+def inline(html):
+    for name in ('site.css', 'ai.css', 'theme-dark.css'):
+        html = re.sub(rf'<link rel="stylesheet" href="/static/student_web/{re.escape(name)}"( media="[^"]*")?>',
+                      lambda match: f'<style{(" " + match.group(1).strip()) if match.group(1) else ""}>'
+                                    + (STATIC / name).read_text() + '</style>', html)
+    for name in ('site.js', 'ai.js'):
+        html = html.replace(f'<script defer src="/static/student_web/{name}"></script>',
+                            '<script>' + (STATIC / name).read_text() + '</script>')
+    return html
+
+
 def html_for(tool, data, theme=None):
     sys.path.insert(0, str(ROOT / 'server'))
     from student_web.ai_views import TOOL_NAMES, result_as_text
@@ -41,15 +72,7 @@ def html_for(tool, data, theme=None):
     context.update(request=request, csrf_token='synthetic-token', messages=[], saved=saved, material=material,
                    tool_name=TOOL_NAMES[tool], data=data, text=result_as_text(saved, material, data),
                    display_theme=theme or 'light')
-    html = render_to_string('student_web/ai_result.html', context)
-    for name in ('site.css', 'ai.css', 'theme-dark.css'):
-        html = re.sub(rf'<link rel="stylesheet" href="/static/student_web/{re.escape(name)}"( media="[^"]*")?>',
-                      lambda match: f'<style{(" " + match.group(1).strip()) if match.group(1) else ""}>'
-                                    + (STATIC / name).read_text() + '</style>', html)
-    for name in ('site.js', 'ai.js'):
-        html = html.replace(f'<script defer src="/static/student_web/{name}"></script>',
-                            '<script>' + (STATIC / name).read_text() + '</script>')
-    return html
+    return inline(render_to_string('student_web/ai_result.html', context))
 
 
 class AiBrowserTests(unittest.TestCase):
@@ -77,6 +100,44 @@ class AiBrowserTests(unittest.TestCase):
         page.route('http://localhost/**', lambda route: route.fulfill(status=200, content_type='text/html', body=html))
         page.goto('http://localhost/ai-results/synthetic/')
         return page
+
+    def test_send_buttons_post_the_chosen_provider_with_both_scripts_loaded(self):
+        for javascript in (True, False):
+            with self.subTest(javascript=javascript):
+                context = self.browser.new_context(viewport={'width': 1280, 'height': 900}, java_script_enabled=javascript)
+                self.addCleanup(context.close)
+                context.set_default_timeout(5000)
+                page = context.new_page()
+                posted = []
+                html = confirm_html()
+                page.route('http://localhost/materials/**', lambda route: (
+                    posted.append(route.request.post_data or '') if route.request.method == 'POST' else None,
+                    route.fulfill(status=200, content_type='text/html',
+                                  body=html if route.request.method == 'GET' else '<p>sent</p>'))[-1])
+                page.goto('http://localhost/materials/synthetic/tools/confirm/')
+                # Both scripts are really on the page: site.js (busy buttons) and ai.js (wait message).
+                self.assertIn("button.textContent = 'Working…'", html)
+                self.assertIn('data-ai-wait', html)
+                page.get_by_role('button', name='Send to Grok (xAI)').click()
+                page.wait_for_load_state()
+                self.assertEqual(len(posted), 1)
+                fields = dict(pair.split('=', 1) for pair in posted[0].split('&'))
+                self.assertEqual(fields.get('provider'), 'grok')
+                self.assertEqual((fields.get('tool'), fields.get('token')), ('summary', 'synthetic-token-value'))
+
+    def test_one_send_disables_both_providers_and_shows_the_wait(self):
+        context = self.browser.new_context(viewport={'width': 1280, 'height': 900})
+        self.addCleanup(context.close)
+        page = context.new_page()
+        html = confirm_html()
+        page.route('http://localhost/materials/**', lambda route: route.fulfill(
+            status=200, content_type='text/html', body=html) if route.request.method == 'GET' else None)
+        page.goto('http://localhost/materials/synthetic/tools/confirm/')
+        page.evaluate("""() => document.querySelectorAll('form[data-ai-send]').forEach(f =>
+            f.addEventListener('submit', e => e.preventDefault()))""")
+        page.get_by_role('button', name='Send to Gemini (Google)').click()
+        self.assertTrue(page.locator('[data-ai-wait]').is_visible())
+        self.assertTrue(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
 
     def test_interactive_quiz_scores_and_retries(self):
         page = self.page('quiz', QUIZ)

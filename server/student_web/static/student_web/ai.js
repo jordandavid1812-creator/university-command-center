@@ -38,8 +38,10 @@
   const waitOnSend = () => {
     document.querySelectorAll('form[data-ai-send]').forEach((form) => {
       form.addEventListener('submit', () => {
-        const wait = form.querySelector('[data-ai-wait]');
+        const wait = document.querySelector('[data-ai-wait]');
         if (wait) wait.hidden = false;
+        // One request at a time: the other provider's button stops too.
+        document.querySelectorAll('form[data-ai-send] button').forEach((button) => { button.disabled = true; });
       });
     });
   };

@@ -112,7 +112,7 @@ def require_runtime_role(connection):
                    OR COALESCE(has_table_privilege(current_user,
                        to_regclass('public.academics_studentprofile'), 'DELETE'), false)
                    -- AI results are never edited; the AI ledger is never deleted, and only
-                   -- its status, error category and update time may change.
+                   -- its status, error category, status class and update time may change.
                    OR COALESCE(has_any_column_privilege(current_user,
                        to_regclass('public.academics_studyairesult'), 'UPDATE'), false)
                    OR COALESCE(has_table_privilege(current_user,
@@ -120,7 +120,7 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_attribute a
                        WHERE a.attrelid = to_regclass('public.academics_studyairequest')
                          AND a.attnum > 0 AND NOT a.attisdropped
-                         AND a.attname NOT IN ('status', 'error_category', 'updated_at')
+                         AND a.attname NOT IN ('status', 'error_category', 'status_class', 'updated_at')
                          AND has_column_privilege(current_user, a.attrelid, a.attnum, 'UPDATE'))
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
