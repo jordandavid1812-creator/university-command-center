@@ -213,6 +213,21 @@ class ChildBoundaryTests(SimpleTestCase):
             text_extraction._SLOTS.release()
             text_extraction._SLOTS.release()
 
+    def test_a_child_that_cannot_start_is_a_clear_refusal_not_a_crash(self):
+        for name, patcher in (("start fails", patch.object(subprocess, "Popen", side_effect=OSError("synthetic"))),
+                              ("no interpreter path", patch.object(sys, "executable", ""))):
+            with self.subTest(name), patcher, self.assertRaises(ExtractionFailed) as refused:
+                extract_text("pdf", b"%PDF-1.7 synthetic")
+            self.assertEqual(refused.exception.reason, "unreadable")
+        # The slot is released after a failed start, so later files still work.
+        self.assertEqual(text_extraction._SLOTS._value, 2)
+
+    def test_a_child_that_stops_reading_early_is_handled(self):
+        FakeChild(self, "import sys\nsys.exit(5)\n")  # exits without reading its 10 MiB input
+        with self.assertRaises(ExtractionFailed) as refused:
+            extract_text("pdf", b"%PDF-" + b"0" * (10 * 1024 * 1024 - 5))
+        self.assertEqual(refused.exception.reason, "unreadable")
+
     def test_oversized_input_is_refused_before_starting_a_child(self):
         with patch.object(subprocess, "Popen") as popen, self.assertRaises(ExtractionFailed):
             extract_text("pdf", b"%PDF-" + b"0" * (10 * 1024 * 1024))

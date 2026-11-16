@@ -91,19 +91,29 @@ def child_environment():
 
 
 def _run_child(content):
-    """Run the child; return (exit code, stdout bytes) or None on timeout or oversized output."""
+    """Run the child; return (exit code, stdout bytes), or None if it could not start,
+    ran too long or wrote too much."""
+    if not sys.executable:  # some servers do not set it; never fall back to a shell or PATH
+        return None
     output, state = [], {"size": 0, "too_large": False}
     with tempfile.TemporaryDirectory(prefix="ucc-pdf-") as workdir:
-        process = subprocess.Popen(
-            [sys.executable, "-I", str(CHILD_SCRIPT)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, env=child_environment(), cwd=workdir, close_fds=True, shell=False)
+        try:
+            process = subprocess.Popen(
+                [sys.executable, "-I", str(CHILD_SCRIPT)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, env=child_environment(), cwd=workdir, close_fds=True, shell=False)
+        except (OSError, ValueError):  # for example no free process slots or file descriptors
+            return None
 
         def feed():
             try:
                 process.stdin.write(content)
-                process.stdin.close()
             except OSError:  # the child stopped reading (for example it was killed)
                 pass
+            finally:
+                try:
+                    process.stdin.close()
+                except OSError:
+                    pass
 
         def drain():
             while True:
