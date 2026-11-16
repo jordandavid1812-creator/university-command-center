@@ -384,7 +384,9 @@ Outcomes:
 - Prompt injection inside a study file can only make that file's own output wrong.
   Only that text is sent, and the output is shape-checked and escaped.
 - PDF text extraction can miss or misorder text (tables, columns, scans).
-- On Windows the PDF child process has a time limit but no memory limit.
+- On Windows the PDF child process has a time limit but no memory limit. (Resolved
+  during stage 2: a Job Object limits memory and forbids other processes; see
+  AI_STUDY_ASSISTANT.md.)
 - Confirm-page extraction is not counted. It is bounded per call and per process,
   which is acceptable for a local single-user site; any deployment would need a
   separate limit.

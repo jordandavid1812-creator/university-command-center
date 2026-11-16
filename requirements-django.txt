@@ -1,3 +1,4 @@
 # Separate foundation runtime; the existing CLI and Streamlit requirements stay intact.
 Django==5.2.19
 psycopg[binary]==3.3.8
+pypdf==6.21.4
