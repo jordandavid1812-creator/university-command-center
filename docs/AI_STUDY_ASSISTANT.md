@@ -131,8 +131,9 @@ Characters are Unicode code points after cleaning. Cleaning turns `\r\n` and `\r
 into `\n` and removes control characters (except tab and line feed), C1 controls and
 lone surrogates. Text is capped at **60,000 characters**.
 
-- **TXT:** the stored bytes are already checked UTF-8; they are decoded strictly,
-  cleaned and capped. Empty or whitespace-only text is "no selectable text".
+- **TXT:** the stored bytes are already checked UTF-8; they are decoded strictly
+  (as `utf-8-sig`, so a byte-order mark, which the upload check accepts, is neither
+  counted nor sent), cleaned and capped. Empty or whitespace-only text is "no selectable text".
 - **PDF:** parsed only in a separate child process, `student_web/pdf_text_child.py`.
   It uses only the standard library and `pypdf`, never project or Django code.
   - It is started as `sys.executable -I` with a fixed argument list, no shell, a fresh
@@ -163,8 +164,12 @@ lone surrogates. Text is capped at **60,000 characters**.
     5 unreadable.
   - The parent kills the child after **20 seconds** or beyond **1 MiB** of output.
     It checks the metadata strictly (exact keys, integers that are not booleans,
-    1 ≤ pages read ≤ min(total, 300), total ≤ 100,000), decodes the text strictly as
-    UTF-8, then re-cleans and re-caps it. Anything else means "could not be read".
+    1 ≤ pages read ≤ min(total, 300), total ≤ 100,000, and "not cut short" only when
+    every page was read), decodes the text strictly as UTF-8, then re-cleans and
+    re-caps it. Anything else means "could not be read".
+  - Any setup failure becomes "could not be read" and never leaves the child running:
+    the child cannot start, `sys.executable` is empty, the temporary folder cannot be
+    created or removed, or a helper thread cannot start.
   - At most **two PDF extractions** run at once per website process. A third gets
     "Busy, try again in a moment" immediately. TXT files need no slot.
 
@@ -178,8 +183,8 @@ Python 3.12. The newer 7.x releases were less than two weeks old when pinned.
 | Suite | Covers |
 | --- | --- |
 | `security_tests.test_study_ai_rls` | Raw SQL as the runtime role, with positive controls (the baseline rows are accepted): forced RLS on both tables, no-context access, own-only rows, cross-student writes and links, no ledger DELETE, status-only UPDATE, no result UPDATE, no TRUNCATE, material delete refused around Django, every CHECK value list, a result whose tool differs from its request |
-| `tests.test_pdf_child_memory` (no database) | Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
-| `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
+| `tests.test_pdf_child_memory` (no database) | **Every platform:** a slow child's real Python process is gone after the time limit, and the call returns within 20 seconds instead of waiting for the child (on Windows this checks the process behind the virtual-environment launcher). Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
+| `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts; the child runs isolated (`-I`) in a removed `ucc-pdf-` folder with stderr discarded; setup failures are refusals that stop the child; byte-order marks; metadata that contradicts itself. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
 No historical tests were changed. `security_tests/test_migrations.py` already

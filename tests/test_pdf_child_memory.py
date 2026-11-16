@@ -8,6 +8,8 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -84,6 +86,48 @@ class JobObjectTests(unittest.TestCase):
             self.assertEqual(child.main(), child.EXIT_UNREADABLE)
         extract.assert_not_called()
         self.assertEqual(stdin.buffer.tell(), 0)
+
+
+def process_is_gone(pid):
+    """True if no process with this ID is running (Windows: also checks it has exited)."""
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, pid)  # SYNCHRONIZE, QUERY_LIMITED_INFORMATION
+        if not handle:
+            return True
+        try:
+            return kernel32.WaitForSingleObject(ctypes.c_void_p(handle), 5000) == 0  # WAIT_OBJECT_0
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+class TimeLimitTests(unittest.TestCase):
+    def test_the_real_python_process_is_gone_after_the_time_limit(self):
+        """On Windows, sys.executable in a virtual environment is a launcher that starts the real
+        interpreter; killing the launcher must end that interpreter too."""
+        from server.student_web import text_extraction
+        with tempfile.TemporaryDirectory() as folder:
+            pid_file = Path(folder) / "pid.txt"
+            script = Path(folder) / "slow_child.py"
+            script.write_text(f"import os, time\nopen({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+                              "time.sleep(60)\n", encoding="utf-8")
+            started = time.monotonic()
+            with patch.object(text_extraction, "CHILD_SCRIPT", script), \
+                    patch.object(text_extraction, "TIME_LIMIT_SECONDS", 3), \
+                    self.assertRaises(text_extraction.ExtractionFailed):
+                text_extraction.extract_text("pdf", b"%PDF-1.7 synthetic")
+            elapsed = time.monotonic() - started
+            pid = int(pid_file.read_text())
+        # Killed at the 3-second limit, not left to finish its 60-second sleep.
+        self.assertLess(elapsed, 20)
+        self.assertTrue(process_is_gone(pid), f"process {pid} is still running")
 
 
 def run_limited(code):

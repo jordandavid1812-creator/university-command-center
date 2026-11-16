@@ -83,6 +83,15 @@ class TextFileTests(SimpleTestCase):
                     extract_text(file_type, content)
                 self.assertEqual(refused.exception.reason, reason)
 
+    def test_a_byte_order_mark_is_not_counted_or_sent(self):
+        extracted = extract_text("txt", b"\xef\xbb\xbfNotes")
+        self.assertEqual((extracted.text, extracted.characters), ("Notes", 5))
+
+    def test_refusal_messages_fit_both_file_types(self):
+        with self.assertRaises(ExtractionFailed) as refused:
+            extract_text("txt", b"\xff")
+        self.assertEqual(refused.exception.message, "This file could not be read.")
+
     def test_cleaning_removes_lone_surrogates_and_controls_but_keeps_text(self):
         self.assertEqual(clean_text("a\ud800b\udfffc\x85d\x7fe​f"), "abcde​f")
 
@@ -154,6 +163,43 @@ class ChildBoundaryTests(SimpleTestCase):
         self.assertEqual(text_extraction.child_environment(), {} if os.name != "nt" else
                          {"SYSTEMROOT": os.environ["SYSTEMROOT"]})
 
+    def test_the_child_runs_isolated_in_its_own_temporary_folder(self):
+        FakeChild(self, "import os, sys\nsys.stdout.buffer.write(b'{\"pages_read\": 1, \"pages_total\": 1, "
+                        "\"truncated\": false}\\n' + f'isolated={sys.flags.isolated} "
+                        "folder={os.path.basename(os.getcwd())}'.encode())\n")
+        launches, real_popen = [], subprocess.Popen
+
+        def spy(*args, **kwargs):
+            launches.append((args, kwargs))
+            return real_popen(*args, **kwargs)
+        with patch.object(subprocess, "Popen", side_effect=spy):
+            text = extract_text("pdf", b"%PDF-1.7 synthetic").text
+        self.assertIn("isolated=1", text)
+        self.assertRegex(text, r"folder=ucc-pdf-")
+        (command,), options = launches[0]
+        self.assertEqual(command[1:2], ["-I"])
+        self.assertEqual((options["stderr"], options["shell"]), (subprocess.DEVNULL, False))
+        self.assertFalse(os.path.exists(options["cwd"]))  # removed afterwards
+
+    def test_setup_failures_are_refusals_and_never_leave_a_child_running(self):
+        with patch.object(text_extraction.tempfile, "TemporaryDirectory", side_effect=OSError("synthetic")), \
+                self.assertRaises(ExtractionFailed) as refused:
+            extract_text("pdf", b"%PDF-1.7 synthetic")
+        self.assertEqual(refused.exception.reason, "unreadable")
+        FakeChild(self, "import time\ntime.sleep(60)\n")
+        started, real_popen = [], subprocess.Popen
+
+        def spy(*args, **kwargs):
+            started.append(real_popen(*args, **kwargs))
+            return started[-1]
+        with patch.object(subprocess, "Popen", side_effect=spy), \
+                patch.object(text_extraction.threading.Thread, "start", side_effect=RuntimeError("synthetic")), \
+                self.assertRaises(ExtractionFailed) as refused:
+            extract_text("pdf", b"%PDF-1.7 synthetic")
+        self.assertEqual(refused.exception.reason, "unreadable")
+        self.assertIsNotNone(started[0].poll())  # the sleeping child was stopped
+        self.assertEqual(text_extraction._SLOTS._value, 2)
+
     def test_a_slow_child_is_stopped_at_the_time_limit(self):
         FakeChild(self, "import time\ntime.sleep(60)\n")
         started = time.monotonic()
@@ -163,7 +209,9 @@ class ChildBoundaryTests(SimpleTestCase):
         self.assertLess(time.monotonic() - started, 10)
 
     def test_oversized_output_is_abandoned(self):
-        FakeChild(self, "import sys\nsys.stdout.buffer.write(b'x' * (3 * 1024 * 1024))\n")
+        # Valid metadata first, so only the output cap can refuse this.
+        FakeChild(self, "import sys\nsys.stdout.buffer.write(b'{\"pages_read\": 1, \"pages_total\": 1, "
+                        "\"truncated\": true}\\n' + b'x' * (3 * 1024 * 1024))\n")
         with self.assertRaises(ExtractionFailed) as refused:
             extract_text("pdf", b"%PDF-1.7 synthetic")
         self.assertEqual(refused.exception.reason, "unreadable")
@@ -177,7 +225,8 @@ class ChildBoundaryTests(SimpleTestCase):
             "read beyond total": b'{"pages_read": 3, "pages_total": 2, "truncated": false}\nText',
             "not JSON": b"pages 1 of 2\nText",
             "invalid UTF-8": good.encode() + b"\nText \xff",
-            "huge total": b'{"pages_read": 1, "pages_total": 100001, "truncated": false}\nText',
+            "huge total": b'{"pages_read": 1, "pages_total": 100001, "truncated": true}\nText',
+            "not cut short but pages missing": b'{"pages_read": 1, "pages_total": 5, "truncated": false}\nText',
         }.items():
             with self.subTest(name):
                 FakeChild(self, f"import sys\nsys.stdout.buffer.write({output!r})\n")

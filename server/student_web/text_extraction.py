@@ -27,7 +27,7 @@ _SLOTS = threading.BoundedSemaphore(2)
 MESSAGES = {
     "encrypted": "This PDF is password-protected, so its text cannot be read.",
     "no_text": "This file has no selectable text (it may be a scan), so there is nothing to send.",
-    "unreadable": "This PDF could not be read.",
+    "unreadable": "This file could not be read.",
     "busy": "Busy reading other files. Try again in a moment.",
     "unsupported": "Only PDF and TXT study files can be used.",
 }
@@ -72,7 +72,8 @@ def extract_text(file_type, content):
 
 def _from_txt(content):
     try:
-        text = clean_text(content.decode("utf-8"))
+        # utf-8-sig drops a leading byte-order mark, as the upload check accepts one.
+        text = clean_text(content.decode("utf-8-sig"))
     except UnicodeDecodeError:
         raise ExtractionFailed("unreadable") from None
     if not text.strip():
@@ -92,18 +93,23 @@ def child_environment():
 
 def _run_child(content):
     """Run the child; return (exit code, stdout bytes), or None if it could not start,
-    ran too long or wrote too much."""
+    ran too long or wrote too much. Any setup failure is a refusal, never a crash."""
     if not sys.executable:  # some servers do not set it; never fall back to a shell or PATH
         return None
-    output, state = [], {"size": 0, "too_large": False}
-    with tempfile.TemporaryDirectory(prefix="ucc-pdf-") as workdir:
-        try:
-            process = subprocess.Popen(
-                [sys.executable, "-I", str(CHILD_SCRIPT)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, env=child_environment(), cwd=workdir, close_fds=True, shell=False)
-        except (OSError, ValueError):  # for example no free process slots or file descriptors
-            return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="ucc-pdf-", ignore_cleanup_errors=True) as workdir:
+            return _run_child_in(workdir, content)
+    except (OSError, RuntimeError, ValueError):  # no process slots, file descriptors, threads or disk
+        return None
 
+
+def _run_child_in(workdir, content):
+    output, state = [], {"size": 0, "too_large": False}
+    process = subprocess.Popen(
+        [sys.executable, "-I", str(CHILD_SCRIPT)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, env=child_environment(), cwd=workdir, close_fds=True, shell=False)
+    code, threads = None, []
+    try:
         def feed():
             try:
                 process.stdin.write(content)
@@ -127,18 +133,27 @@ def _run_child(content):
                     return
                 output.append(chunk)
 
-        threads = [threading.Thread(target=feed, daemon=True), threading.Thread(target=drain, daemon=True)]
-        for thread in threads:
+        for target in (feed, drain):
+            thread = threading.Thread(target=target, daemon=True)
             thread.start()
+            threads.append(thread)
         try:
             code = process.wait(timeout=TIME_LIMIT_SECONDS)
         except subprocess.TimeoutExpired:
+            code = None
+    finally:
+        # Whatever happened above, the child never outlives this call. Once it has ended,
+        # its pipes reach end-of-file, so the helper threads finish before the pipes close.
+        if process.poll() is None:
             process.kill()
             process.wait()
-            code = None
         for thread in threads:
             thread.join(5)
-        process.stdout.close()
+        for stream in (process.stdin, process.stdout):
+            try:
+                stream.close()
+            except OSError:
+                pass
     if code is None or state["too_large"]:
         return None
     return code, b"".join(output)
@@ -152,7 +167,8 @@ def _metadata(line):
         raise ValueError
     read, total, truncated = data["pages_read"], data["pages_total"], data["truncated"]
     if (type(read) is not int or type(total) is not int or type(truncated) is not bool
-            or not 1 <= read <= min(total, MAX_PAGES) or total > MAX_TOTAL_PAGES):
+            or not 1 <= read <= min(total, MAX_PAGES) or total > MAX_TOTAL_PAGES
+            or (not truncated and read != total)):  # "not cut short" must mean every page was read
         raise ValueError
     return read, total, truncated
 
