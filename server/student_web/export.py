@@ -31,6 +31,13 @@ def document(records, account, exported_at):
                              "original_filename": m.original_filename, "file_type": m.file_type,
                              "size_bytes": m.size_bytes, "file_stored": m.pk in records["stored"],
                              "created_at": _when(m.created_at)} for m in records["materials"]],
+        "ai_results": [{"id": str(r.pk), "material_id": str(r.material_id), "request_id": str(r.request_id),
+                        "tool": r.tool, "question": r.question, "result": r.result, "shape_version": r.shape_version,
+                        "created_at": _when(r.created_at)} for r in records["ai_results"]],
+        "ai_requests": [{"id": str(r.pk), "tool": r.tool, "provider": r.provider, "model": r.model,
+                         "status": r.status, "error_category": r.error_category,
+                         "characters_sent": r.characters_sent, "truncated": r.truncated,
+                         "created_at": _when(r.created_at)} for r in records["ai_requests"]],
         "notes": "Study file contents are not included; download each stored file from Study materials.",
     }
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"

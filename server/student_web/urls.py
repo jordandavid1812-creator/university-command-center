@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import ai_views, views
 
 app_name = 'student_web'
 urlpatterns = [
@@ -18,6 +18,13 @@ urlpatterns = [
     path('materials/', views.material_list, name='material-list'),
     path('materials/<uuid:identifier>/delete/', views.delete, {'kind': 'material'}, name='material-delete'),
     path('materials/<uuid:identifier>/download/', views.material_download, name='material-download'),
+    path('materials/<uuid:identifier>/tools/', ai_views.tools, name='ai-tools'),
+    path('materials/<uuid:identifier>/tools/confirm/', ai_views.confirm, name='ai-confirm'),
+    path('materials/<uuid:identifier>/tools/send/', ai_views.send, name='ai-send'),
+    path('ai-requests/<uuid:identifier>/', ai_views.request_status, name='ai-request'),
+    path('ai-results/<uuid:identifier>/', ai_views.result, name='ai-result'),
+    path('ai-results/<uuid:identifier>/download/', ai_views.result_download, name='ai-result-download'),
+    path('ai-results/<uuid:identifier>/delete/', ai_views.result_delete, name='ai-result-delete'),
 ]
 for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments')):
     urlpatterns += [

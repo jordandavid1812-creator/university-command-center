@@ -8,8 +8,9 @@ def snapshot(identity, today=None):
     returns assignment totals, upcoming work and the greeting name, in one transaction."""
     if today is None:
         return workspace(*academic_snapshot(identity))
-    semesters, courses, totals, upcoming, greeting_name = dashboard_reads(identity, today)
-    return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name}
+    semesters, courses, totals, upcoming, greeting_name, ai_panel = dashboard_reads(identity, today)
+    return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
+            'ai_panel': ai_panel}
 
 
 def workspace(semesters, courses):

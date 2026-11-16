@@ -6,9 +6,11 @@ querysets or use the migration connection. Mutations remain in academics.service
 from dataclasses import dataclass
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
-from .models import Assignment, Course, MaterialFile, Semester, StudentProfile, StudyMaterial
+from .models import (Assignment, Course, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
+                     StudyMaterial)
 from .ownership import database_alias, student_transaction
-from .services import InvalidRecord, RecordNotFound, record_id
+from .services import (AI_REQUESTS_PER_DAY, MAX_AI_RESULTS_PER_STUDENT, InvalidRecord, RecordNotFound, ai_day_range,
+                       record_id)
 
 PAGE_SIZE = 25
 MAX_COURSES = 1000
@@ -16,6 +18,8 @@ MAX_SEMESTERS = 200
 MAX_PREDICTION_COURSES = 200
 MAX_EXPORT_ASSIGNMENTS = 20000
 MAX_EXPORT_MATERIALS = 5000
+MAX_EXPORT_AI_REQUESTS = 20000
+DASHBOARD_RECENT_AI_RESULTS = 5
 MODELS = {'semester': Semester, 'course': Course, 'assignment': Assignment}
 
 
@@ -142,7 +146,16 @@ def dashboard_reads(identity, today):
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
         name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
-        return semesters, records, totals, upcoming, name or ''
+        return semesters, records, totals, upcoming, name or '', _ai_panel(owner)
+
+
+def _ai_panel(owner):
+    """Today's AI usage and the most recent saved results (two queries, same transaction)."""
+    start, end = ai_day_range()
+    used = _records(StudyAiRequest, owner).filter(created_at__gte=start, created_at__lt=end).count()
+    recent = list(_records(StudyAiResult, owner).order_by('-created_at', 'id')
+                  .values('id', 'tool', 'created_at', 'material__title')[:DASHBOARD_RECENT_AI_RESULTS])
+    return {'used_today': used, 'daily_limit': AI_REQUESTS_PER_DAY, 'recent': recent}
 
 
 def code_in_use(identity, code, exclude=None):
@@ -163,8 +176,12 @@ def export_records(identity):
         materials = list(_records(StudyMaterial, owner).order_by("created_at", "id")[:MAX_EXPORT_MATERIALS + 1])
         stored = set(_records(MaterialFile, owner).values_list("material_id", flat=True))
         profile = _records(StudentProfile, owner).first()
+        ai_requests = list(_records(StudyAiRequest, owner).order_by("created_at", "id")[:MAX_EXPORT_AI_REQUESTS + 1])
+        ai_results = list(_records(StudyAiResult, owner).order_by("created_at", "id")[:MAX_AI_RESULTS_PER_STUDENT + 1])
     if (len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
-            or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS):
+            or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS
+            or len(ai_requests) > MAX_EXPORT_AI_REQUESTS or len(ai_results) > MAX_AI_RESULTS_PER_STUDENT):
         raise WorkspaceLimit("Your workspace is too large to export in one file. No file was created.")
     return {"semesters": semesters, "courses": courses, "assignments": assignments,
-            "materials": materials, "stored": stored, "profile": profile}
+            "materials": materials, "stored": stored, "profile": profile,
+            "ai_requests": ai_requests, "ai_results": ai_results}

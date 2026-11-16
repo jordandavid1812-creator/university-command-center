@@ -18,6 +18,7 @@ No personal JSON is read/imported and no public deployment is approved.
 | `/performance/` | Read-only credit-weighted semester GPA and overall CGPA, attempted credits, graded/ungraded counts and accessible native meters/table |
 | `/predictor/` | Select courses with hypothetical grades, compute a selected-course prediction, filter by semester and reset selections without saving |
 | `/planner/` | Decimal target/remaining-credit form, required future average and the engine's achievable/guaranteed/impossible result states |
+| `/materials/<id>/tools/` and AI result pages | AI study assistant: summary, quiz, flashcards, ask a question; confirm before sending; see [AI_STUDY_ASSISTANT.md](AI_STUDY_ASSISTANT.md) |
 | `/settings/` | Verified username/email/status, password-change link and secure POST logout, profile, display mode, storage used and **Download my data**; no email change or account deletion |
 | `/materials/` | Own study materials: upload checked PDF/TXT files, owner-only attachment downloads, confirmed deletion; 50 files / 200 MiB per student. See [STUDY_MATERIALS.md](STUDY_MATERIALS.md) |
 | `/accounts/...` | Existing registration, verification, login/logout and recovery, presented in the shared website layout |

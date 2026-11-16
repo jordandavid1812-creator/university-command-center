@@ -8,12 +8,13 @@ with its own PR and review.
 | --- | --- |
 | 1. Records: tables, RLS, grants, startup checks, services, security tests | Built (PR #67, #68) |
 | 2. Text extraction (TXT, PDF via `pypdf` in a child process) | Built (PR #69) |
-| 3a. Provider client (Gemini, Grok), prompts, answer checks, key scanning | **Built (this PR)** |
-| 3b. Pages, consent token, export, `prune_ai_ledger` | Not started |
+| 3a. Provider client (Gemini, Grok), prompts, answer checks, key scanning | Built (PR #70) |
+| 3b. Pages, consent token, export, `prune_ai_ledger`, plus owner-requested quiz, flashcards, copy/download and dashboard panel | **Built (this PR)** |
 | 4. Manual check on the owner's PC with the owner's keys | Not started |
 
-Nothing calls Gemini or Grok yet: no page uses the client, the records or the extracted
-text until stage 3b, so no file content leaves the server.
+From stage 3b the website can send a file's text to Gemini or Grok, but only after the
+student's Send click on the confirm page, and only when the owner has set a key and a
+model (stage 4). With no key set, nothing can be sent.
 
 ## Stage 1: records
 
@@ -260,6 +261,87 @@ reservation.
   resolves or connects to a non-local address. The provider tests use it, and stage
   3b's web tests must use it too.
 
+## Stage 3b: pages
+
+| Route | Method | What it does |
+| --- | --- | --- |
+| `/materials/<id>/tools/` | GET | The four tools, the question box, today's usage meter, and saved results for this file. Only for the student's own material with a stored file (otherwise 404) |
+| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. **Never sends and never counts.** No Send button at 50 a day or with no provider |
+| `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
+| `/ai-requests/<id>/` | GET | In progress (reloads every 5 seconds, no JavaScript needed), failed (plain reason), interrupted, "result deleted", or a redirect to the result |
+| `/ai-results/<id>/` | GET | The result, re-checked with `check_result` before display, labelled "AI-generated: check it against your notes". An invalid old row shows "can no longer be displayed" |
+| `/ai-results/<id>/download/` | GET | The result as a plain-text attachment (`nosniff`, sandbox CSP) |
+| `/ai-results/<id>/delete/` | GET/POST | Dedicated confirmation; the ledger row stays and still counts |
+
+Study materials shows **Study tools** for each stored file. The dashboard has an **AI
+study tools** panel with today's usage meter and the five latest results, read in the
+same single dashboard transaction (two extra queries). **Download my data** adds
+`ai_results` and `ai_requests` (never the consent token hash), within the 413 limits.
+
+### Send, step by step (`student_web/ai_views.py`)
+
+1. The form is checked: exact fields, tool from the list, and a question only for "Ask
+   a question" (1–500 characters).
+2. The consent token (`student_web/ai_consent.py`) is checked. It must have a valid
+   signature (Django signing, its own salt) and match this student, material, tool and
+   question. A forged token, or one for another student, material, tool or question,
+   gets a 400 and nothing is sent.
+3. **The hash is looked up before the age check.** A request already made with this
+   token redirects to it (a refresh, a double click, or an old tab). Only then does an
+   expired token (over 10 minutes) get "Confirmation expired" and nothing is sent.
+4. The provider must be configured; a forged choice gets a 400.
+5. The file is read and extracted again. A failure stops here, with nothing sent and
+   nothing counted. If the character count differs from the confirmed one, the send
+   is refused.
+6. `services.ai.reserve` runs (busy, 50 a day, 500 results); refusals get a 429 with
+   a plain message. An existing request for the token redirects.
+7. `ai_providers.ask` runs with **no database transaction open**. A test records
+   `in_atomic_block` while connecting.
+8. `succeed` saves the result, or `fail` records the category. If the session ended
+   during the call, the save is refused and the output discarded. A late answer for an
+   interrupted request is discarded.
+
+Every Send response is a redirect, so refreshing never posts again. Only the file's
+extracted text and the question are sent: never the username, email, display name,
+matric number, file name or material title.
+
+### Owner-requested extras (no extra AI requests)
+
+All of these work on a result already saved, and all work without JavaScript first.
+`static/student_web/ai.js` and `ai.css` load **only on the AI pages**, so the site-wide
+`site.js` and `site.css` budgets and pages are unchanged.
+
+- **Interactive quiz.** Without JavaScript, each question lists its options with a
+  "Show answer" box. With it, the options become buttons:
+  - instant right/wrong colours and the reason;
+  - a sticky score and progress bar;
+  - a final score that counts up, with confetti for a perfect score;
+  - "Try again".
+- **Flip flashcards.** Without JavaScript, a list of fronts and backs. With it, a 3D
+  flip deck: next/previous (also the arrow keys), shuffle, "I know it" and "Review
+  again" piles, "Study review pile" and "All cards".
+- **Copy and download.** "Download as text" is a normal link. "Copy" (JavaScript) uses
+  the Clipboard API on secure pages such as `127.0.0.1`, otherwise a fallback.
+  Printing shows every quiz answer.
+- **Dashboard AI panel** (above).
+
+AI text is only ever inserted with `textContent`, never as HTML. All motion is skipped
+when the device asks for reduced motion. The waiting page and spinner work without
+JavaScript. Site-wide premium animations (GSAP) are a separate, later task with its own
+plan.
+
+### `prune_ai_ledger`
+
+`python server/manage.py prune_ai_ledger --settings=config.settings.auth_migration`,
+with the website stopped.
+
+- It refuses unless the current role owns both AI tables, so the runtime role is
+  refused.
+- In one transaction it checks deferred keys immediately, lifts `FORCE` on both
+  tables, deletes ledger rows older than 365 days that have no result, and restores
+  `FORCE`.
+- It prints only a count.
+
 ## Tests
 
 | Suite | Covers |
@@ -269,6 +351,9 @@ reservation.
 | `tests.test_repository_key_scan` | Key shapes found, ordinary text and near-misses ignored, a key at the end of a 6 MiB file and a key split across chunks found (shown to fail without the overlap), and the check fails on a tracked key in a temporary repository without printing the key or file name |
 | `tests.test_pdf_child_memory` (no database) | **Every platform:** a slow child's real Python process is gone after the time limit, and the call returns within 20 seconds instead of waiting for the child (on Windows this checks the process behind the virtual-environment launcher). Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
 | `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts; the child runs isolated (`-I`) in a removed `ucc-pdf-` folder with stderr discarded; setup failures are refusals that stop the child; byte-order marks; metadata that contradicts itself. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
+| `web_tests.test_ai_pages` (NoNetworkMixin; fake provider connection) | Tools page owner-only and stored-file-only; confirm shows what is and isn't sent and never sends or counts; GET never sends; question rules; only configured providers offered and a forged one refused; one click sends once and the result is shown escaped; only the text and question sent (no username, email, display name, matric, file name or title); a refresh or double click sends once; forged, other-tool, other-material and other-student tokens refused; an expired token sends nothing but still finds a finished request; missing CSRF never sends; failures recorded without retry or fallback; the daily limit; the session ending during the call discards the answer; no transaction open during the call; request page states; each tool without JavaScript; download headers; delete; owner-only results; invalid saved results; material deletion keeps the count; dashboard panel; export sections |
+| `tools/test_ai_browser.py` (Chromium) | Interactive quiz (right/wrong, reason, score, final, try again), flashcard deck (flip, next, piles, review pile, keys), copy to the clipboard as plain text, everything without JavaScript, animations end visible with no script errors, light and dark contrast of every quiz state |
+| `security_tests.test_prune_ai_ledger` | Old rows without results really removed for every student, others kept, `FORCE` restored, idempotent, runtime refused (shown to fail without lifting `FORCE`) |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
 No historical tests were changed. `security_tests/test_migrations.py` already

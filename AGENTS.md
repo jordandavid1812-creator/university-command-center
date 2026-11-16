@@ -120,3 +120,7 @@ AI providers (stage 3a): only student_web/ai_providers.py talks to Gemini/Grok, 
 keys in headers only, no redirects, one 60 s deadline and a 1 MiB cap. Never add default model names,
 retries, fallbacks, logging of prompts/replies/keys, or tests that reach the network.
 Never pass or patch ai_providers._connect outside tests; AI tests use tests/network_guard.NoNetworkMixin.
+AI pages (stage 3b): only ai_views.send may call ask(), after a valid consent token, a ledger reservation
+and with no transaction open. Look up the token hash before rejecting an expired token. AI text is
+inserted with textContent only. ai.js/ai.css load only on AI pages; keep every AI page working without JS.
+prune_ai_ledger runs only as the table owner with the website stopped.
