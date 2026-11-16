@@ -313,6 +313,9 @@ class AiRecords:
         self._requests(owner).filter(status="sent", created_at__lt=now - AI_STALE_AFTER).update(
             status="interrupted", updated_at=now)
 
+    def _existing(self, owner, consent_token_hash):
+        return self._requests(owner).filter(consent_token_hash=consent_token_hash).first()
+
     def find_request(self, identity, consent_token_hash):
         """The request already made with this consent token, or None."""
         with student_transaction(identity):
@@ -322,21 +325,26 @@ class AiRecords:
     def reserve(self, identity, *, tool, provider, model, characters_sent, truncated, consent_token_hash):
         """Record one request before anything is sent. Returns (request, created).
 
-        Under a per-student lock: an existing request with the same consent token is
-        returned unchanged (created=False), so a repeated Send never sends twice.
-        Otherwise stale in-flight requests become interrupted, then the in-flight,
-        daily and saved-result limits are checked, and the new row is inserted.
+        Must be the outermost call (not inside another transaction), so its two steps
+        commit separately:
+        1. In its own transaction, this student's stale in-flight requests become
+           interrupted. A refusal in step 2 therefore cannot undo it. No advisory lock
+           is needed here: it only touches rows over two minutes old, and row locks make
+           two concurrent markings safe (the second finds nothing left to mark).
+        2. Under a per-student lock: an existing request with the same consent token is
+           returned unchanged (created=False), so a repeated Send never sends twice.
+           Otherwise the in-flight, daily and saved-result limits are checked, in that
+           order, and the new row is inserted.
         """
-        # First, in its own short transaction, so a refusal below cannot roll it back.
+        if connections[database_alias()].in_atomic_block:
+            raise RuntimeError("ai.reserve must not run inside another transaction.")
         with student_transaction(identity):
-            owner = require_identity(identity)
-            self._lock(owner)
-            self._mark_stale(owner, timezone.now())
+            self._mark_stale(require_identity(identity), timezone.now())
         try:
             with student_transaction(identity):
                 owner = require_identity(identity)
                 self._lock(owner)
-                existing = self._requests(owner).filter(consent_token_hash=consent_token_hash).first()
+                existing = self._existing(owner, consent_token_hash)
                 if existing is not None:
                     return existing, False
                 now = timezone.now()
@@ -368,13 +376,18 @@ class AiRecords:
             raise InvalidRecord() from None
 
     def _close(self, owner, request_id, **values):
-        changed = self._requests(owner).filter(pk=record_id(request_id), status="sent").update(
+        """Close an in-progress request: RecordNotFound if it is not this student's,
+        AiRequestClosed if it is no longer in progress."""
+        identifier = record_id(request_id)
+        changed = self._requests(owner).filter(pk=identifier, status="sent").update(
             updated_at=timezone.now(), **values)
         if changed != 1:
+            if not self._requests(owner).filter(pk=identifier).exists():
+                raise RecordNotFound()
             raise AiRequestClosed()
 
     def fail(self, identity, request_id, category):
-        """Mark an in-progress request failed. Raises AiRequestClosed if it is no longer in progress."""
+        """Mark an in-progress request failed (RecordNotFound / AiRequestClosed as in _close)."""
         if category not in _AI_CATEGORIES:
             raise InvalidRecord()
         with student_transaction(identity):

@@ -17,7 +17,9 @@ content leaves the server.
 ## Stage 1: records
 
 Migrations `0011_study_ai_records` (Django models and constraints) and
-`0012_study_ai_security` (same-owner keys, result size limit, forced RLS).
+`0012_study_ai_security` (same-owner keys, result size limit, forced RLS),
+then `0013_study_ai_result_tool` (the result's key to its request also includes the
+tool; added after the PR #67 review).
 
 ### `academics_studyairequest`: the usage ledger
 
@@ -43,7 +45,8 @@ daily count. It stores no file name, file text, question or response.
   refused.
 - Characters sent must be 1 to 60,000. The token hash must be 64 lower-case hex
   characters.
-- `(id, owner)` is unique, so results can use a same-owner key.
+- `(id, owner)` and `(id, owner, tool)` are unique, so results can use a same-owner
+  key that also matches the tool.
 - `(owner, consent_token_hash)` is unique, so one consent token is used once.
 - A partial unique index allows at most one `sent` row per student.
 - Runtime grants: SELECT, INSERT, and UPDATE of only `status`, `error_category` and
@@ -55,7 +58,8 @@ Each row holds owner, material, request, tool, question, the result (JSON) and a
 shape version.
 
 - Same-owner keys `(material_id, owner_id)` to the material and
-  `(request_id, owner_id)` to the request. There is one result per request.
+  `(request_id, owner_id, tool)` to the request, so a result always has its
+  request's tool, even for raw SQL. There is one result per request.
 - The material link follows the stored-file pattern. The database key is
   `NO ACTION`, and Django's `CASCADE` deletes a material's results inside the
   material delete. A raw-SQL delete of a material that has results is refused.
@@ -87,12 +91,17 @@ also refuses a runtime role holding any of these:
 | --- | --- |
 | `reserve(...)` | See the steps below. Returns `(request, created)` |
 | `succeed(...)` | Saves the checked result and marks the request `succeeded` together, but **only while it is still `sent`**. A late answer for an interrupted request raises `AiRequestClosed` and saves nothing. An invalid result raises `InvalidRecord`, saves nothing and leaves the request `sent`, so the caller then records `fail(..., "save")` |
-| `fail(...)` | Marks a `sent` request `failed` with a category from the fixed list |
+| `fail(...)` | Marks a `sent` request `failed` with a category from the fixed list. Like `succeed`, it raises `RecordNotFound` for a request that is not this student's and `AiRequestClosed` for one no longer in progress |
 | `find_request`, `get_request`, `get_result`, `results_for`, `delete_result`, `usage` | Owner-only reads and deletion. Deleting a result keeps its ledger row, which still counts |
 
-`reserve` first changes this student's `sent` requests older than two minutes to
-`interrupted`, in its own short transaction, so a refusal cannot undo it. Then,
-in one transaction under a per-student advisory lock:
+`reserve` must be the outermost call; inside another transaction it raises
+`RuntimeError`, because a refusal could then undo step 0.
+
+0. In its own short transaction, it changes this student's `sent` requests older
+   than two minutes to `interrupted`, so a refusal cannot undo it. This step takes
+   no advisory lock; row locks make concurrent markings safe.
+
+Then, in one transaction under a per-student advisory lock:
 
 1. A request already made with the same consent token hash is returned unchanged
    (`created=False`), so a repeated Send never sends twice.
@@ -111,8 +120,8 @@ money.
 
 | Suite | Covers |
 | --- | --- |
-| `security_tests.test_study_ai_rls` | Raw SQL as the runtime role: forced RLS on both tables, no-context access, own-only rows, cross-student writes and links, no ledger DELETE, status-only UPDATE, no result UPDATE, no TRUNCATE, material delete refused around Django, every CHECK value list |
-| `security_tests.test_study_ai_service` | One request per consent token, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49, startup refusal of missing RLS and each stray grant |
+| `security_tests.test_study_ai_rls` | Raw SQL as the runtime role, with positive controls (the baseline rows are accepted): forced RLS on both tables, no-context access, own-only rows, cross-student writes and links, no ledger DELETE, status-only UPDATE, no result UPDATE, no TRUNCATE, material delete refused around Django, every CHECK value list, a result whose tool differs from its request |
+| `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
 No historical tests were changed. `security_tests/test_migrations.py` already
 restores the latest academics migration.
@@ -120,5 +129,6 @@ restores the latest academics migration.
 ## Upgrade order
 
 As before: run `migrate`, then `configure_runtime`, with the migration settings,
-then start the website. The website refuses to start student services until both
+then start the website. A database already at stage 1 (0012) needs only `migrate`
+for 0013; it adds no grants, but re-running `configure_runtime` is harmless. The website refuses to start student services until both
 new tables exist with forced RLS.

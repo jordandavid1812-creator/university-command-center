@@ -122,7 +122,20 @@ class StudyAiRlsTests(StudentSecurityCase):
     def test_material_with_results_cannot_be_deleted_around_django(self):
         self.denied("DELETE FROM academics_studymaterial WHERE id=%s", [self.material_a.pk], identity=self.a)
 
+    def spare_request(self, tool="summary"):
+        """A fresh, finished request of this student, so each result case has its own request."""
+        request, _ = ai.reserve(self.a, tool=tool, provider="gemini", model="synthetic-model-1", characters_sent=10,
+                                truncated=False, consent_token_hash=token(str(uuid.uuid4())))
+        ai.fail(self.a, request.pk, "timeout")
+        return request
+
     def test_check_constraints_refuse_unknown_or_unsafe_values(self):
+        # Positive controls: the unchanged baseline rows are accepted, so each refusal below
+        # is caused by its one changed value.
+        baseline = self.spare_request()
+        with student_transaction(self.a):
+            self.assertEqual(self.sql(*self.insert_request(self.a.student_id)), 1)
+            self.assertEqual(self.sql(*self.insert_result(self.a.student_id, self.material_a.pk, baseline.pk)), 1)
         bad_requests = {
             "tool": {"tool": "essay"}, "provider": {"provider": "other"}, "status": {"status": "done"},
             "category": {"error_category": "mystery"}, "category without failure": {"status": "succeeded"},
@@ -133,16 +146,20 @@ class StudyAiRlsTests(StudentSecurityCase):
         for name, overrides in bad_requests.items():
             with self.subTest(request=name):
                 self.denied(*self.insert_request(self.a.student_id, **overrides), identity=self.a)
-        spare, _ = ai.reserve(self.a, tool="answer", provider="gemini", model="synthetic-model-1",
-                              characters_sent=10, truncated=False, consent_token_hash=token("checks"))
-        ai.fail(self.a, spare.pk, "timeout")
         bad_results = {
-            "tool": {"tool": "essay"}, "question on summary": {"question": "Why?"},
-            "blank question": {"tool": "answer", "question": "   "},
-            "shape version": {"shape_version": 0},
-            "too large": {"result": json.dumps({"points": ["x" * 70000]})},
+            "tool": ("summary", {"tool": "essay"}),
+            "tool differs from its request": ("quiz", {}),
+            "question on summary": ("summary", {"question": "Why?"}),
+            "blank question": ("answer", {"tool": "answer", "question": "   "}),
+            "shape version": ("summary", {"shape_version": 0}),
+            "too large": ("summary", {"result": json.dumps({"points": ["x" * 70000]})}),
         }
-        for name, overrides in bad_results.items():
+        for name, (request_tool, overrides) in bad_results.items():
             with self.subTest(result=name):
-                self.denied(*self.insert_result(self.a.student_id, self.material_a.pk, spare.pk, **overrides),
+                request = self.spare_request(request_tool)
+                self.denied(*self.insert_result(self.a.student_id, self.material_a.pk, request.pk, **overrides),
                             identity=self.a)
+        answer = self.spare_request("answer")
+        with student_transaction(self.a):
+            self.assertEqual(self.sql(*self.insert_result(self.a.student_id, self.material_a.pk, answer.pk,
+                                                          tool="answer", question="What is synthetic data?")), 1)
