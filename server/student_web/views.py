@@ -62,6 +62,9 @@ def dashboard(request, identity):
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
     selected = selector.cleaned_data['semester']
     current = next((row for row in workspace['summary']['semesters'] if row['semester'] == selected), None)
+    names = dict(forms.AI_TOOL_CHOICES)
+    for item in workspace['ai_panel']['recent']:
+        item['tool_name'] = names.get(item['tool'], item['tool'])
     return render(request, 'student_web/dashboard.html', {**workspace, 'selector': selector, 'current': current,
                   'current_selected': bool(selected), 'today': today})
 

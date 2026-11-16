@@ -54,6 +54,12 @@
     </section>
   </div>
 
+  <section class="panel dashboard-ai" aria-labelledby="ai-title">
+    <div class="section-heading"><h2 id="ai-title">AI study tools</h2><a href="{% url 'student_web:material-list' %}">Open study materials</a></div>
+    <p><strong>{{ ai_panel.used_today }} of {{ ai_panel.daily_limit }}</strong> AI requests used today</p><meter min="0" max="{{ ai_panel.daily_limit }}" value="{{ ai_panel.used_today }}" aria-label="AI requests used today">{{ ai_panel.used_today }} of {{ ai_panel.daily_limit }}</meter>
+    {% if ai_panel.recent %}<ul class="dashboard-task-list">{% for item in ai_panel.recent %}<li><div><a href="{% url 'student_web:ai-result' item.id %}">{{ item.tool_name }}</a><span>{{ item.material__title }}</span></div><time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:'j M Y' }}</time></li>{% endfor %}</ul>{% else %}<p class="dashboard-note">No AI results yet. Choose <strong>Study tools</strong> next to a stored file on Study materials.</p>{% endif %}
+  </section>
+
   <section class="panel dashboard-semester" aria-labelledby="selected-title">
     <div><h2 id="selected-title">Selected semester</h2><p class="dashboard-note">Choose a semester for this view. This does not save an active-semester preference.</p>
       <form method="get" class="dashboard-selector" aria-label="Choose selected semester">

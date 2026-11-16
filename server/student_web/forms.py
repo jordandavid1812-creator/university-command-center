@@ -198,3 +198,43 @@ class PlannerForm(StrictForm):
             return checked_credits(self.cleaned_data['remaining'])
         except ValueError as error:
             raise forms.ValidationError(str(error)) from error
+
+
+AI_TOOL_CHOICES = [("summary", "Summary"), ("quiz", "Quiz"), ("flashcards", "Flashcards"),
+                   ("answer", "Ask a question")]
+
+
+class AiToolForm(StrictForm):
+    """Choose a tool (and a question for "Ask a question"). Posting this never sends anything."""
+    tool = forms.ChoiceField(choices=AI_TOOL_CHOICES, widget=forms.RadioSelect, label='Study tool')
+    question = forms.CharField(max_length=500, required=False, label='Your question',
+                               widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 500}),
+                               help_text='Only for "Ask a question". Up to 500 characters.')
+
+    def clean(self):
+        values = super().clean()
+        tool, question = values.get('tool'), (values.get('question') or '').strip()
+        if tool == 'answer' and not question:
+            self.add_error('question', 'Type the question you want answered.')
+        elif tool and tool != 'answer' and question:
+            self.add_error('question', 'Questions are only used with "Ask a question". Clear this box or '
+                                       'choose that tool.')
+        values['question'] = question
+        return values
+
+
+class AiSendForm(AiToolForm):
+    """The confirm page's Send form: the same choice, the consent token and the provider."""
+    token = forms.CharField(max_length=400, widget=forms.HiddenInput())
+    provider = forms.ChoiceField(choices=[])
+
+    def __init__(self, *args, providers, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['provider'].choices = [(code, code) for code in providers]
+        for name in ('tool', 'question'):
+            self.fields[name].widget = forms.HiddenInput()
+
+
+class ConfirmDeleteForm(StrictForm):
+    confirm = forms.BooleanField(label='I confirm I want to delete this result')
+

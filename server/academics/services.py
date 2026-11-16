@@ -438,6 +438,11 @@ class AiRecords:
             except StudyAiResult.DoesNotExist:
                 raise RecordNotFound() from None
 
+    def result_for_request(self, identity, request_id):
+        """The saved result of one of this student's requests, or None (never saved or deleted)."""
+        with student_transaction(identity):
+            return self._results(require_identity(identity)).filter(request_id=record_id(request_id)).first()
+
     def results_for(self, identity, material_id):
         """Saved results for one of the student's materials, newest first."""
         with student_transaction(identity):

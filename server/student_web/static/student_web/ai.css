@@ -1,0 +1,83 @@
+/* AI study pages only (loaded by components/ai_assets.html). Colours come from the shared
+   tokens in site.css / theme-dark.css, so light and dark mode both apply. */
+.ai-panel h2 { margin-top:0; }
+.ai-usage p { margin:var(--space-1) 0; }
+.ai-meter, .dashboard-ai meter { width:100%; height:.75rem; }
+.ai-facts { padding-left:var(--space-5); }
+.ai-facts li { margin-bottom:var(--space-2); }
+.ai-warning h3 { margin:0 0 var(--space-2); font-size:var(--type-body); }
+.ai-warning ul { margin:0; padding-left:var(--space-5); }
+.ai-result-list { list-style:none; margin:0; padding:0; }
+.ai-result-item { padding:var(--space-3) 0; border-bottom:1px solid var(--color-border-subtle); }
+.ai-result-item:last-child { border-bottom:0; }
+.ai-points { display:grid; gap:var(--space-3); padding-left:var(--space-6); }
+.ai-question { border:1px solid var(--color-border-subtle); border-radius:12px; margin:0 0 var(--space-4);
+  padding:var(--space-4); background:var(--color-surface); }
+.ai-question legend { font-weight:600; padding:0 var(--space-2); }
+.ai-options { margin:var(--space-2) 0; padding-left:var(--space-6); }
+.ai-options li { margin:var(--space-1) 0; }
+.ai-answer summary { cursor:pointer; color:var(--color-primary); font-weight:600; }
+.ai-reason { color:var(--color-text-muted); }
+.ai-cards[hidden], .ai-answer[hidden] { display:none; }
+.ai-cards { display:grid; gap:var(--space-3); padding-left:var(--space-6); }
+.ai-card-front { margin:0 0 var(--space-1); }
+.ai-card-back { margin:0; color:var(--color-text-muted); }
+.ai-answer-text { font-size:1.0625rem; line-height:1.6; }
+.ai-status { display:flex; flex-direction:column; gap:var(--space-2); }
+.ai-status-failed { border-left:4px solid var(--color-error-text); }
+.ai-status-interrupted, .ai-status-deleted { border-left:4px solid var(--color-warning-text); }
+.ai-wait { display:flex; align-items:center; gap:var(--space-3); margin-top:var(--space-4); }
+.ai-wait[hidden] { display:none; }
+.ai-spinner { width:1.5rem; height:1.5rem; flex:none; border-radius:50%; border:3px solid var(--color-border-subtle);
+  border-top-color:var(--color-primary); animation:ai-spin .9s linear infinite; }
+@keyframes ai-spin { to { transform:rotate(360deg); } }
+
+/* --- Interactive quiz (added by ai.js; without JavaScript the plain list above is used) --- */
+.ai-js .ai-options { list-style:none; padding:0; display:grid; gap:var(--space-2); }
+.ai-option { width:100%; text-align:left; font:inherit; color:var(--color-text); cursor:pointer;
+  padding:var(--space-3) var(--space-4); border-radius:10px; border:1px solid var(--color-border-control);
+  background:var(--color-surface); transition:transform .15s ease, background-color .2s ease, border-color .2s ease; }
+.ai-option:hover:not(:disabled) { transform:translateY(-1px); border-color:var(--color-primary); }
+.ai-option:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
+.ai-option:disabled { cursor:default; }
+.ai-option[data-state="right"] { background:var(--color-success-bg); border-color:var(--color-success-text);
+  color:var(--color-success-text); font-weight:600; }
+.ai-option[data-state="wrong"] { background:var(--color-error-bg); border-color:var(--color-error-text);
+  color:var(--color-error-text); }
+.ai-feedback { margin:var(--space-2) 0 0; font-weight:600; }
+.ai-feedback[data-state="right"] { color:var(--color-success-text); }
+.ai-feedback[data-state="wrong"] { color:var(--color-error-text); }
+.ai-score { position:sticky; top:var(--space-2); z-index:1; display:flex; justify-content:space-between;
+  align-items:center; gap:var(--space-3); padding:var(--space-3) var(--space-4); margin-bottom:var(--space-4);
+  border-radius:12px; background:var(--color-active-bg); color:var(--color-active-text); font-weight:600; }
+.ai-progress { flex:1; height:.5rem; border-radius:999px; background:var(--color-border-subtle); overflow:hidden; }
+.ai-progress > span { display:block; height:100%; width:0; background:var(--color-primary); transition:width .4s ease; }
+.ai-final { text-align:center; padding:var(--space-6); border-radius:16px; background:var(--color-surface-raised); }
+.ai-final strong { display:block; font-size:2.5rem; color:var(--color-primary); }
+
+/* --- Flashcard deck (added by ai.js) --- */
+.ai-deck { display:grid; gap:var(--space-4); justify-items:center; }
+.ai-flip { width:min(100%, 34rem); height:16rem; perspective:1200px; border:0; padding:0; background:none; cursor:pointer;
+  font:inherit; color:inherit; }
+.ai-flip:focus-visible { outline:3px solid var(--color-focus); outline-offset:4px; border-radius:18px; }
+.ai-flip-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .6s cubic-bezier(.2,.7,.2,1); }
+.ai-flip[aria-pressed="true"] .ai-flip-inner { transform:rotateY(180deg); }
+.ai-face { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:var(--space-6);
+  border-radius:18px; border:1px solid var(--color-border-subtle); backface-visibility:hidden; overflow:auto;
+  background:var(--color-surface); box-shadow:0 12px 30px var(--color-shadow); font-size:1.125rem; text-align:center; }
+.ai-face-back { transform:rotateY(180deg); background:var(--color-surface-raised); }
+.ai-deck-bar { display:flex; flex-wrap:wrap; gap:var(--space-2); justify-content:center; align-items:center; }
+.ai-deck-count { min-width:8rem; text-align:center; font-weight:600; }
+.ai-piles { color:var(--color-text-muted); }
+
+.ai-copied { color:var(--color-success-text); font-weight:600; }
+
+@media (prefers-reduced-motion:reduce) {
+  .ai-spinner { animation:none; }
+  .ai-option, .ai-progress > span, .ai-flip-inner { transition:none; }
+}
+@media print {
+  .ai-actions, .ai-answer summary, .ai-deck-bar, .ai-score, .page-heading .button { display:none; }
+  .ai-answer { display:block; }
+  .ai-question { break-inside:avoid; }
+}
