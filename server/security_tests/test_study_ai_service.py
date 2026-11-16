@@ -17,6 +17,8 @@ from .base import StudentSecurityCase
 
 FACTS = {"original_filename": "notes.txt", "file_type": "txt", "size_bytes": 15}
 RESULT = {"points": ["Synthetic point"]}
+# A fixed clock (noon in Lagos) so no test depends on the real time of day.
+NOON_LAGOS = datetime(2026, 11, 14, 11, 0, tzinfo=dt_timezone.utc)
 
 
 def token(label):
@@ -25,6 +27,10 @@ def token(label):
 
 class StudyAiServiceTests(StudentSecurityCase):
     def setUp(self):
+        self.now = NOON_LAGOS
+        clock = patch("django.utils.timezone.now", side_effect=lambda: self.now)
+        clock.start()
+        self.addCleanup(clock.stop)
         super().setUp()
         self.material_a = materials.create(self.a, course_id=self.course_a.pk, title="A notes", **FACTS)
         self.material_b = materials.create(self.b, course_id=self.course_b.pk, title="B notes", **FACTS)
@@ -59,9 +65,9 @@ class StudyAiServiceTests(StudentSecurityCase):
         request, _ = self.reserve()
         ai.succeed(self.a, request.pk, material_id=self.material_a.pk, result=RESULT)
         interrupted, _ = self.reserve()
-        with patch("django.utils.timezone.now", return_value=datetime.now(dt_timezone.utc) + timedelta(minutes=3)):
-            with self.assertRaises(AiLimitReached) as refused:
-                self.reserve()
+        self.now += timedelta(minutes=3)
+        with self.assertRaises(AiLimitReached) as refused:
+            self.reserve()
         self.assertEqual(refused.exception.reason, "daily")
         self.assertEqual(ai.get_request(self.a, interrupted.pk).status, "interrupted")
         self.assertEqual(ai.usage(self.a)["used_today"], 50)
@@ -82,16 +88,16 @@ class StudyAiServiceTests(StudentSecurityCase):
     def test_daily_count_resets_at_lagos_midnight_not_utc(self):
         # 23:59 in Lagos (UTC+1) on 14 Nov is 22:59 UTC.
         late = datetime(2026, 11, 14, 22, 59, tzinfo=dt_timezone.utc)
-        with patch("django.utils.timezone.now", return_value=late):
-            self.used(50)
-            with self.assertRaises(AiLimitReached):
-                self.reserve()
-        with patch("django.utils.timezone.now", return_value=late + timedelta(seconds=59)):
-            with self.assertRaises(AiLimitReached):
-                self.reserve()
-        with patch("django.utils.timezone.now", return_value=late + timedelta(minutes=1)):  # 00:00 Lagos
+        self.now = late
+        self.used(50)
+        with self.assertRaises(AiLimitReached):
             self.reserve()
-            self.assertEqual(ai.usage(self.a)["used_today"], 1)
+        self.now = late + timedelta(seconds=59)
+        with self.assertRaises(AiLimitReached):
+            self.reserve()
+        self.now = late + timedelta(minutes=1)  # 00:00 Lagos
+        self.reserve()
+        self.assertEqual(ai.usage(self.a)["used_today"], 1)
         start, end = ai_day_range(late)
         self.assertEqual((start.isoformat(), end - start), ("2026-11-14T00:00:00+01:00", timedelta(days=1)))
 
@@ -109,9 +115,8 @@ class StudyAiServiceTests(StudentSecurityCase):
         with self.assertRaises(AiLimitReached) as refused:
             self.reserve()
         self.assertEqual(refused.exception.reason, "busy")
-        later = datetime.now(dt_timezone.utc) + timedelta(minutes=3)
-        with patch("django.utils.timezone.now", return_value=later):
-            second, created = self.reserve()
+        self.now += timedelta(minutes=3)
+        second, created = self.reserve()
         self.assertTrue(created)
         self.assertEqual(ai.get_request(self.a, first.pk).status, "interrupted")
         # A late answer for the interrupted request saves nothing and cannot fail it either.
@@ -172,7 +177,7 @@ class StudyAiServiceTests(StudentSecurityCase):
         saved = ai.succeed(self.a, request.pk, material_id=self.material_a.pk, result=RESULT)
         for call in (lambda: ai.get_request(self.b, request.pk), lambda: ai.get_result(self.b, saved.pk),
                      lambda: ai.delete_result(self.b, saved.pk), lambda: ai.fail(self.b, request.pk, "network")):
-            with self.assertRaises((RecordNotFound, AiRequestClosed)):
+            with self.assertRaises(RecordNotFound):
                 call()
         self.assertEqual(ai.results_for(self.b, self.material_a.pk), [])
         for identity in (None, self.a.student_id, {"student_id": self.a.student_id}):
@@ -198,20 +203,23 @@ class StudyAiServiceTests(StudentSecurityCase):
         while time.monotonic() < deadline:
             with connections["default"].cursor() as cursor:
                 cursor.execute("""SELECT count(*) FILTER (WHERE granted), count(*) FILTER (WHERE NOT granted)
-                                  FROM pg_locks WHERE locktype = 'advisory'""")
+                                  FROM pg_locks l JOIN pg_database d ON d.oid = l.database
+                                  WHERE l.locktype = 'advisory' AND d.datname = current_database()""")
                 if cursor.fetchone() == (granted, waiting):
                     return
             time.sleep(0.05)
         self.fail(f"advisory locks never reached granted={granted}, waiting={waiting}")
 
     def race(self, labels):
-        """Run two reservations; the first holds the lock until the second is waiting for it."""
-        original_lock, release, results = AiRecords._lock, Event(), {}
+        """Two reservations. The first stops after its checks, holding the lock just before
+        its insert, until the second is waiting for the lock; then the first commits."""
+        original_clean, reached, release, results = StudyAiRequest.full_clean, Event(), Event(), {}
 
-        def held_lock(records, owner):
-            original_lock(records, owner)
+        def held_clean(request, *args, **kwargs):
             if current_thread().name == "first":
+                reached.set()
                 release.wait(10)
+            return original_clean(request, *args, **kwargs)
 
         def run(name, label):
             try:
@@ -222,9 +230,10 @@ class StudyAiServiceTests(StudentSecurityCase):
             finally:
                 connections.close_all()
 
-        with patch.object(AiRecords, "_lock", held_lock):
+        with patch.object(StudyAiRequest, "full_clean", held_clean):
             first = Thread(target=run, args=("first", labels[0]), name="first", daemon=True)
             first.start()
+            self.assertTrue(reached.wait(10))
             self.wait_for_advisory_locks(granted=1, waiting=0)
             second = Thread(target=run, args=("second", labels[1]), name="second", daemon=True)
             second.start()
@@ -236,18 +245,32 @@ class StudyAiServiceTests(StudentSecurityCase):
 
     def test_two_simultaneous_sends_with_one_token_create_one_request(self):
         results = self.race(["same", "same"])
-        # Whichever wins creates the request; the other gets that same request back.
-        self.assertEqual(sorted(created for _, created in results.values()), [False, True])
-        self.assertEqual(results["first"][0], results["second"][0])
+        self.assertTrue(results["first"][1])
+        self.assertEqual(results["second"], (results["first"][0], False))
+        self.assertEqual(ai.usage(self.a)["used_today"], 1)
         self.assertEqual(ai.usage(self.a)["used_today"], 1)
 
     def test_two_simultaneous_requests_at_49_cannot_both_pass(self):
         self.used(49)
         results = self.race(["one", "two"])
-        outcomes = sorted(results.values(), key=lambda value: isinstance(value, str))
-        self.assertTrue(outcomes[0][1])
-        self.assertIn(outcomes[1], ("busy", "daily"))
+        self.assertTrue(results["first"][1])
+        self.assertIn(results["second"], ("busy", "daily"))
         self.assertEqual(ai.usage(self.a)["used_today"], 50)
+
+    def test_a_unique_token_violation_returns_the_existing_request(self):
+        first, _ = self.reserve(label="fallback")
+        ai.fail(self.a, first.pk, "network")
+        # Make the in-lock lookup miss once, so the insert hits the unique token constraint.
+        with patch.object(AiRecords, "_existing", return_value=None):
+            again, created = self.reserve(label="fallback")
+        self.assertEqual((again.pk, created), (first.pk, False))
+        self.assertEqual(ai.usage(self.a)["used_today"], 1)
+
+    def test_reserve_refuses_to_run_inside_another_transaction(self):
+        from academics.ownership import student_transaction
+        with self.assertRaises(RuntimeError), student_transaction(self.a):
+            self.reserve()
+        self.assertEqual(ai.usage(self.a)["used_today"], 0)
 
     # --- startup checks ---------------------------------------------------------------
 

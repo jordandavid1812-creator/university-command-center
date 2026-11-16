@@ -1,4 +1,4 @@
-"""AI requests and results: same-owner links, result size limit and forced row-level security."""
+"""AI requests and results: same-owner links (the request link also matches the tool), result size limit and forced RLS."""
 from django.db import migrations
 
 TABLES = ("academics_studyairequest", "academics_studyairesult")
@@ -36,8 +36,8 @@ class Migration(migrations.Migration):
 
                 ALTER TABLE academics_studyairesult
                 ADD CONSTRAINT airesult_request_same_owner
-                FOREIGN KEY (request_id, owner_id)
-                REFERENCES academics_studyairequest (id, owner_id)
+                FOREIGN KEY (request_id, owner_id, tool)
+                REFERENCES academics_studyairequest (id, owner_id, tool)
                 ON DELETE NO ACTION ON UPDATE NO ACTION NOT DEFERRABLE;
 
                 ALTER TABLE academics_studyairesult

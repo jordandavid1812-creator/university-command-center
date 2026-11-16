@@ -244,6 +244,8 @@ class StudyAiRequest(ValidatedRecord):
         indexes = [models.Index(fields=["owner", "created_at"], name="airequest_owner_created")]
         constraints = [
             models.UniqueConstraint(fields=["id", "owner"], name="airequest_id_owner_unique"),
+            # Lets a result's key include the tool, so a result always matches its request's tool.
+            models.UniqueConstraint(fields=["id", "owner", "tool"], name="airequest_id_owner_tool_unique"),
             models.UniqueConstraint(fields=["owner", "consent_token_hash"], name="airequest_token_once"),
             # At most one request in flight per student.
             models.UniqueConstraint(fields=["owner"], condition=models.Q(status="sent"),
