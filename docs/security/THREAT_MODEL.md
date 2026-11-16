@@ -25,7 +25,7 @@ flowchart LR
     CAP --> SVC[academics.services and academics.queries]
     SVC -->|default/runtime alias| TX[student_transaction: signs xid and backend pid, SET LOCAL]
     TX --> RLS[ucc_security.current_student, SECURITY DEFINER, forced RLS]
-    RLS --> ACAD[(academics_semester, academics_course, academics_assignment, academics_studymaterial, academics_materialfile, academics_studentprofile)]
+    RLS --> ACAD[(academics_semester, academics_course, academics_assignment, academics_studymaterial, academics_materialfile, academics_studentprofile, academics_studyairequest, academics_studyairesult)]
     MIG[Offline migrator: migrate, configure_runtime, configure_auth_role] -.-> ACAD
     MIG -.-> KEY[(ucc_security.context_key)]
     AV -->|on_commit| MAIL[Email backend: console or locmem only]
