@@ -116,3 +116,7 @@ PDF text (AI stage 2): pypdf runs only in student_web/pdf_text_child.py, a child
 an empty environment, a time limit, an output cap and lowered pypdf limits (jbig2dec_binary=None).
 Never import pypdf in the website process or pass the website's environment to the child.
 The child must limit its own memory (RLIMIT_AS; Windows Job Object) before reading and stop if it cannot.
+AI providers (stage 3a): only student_web/ai_providers.py talks to Gemini/Grok, on fixed hosts with
+keys in headers only, no redirects, one 60 s deadline and a 1 MiB cap. Never add default model names,
+retries, fallbacks, logging of prompts/replies/keys, or tests that reach the network.
+Never pass or patch ai_providers._connect outside tests; AI tests use tests/network_guard.NoNetworkMixin.
