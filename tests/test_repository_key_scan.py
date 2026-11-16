@@ -31,6 +31,22 @@ class KeyShapeTests(unittest.TestCase):
             with self.subTest(text=text[:20]):
                 self.assertFalse(contains_api_key(text.encode()))
 
+    def test_large_files_and_keys_split_across_chunks_are_scanned(self):
+        from unittest.mock import patch
+        from tools import check_repository_safety as safety
+        with tempfile.TemporaryDirectory() as folder:
+            large = Path(folder) / "large.txt"
+            large.write_bytes(b"x " * (3 * 1024 * 1024) + XAI.encode())  # over 6 MiB, key at the end
+            self.assertTrue(safety.file_contains_api_key(large))
+            split = Path(folder) / "split.txt"
+            split.write_bytes(b"a" * 90 + b" " + GOOGLE.encode() + b" end")
+            with patch.object(safety, "CHUNK_BYTES", 100):  # the key starts in one chunk and ends in the next
+                self.assertTrue(safety.file_contains_api_key(split))
+            clean = Path(folder) / "clean.txt"
+            clean.write_bytes(b"no keys " * 300000)
+            with patch.object(safety, "CHUNK_BYTES", 1000):
+                self.assertFalse(safety.file_contains_api_key(clean))
+
     def test_the_check_fails_on_a_tracked_key_without_printing_it(self):
         with tempfile.TemporaryDirectory() as folder:
             environment = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}

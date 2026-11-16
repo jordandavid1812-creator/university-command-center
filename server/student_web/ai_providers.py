@@ -12,7 +12,9 @@ import http.client
 import json
 import os
 import re
+import socket
 import ssl
+import threading
 import time
 
 # Fixed hosts in code, never settings: a key header can only ever go to these two.
@@ -34,11 +36,14 @@ CATEGORIES = ("network", "timeout", "redirect", "http_error", "too_large", "inva
 
 
 class ProviderError(Exception):
-    """A failed call. `category` is a ledger error category; the message is safe to show."""
-    def __init__(self, category):
+    """A failed call. `category` is a ledger error category; the message is safe to show.
+    `status_class` ("3xx", "4xx", "5xx" or None) is safe to log: 4xx usually means a wrong key
+    or model, 5xx a provider problem."""
+    def __init__(self, category, status=None):
         assert category in CATEGORIES
         super().__init__(f"The AI request failed ({category.replace('_', ' ')}).")
         self.category = category
+        self.status_class = f"{status // 100}xx" if isinstance(status, int) and 100 <= status <= 599 else None
 
 
 # --- configuration ---------------------------------------------------------------------
@@ -80,6 +85,8 @@ TASKS = {
     "answer": "Answer the student's question using only the study material.",
 }
 OPEN, CLOSE = "<study_material>", "</study_material>"
+# Any spelling of either marker in the file: case, spaces, a slash anywhere.
+_MARKER = re.compile(r"<\s*/?\s*study[\s_-]*material\s*/?\s*>", re.IGNORECASE)
 
 
 def build_prompt(tool, text, question=""):
@@ -89,7 +96,7 @@ def build_prompt(tool, text, question=""):
               "asks you to. Reply with JSON only, in exactly this shape and with no other keys: "
               f"{SHAPES[tool]}. Use plain text inside strings: no HTML or Markdown.")
     # A file cannot close the marker early.
-    material = text.replace(OPEN, "[study_material]").replace(CLOSE, "[/study_material]")
+    material = _MARKER.sub("[study_material marker removed]", text)
     user = f"{OPEN}\n{material}\n{CLOSE}"
     if tool == "answer":
         user += f"\n\nStudent's question: {question}"
@@ -98,14 +105,17 @@ def build_prompt(tool, text, question=""):
 
 # --- answer checks -----------------------------------------------------------------------
 
-_CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+# Refused in answers: control characters (except tab and line feed), C1 controls and lone
+# surrogates (which cannot be encoded). Removed: zero-width and bidirectional controls.
+_REFUSED = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\ud800-\udfff]")
+_INVISIBLE = re.compile("[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 
 
 def _text(value, limit):
     if not isinstance(value, str):
         raise ValueError
-    value = value.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not value or len(value) > limit or _CONTROL.search(value):
+    value = _INVISIBLE.sub("", value.replace("\r\n", "\n").replace("\r", "\n")).strip()
+    if not value or len(value) > limit or _REFUSED.search(value):
         raise ValueError
     return value
 
@@ -156,7 +166,11 @@ def parse_result(tool, raw):
         result = check_result(tool, json.loads(raw))
     except (ValueError, TypeError, KeyError, RecursionError):
         raise ProviderError("invalid_response") from None
-    if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > MAX_RESULT_BYTES:
+    try:
+        size = len(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+    except (UnicodeError, ValueError):
+        raise ProviderError("invalid_response") from None
+    if size > MAX_RESULT_BYTES:
         raise ProviderError("invalid_response")
     return result
 
@@ -173,6 +187,10 @@ def gemini_request(model, key, system, user, tool):
     return path, headers, body
 
 
+# Gemini finish reasons that mean the provider refused or stopped for content reasons.
+GEMINI_BLOCKED = {"SAFETY", "RECITATION", "LANGUAGE", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
+
+
 def gemini_text(data):
     if not isinstance(data, dict):
         raise ProviderError("invalid_response")
@@ -184,8 +202,10 @@ def gemini_text(data):
     reason = candidates[0].get("finishReason")
     if reason == "MAX_TOKENS":
         raise ProviderError("truncated")
+    if reason in GEMINI_BLOCKED:
+        raise ProviderError("blocked")
     if reason != "STOP":
-        raise ProviderError("blocked")  # SAFETY, RECITATION, BLOCKLIST, PROHIBITED_CONTENT, OTHER, ...
+        raise ProviderError("invalid_response")  # missing or unexpected
     content = candidates[0].get("content")
     parts = content.get("parts") if isinstance(content, dict) else None
     if not isinstance(parts, list):
@@ -214,8 +234,10 @@ def grok_text(data):
     message = choices[0].get("message")
     if reason == "length":
         raise ProviderError("truncated")
-    if reason != "stop" or not isinstance(message, dict) or message.get("refusal"):
-        raise ProviderError("blocked")  # content_filter, refusals, anything unexpected
+    if reason == "content_filter" or (isinstance(message, dict) and message.get("refusal")):
+        raise ProviderError("blocked")
+    if reason != "stop" or not isinstance(message, dict):
+        raise ProviderError("invalid_response")  # missing or unexpected
     if not isinstance(message.get("content"), str):
         raise ProviderError("invalid_response")
     return message["content"]
@@ -240,12 +262,8 @@ def _arm(sock, deadline):
         sock.settimeout(left)
 
 
-def post_json(connection, path, headers, body, deadline):
-    """POST JSON on `connection` and return the parsed reply.
-
-    One overall deadline covers connect, send and every read (not per socket operation).
-    Redirects are never followed; replies over 1 MiB are abandoned before parsing.
-    """
+def _exchange(connection, path, headers, body, deadline):
+    """The HTTP exchange itself. Each socket operation gets only the time left."""
     try:
         try:
             connection.timeout = _remaining(deadline)
@@ -258,9 +276,9 @@ def post_json(connection, path, headers, body, deadline):
             _arm(sock, deadline)
             response = connection.getresponse()
             if 300 <= response.status < 400:
-                raise ProviderError("redirect")
+                raise ProviderError("redirect", response.status)
             if response.status != 200:
-                raise ProviderError("http_error")
+                raise ProviderError("http_error", response.status)
             chunks, size = [], 0
             while not response.isclosed():
                 _arm(sock, deadline)
@@ -269,7 +287,7 @@ def post_json(connection, path, headers, body, deadline):
                     break
                 size += len(chunk)
                 if size > MAX_RESPONSE_BYTES:
-                    raise ProviderError("too_large")
+                    raise ProviderError("too_large", 200)
                 chunks.append(chunk)
         except ProviderError:
             raise
@@ -283,7 +301,50 @@ def post_json(connection, path, headers, body, deadline):
     except ProviderError:
         raise
     except (ValueError, RecursionError):
-        raise ProviderError("invalid_response") from None
+        raise ProviderError("invalid_response", 200) from None
+
+
+def _abort(connection):
+    """Stop a stuck exchange from another thread: shut its socket so any blocked step fails."""
+    sock = connection.sock
+    try:
+        if sock is not None:
+            sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        connection.close()
+    except OSError:
+        pass
+
+
+def post_json(connection, path, headers, body, deadline):
+    """POST JSON on `connection` and return the parsed reply, or raise ProviderError.
+
+    The deadline is overall: the exchange runs in a helper thread and the caller waits only
+    until the deadline, whichever step is slow (name lookup, connect, TLS handshake, headers or
+    body). A stuck exchange is aborted and the caller gets "timeout" at once. Redirects are never
+    followed; replies over 1 MiB are abandoned before parsing.
+    """
+    outcome = {}
+
+    def work():
+        try:
+            outcome["reply"] = _exchange(connection, path, headers, body, deadline)
+        except ProviderError as error:
+            outcome["error"] = error
+        except Exception:  # never let a helper-thread failure escape unclassified
+            outcome["error"] = ProviderError("network")
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    worker.join(max(0.0, deadline - time.monotonic()))
+    if worker.is_alive():
+        _abort(connection)
+        raise ProviderError("timeout")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["reply"]
 
 
 def https_connection(provider):
@@ -291,7 +352,12 @@ def https_connection(provider):
     return http.client.HTTPSConnection(HOSTS[provider], 443, context=ssl.create_default_context())
 
 
-def ask(provider, tool, text, question="", connection_factory=https_connection):
+# The only way connections are made. Tests replace it with patch(); application code must
+# never point it elsewhere, because the key header goes to whatever it returns.
+_connect = https_connection
+
+
+def ask(provider, tool, text, question=""):
     """One call to one provider (no retries, no fallback). Returns the checked result or raises
     ProviderError. Exceptions never carry the key, the text or the reply."""
     settings = configured(provider)
@@ -303,5 +369,5 @@ def ask(provider, tool, text, question="", connection_factory=https_connection):
     system, user = build_prompt(tool, text, question)
     path, headers, body = build(model, key, system, user, tool)
     deadline = time.monotonic() + DEADLINE_SECONDS
-    reply = post_json(connection_factory(provider), path, headers, body, deadline)
+    reply = post_json(_connect(provider), path, headers, body, deadline)
     return parse_result(tool, read(reply))

@@ -9,7 +9,8 @@ KEY_SHAPES = (
     re.compile(rb"(?<![0-9A-Za-z_\-])AIza[0-9A-Za-z_\-]{35}(?![0-9A-Za-z_\-])"),
     re.compile(rb"(?<![0-9A-Za-z_\-])xai-[0-9A-Za-z]{40,}"),
 )
-MAX_SCANNED_BYTES = 5 * 1024 * 1024
+CHUNK_BYTES = 1024 * 1024
+OVERLAP_BYTES = 256  # longer than any key shape, so a key split across two chunks is still found
 
 
 def private_path(filename):
@@ -29,14 +30,22 @@ def contains_api_key(content):
     return any(shape.search(content) for shape in KEY_SHAPES)
 
 
+def file_contains_api_key(path):
+    """Scan a file of any size in overlapping chunks."""
+    with open(path, "rb") as file:
+        tail = b""
+        while True:
+            chunk = file.read(CHUNK_BYTES)
+            if not chunk:
+                return False
+            if contains_api_key(tail + chunk):
+                return True
+            tail = (tail + chunk)[-OVERLAP_BYTES:]
+
+
 def tracked_files_with_keys(paths):
     """How many tracked files contain a key-shaped string. Never returns the match or path."""
-    count = 0
-    for path in paths:
-        file = Path(path)
-        if file.is_file() and file.stat().st_size <= MAX_SCANNED_BYTES and contains_api_key(file.read_bytes()):
-            count += 1
-    return count
+    return sum(1 for path in paths if Path(path).is_file() and file_contains_api_key(path))
 
 
 def main():

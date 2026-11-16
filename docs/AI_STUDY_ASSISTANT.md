@@ -201,28 +201,37 @@ reservation.
   are read.
 - **Keys only in headers:** `x-goog-api-key` for Gemini and
   `Authorization: Bearer` for Grok, never in a URL or the body.
-- **One overall 60-second deadline** covers connect, send and every read. Each socket
-  operation gets only the time left, so a reply dripping one byte at a time still
-  stops at the deadline. Name lookup (DNS) is outside it (known limit).
+- **One overall 60-second deadline.** The whole exchange (name lookup, connect, TLS
+  handshake, headers, body) runs in a helper thread, and the caller waits only until
+  the deadline. A stuck exchange is aborted (its socket is shut down) and the caller
+  gets `timeout` at once, whichever step was slow. Each socket operation is also
+  given only the time left. A slow name lookup can keep the helper thread alive
+  briefly after the caller has moved on, but never delays the caller.
 - **No redirects:** any 3xx reply is a `redirect` failure. Replies over **1 MiB** are
   abandoned before parsing (`too_large`).
 - **Formats.** The plan's Gemini `generateContent` and xAI `chat/completions`.
   - Gemini: JSON output is requested with `responseMimeType`; internal "thought" parts
-    are skipped; `MAX_TOKENS` means `truncated`; a block reason or any other finish
-    reason means `blocked`.
+    are skipped; `MAX_TOKENS` means `truncated`; a prompt block reason or a content
+    finish reason (`SAFETY`, `RECITATION`, `LANGUAGE`, `BLOCKLIST`,
+    `PROHIBITED_CONTENT`, `SPII`, `IMAGE_SAFETY`) means `blocked`; a missing or
+    unknown finish reason means `invalid_response`.
   - Grok: `response_format` json_object; `length` means `truncated`;
-    `content_filter`, a refusal or any other finish reason means `blocked`.
+    `content_filter` or a refusal means `blocked`; a missing or unknown finish
+    reason, or a message that is not an object, means `invalid_response`.
   - Both providers now call these endpoints legacy but supported; stage 4 confirms
     them with one real call each.
   - Maximum output: 2,048 tokens for summary and answer, 4,096 for quiz and
     flashcards. Whether reasoning models need a larger budget is also checked in
     stage 4.
 - **Prompts** say the text between `<study_material>` markers is content to study,
-  never instructions. A file cannot close the marker early, because any marker
-  inside it is rewritten.
+  never instructions. A file cannot close the marker early: any spelling of either
+  marker inside it (any case, spaces, `_`/`-`/space between the words, a slash
+  anywhere) is replaced with `[study_material marker removed]`. The strict answer
+  checks remain the main defence.
 - **Answer checks** (`parse_result` and `check_result`, shape version 1):
   - strict JSON with exact keys, no extra keys;
-  - lengths per field, no control characters, at most 64 KiB once checked;
+  - lengths per field; control characters and lone surrogates refused; zero-width
+    and bidirectional-control characters removed; at most 64 KiB once checked;
   - summary: 1–10 points;
   - quiz: 5–10 questions, each with exactly 4 options and an integer (not boolean)
     correct index from 0 to 3;
@@ -231,25 +240,33 @@ reservation.
 
   `check_result` is also used to re-check saved results before showing them.
 - **Errors** are `ProviderError` with a ledger category (`network`, `timeout`,
-  `redirect`, `http_error`, `too_large`, `invalid_response`, `blocked`, `truncated`).
+  `redirect`, `http_error`, `too_large`, `invalid_response`, `blocked`, `truncated`)
+  and a `status_class` (`3xx`/`4xx`/`5xx` or none), which is safe to log: 4xx usually
+  means a wrong key or model.
   Their message and traceback never contain the key, URL, file text, question or
   reply; underlying exceptions are suppressed. The module imports no logging and no
   other HTTP library (a source audit checks this).
-- **One call to one provider:** `ask` makes exactly one request, with no retries and
-  no fallback. Asking for a provider that is not configured is a `ValueError`, and
-  nothing is contacted.
+- **One call to one provider:** `ask(provider, tool, text, question)` makes exactly one
+  request, with no retries and no fallback. Asking for a provider that is not
+  configured is a `ValueError`, and nothing is contacted. Connections are made only by
+  the module's `_connect` (fixed hosts). It is not a parameter; tests replace it with
+  `patch`, and application code must never change it.
 - **Key scanning.** `tools/check_repository_safety.py` now also fails if any tracked
   file contains a Google-key-shaped (`AIza` + exactly 35 key characters) or
-  xAI-key-shaped (`xai-` + at least 40) string. It prints only a count, never the
-  match or the file name.
+  xAI-key-shaped (`xai-` + at least 40) string. Files of any size are read in 1 MiB
+  chunks that overlap by 256 bytes, so a key split across chunks is still found. It
+  prints only a count, never the match or the file name.
+- **Network guard.** `tests/network_guard.py` (`NoNetworkMixin`) fails any test that
+  resolves or connects to a non-local address. The provider tests use it, and stage
+  3b's web tests must use it too.
 
 ## Tests
 
 | Suite | Covers |
 | --- | --- |
 | `security_tests.test_study_ai_rls` | Raw SQL as the runtime role, with positive controls (the baseline rows are accepted): forced RLS on both tables, no-context access, own-only rows, cross-student writes and links, no ledger DELETE, status-only UPDATE, no result UPDATE, no TRUNCATE, material delete refused around Django, every CHECK value list, a result whose tool differs from its request |
-| `tests.test_ai_providers` (no database; a guard fails any non-local connection) | Configuration and unsafe keys or models refused; fixed verified-HTTPS hosts; request formats; only the text and question sent, the key only in a header; one call to the chosen provider even on failure; an unconfigured provider is never contacted; every outcome mapped to its category; thought parts skipped; errors and tracebacks without the key or text; every answer shape and refusal; 64 KiB limit; against a local misbehaving server: no redirects, one overall deadline (a dripping reply), the 1 MiB cap, refused connections; source audit. The overall deadline, size cap, redirect refusal, marker rewriting and thought skipping were each shown to fail when removed |
-| `tests.test_repository_key_scan` | Key shapes found, ordinary text and near-misses ignored, and the check fails on a tracked key in a temporary repository without printing the key or file name |
+| `tests.test_ai_providers` (no database; a guard fails any non-local connection) | Configuration and unsafe keys or models refused; fixed verified-HTTPS hosts; request formats; only the text and question sent, the key only in a header; one call to the chosen provider even on failure; an unconfigured provider is never contacted; every outcome mapped to its category; thought parts skipped; errors and tracebacks without the key or text; every answer shape and refusal; 64 KiB limit; marker variants; lone surrogates as a provider error; invisible characters removed; odd finish reasons as `invalid_response`; status classes; `ask` has no connection parameter; against a local misbehaving server: no redirects, the overall deadline for a dripping body, dripping headers and a silent TLS handshake, the 1 MiB cap, refused connections; source audit. The overall deadline (including the helper thread), size cap, redirect refusal, marker variants, surrogate refusal, odd-reason mapping and thought skipping were each shown to fail when removed |
+| `tests.test_repository_key_scan` | Key shapes found, ordinary text and near-misses ignored, a key at the end of a 6 MiB file and a key split across chunks found (shown to fail without the overlap), and the check fails on a tracked key in a temporary repository without printing the key or file name |
 | `tests.test_pdf_child_memory` (no database) | **Every platform:** a slow child's real Python process is gone after the time limit, and the call returns within 20 seconds instead of waiting for the child (on Windows this checks the process behind the virtual-environment launcher). Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
 | `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts; the child runs isolated (`-I`) in a removed `ucc-pdf-` folder with stderr discarded; setup failures are refusals that stop the child; byte-order marks; metadata that contradicts itself. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
