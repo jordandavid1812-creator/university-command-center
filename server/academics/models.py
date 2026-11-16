@@ -206,3 +206,95 @@ class StudentProfile(ValidatedRecord):
                                    name="profile_text_trimmed"),
             models.CheckConstraint(condition=models.Q(record_version__gte=1), name="profile_version_positive"),
         ]
+
+
+# AI study assistant records (docs/AI_STUDY_ASSISTANT_PLAN.md, stage 1). Fixed value lists:
+# adding a value later needs a migration, so keep these in step with the plan.
+AI_TOOLS = [("summary", "Summary"), ("quiz", "Quiz"), ("flashcards", "Flashcards"), ("answer", "Ask a question")]
+AI_PROVIDERS = [("gemini", "Gemini"), ("grok", "Grok")]
+AI_STATUSES = [("sent", "In progress"), ("succeeded", "Succeeded"), ("failed", "Failed"),
+               ("interrupted", "Interrupted")]
+AI_ERROR_CATEGORIES = [("network", "Network"), ("timeout", "Timeout"), ("redirect", "Redirect"),
+                       ("http_error", "Provider error"), ("too_large", "Response too large"),
+                       ("invalid_response", "Invalid response"), ("blocked", "Blocked by provider"),
+                       ("truncated", "Response cut off"), ("save", "Could not save")]
+AI_MODEL_PATTERN = r"^[a-z0-9][a-z0-9.\-]{0,63}$"
+MAX_AI_TEXT_CHARACTERS = 60000
+MAX_AI_QUESTION_CHARACTERS = 500
+MAX_AI_RESULT_BYTES = 64 * 1024
+
+
+class StudyAiRequest(ValidatedRecord):
+    """The usage ledger: one row per request sent to a provider. Never deleted by the website.
+
+    It has no link to the study material, so deleting a material cannot reset the daily count.
+    It keeps no file name, file text, question or response.
+    """
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ai_requests")
+    tool = models.CharField(max_length=10, choices=AI_TOOLS)
+    provider = models.CharField(max_length=6, choices=AI_PROVIDERS)
+    model = models.CharField(max_length=64, validators=[RegexValidator(AI_MODEL_PATTERN)])
+    status = models.CharField(max_length=11, choices=AI_STATUSES, default="sent")
+    characters_sent = models.PositiveIntegerField()
+    truncated = models.BooleanField()
+    consent_token_hash = models.CharField(max_length=64)
+    error_category = models.CharField(max_length=16, blank=True, choices=AI_ERROR_CATEGORIES)
+
+    class Meta:
+        indexes = [models.Index(fields=["owner", "created_at"], name="airequest_owner_created")]
+        constraints = [
+            models.UniqueConstraint(fields=["id", "owner"], name="airequest_id_owner_unique"),
+            models.UniqueConstraint(fields=["owner", "consent_token_hash"], name="airequest_token_once"),
+            # At most one request in flight per student.
+            models.UniqueConstraint(fields=["owner"], condition=models.Q(status="sent"),
+                                    name="airequest_one_in_flight"),
+            models.CheckConstraint(condition=models.Q(tool__in=[code for code, _ in AI_TOOLS]),
+                                   name="airequest_tool_valid"),
+            models.CheckConstraint(condition=models.Q(provider__in=[code for code, _ in AI_PROVIDERS]),
+                                   name="airequest_provider_valid"),
+            models.CheckConstraint(condition=models.Q(status__in=[code for code, _ in AI_STATUSES]),
+                                   name="airequest_status_valid"),
+            models.CheckConstraint(condition=models.Q(model__regex=AI_MODEL_PATTERN),
+                                   name="airequest_model_valid"),
+            models.CheckConstraint(condition=models.Q(consent_token_hash__regex=r"^[0-9a-f]{64}$"),
+                                   name="airequest_token_hash_hex"),
+            models.CheckConstraint(condition=models.Q(characters_sent__gte=1,
+                                                      characters_sent__lte=MAX_AI_TEXT_CHARACTERS),
+                                   name="airequest_characters_range"),
+            # An error category exactly when the request failed.
+            models.CheckConstraint(condition=(models.Q(status="failed", error_category__in=[
+                                       code for code, _ in AI_ERROR_CATEGORIES])
+                                   | (~models.Q(status="failed") & models.Q(error_category=""))),
+                                   name="airequest_category_valid"),
+        ]
+
+
+class StudyAiResult(ValidatedRecord):
+    """A saved, checked AI output. Never edited; deleted with its material or by the student."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ai_results")
+    material = models.ForeignKey(StudyMaterial, on_delete=models.CASCADE, related_name="ai_results")
+    request = models.OneToOneField(StudyAiRequest, on_delete=models.PROTECT, related_name="result")
+    tool = models.CharField(max_length=10, choices=AI_TOOLS)
+    question = models.CharField(max_length=MAX_AI_QUESTION_CHARACTERS, blank=True)
+    result = models.JSONField()
+    shape_version = models.PositiveSmallIntegerField()
+
+    def clean(self):
+        alias = self._state.db
+        if self.material_id and self.owner_id and not StudyMaterial.objects.using(alias).filter(
+                pk=self.material_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"material": "Material must belong to the result owner."})
+        if self.request_id and self.owner_id and not StudyAiRequest.objects.using(alias).filter(
+                pk=self.request_id, owner_id=self.owner_id, tool=self.tool).exists():
+            raise ValidationError({"request": "Request must belong to the result owner and match its tool."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(tool__in=[code for code, _ in AI_TOOLS]),
+                                   name="airesult_tool_valid"),
+            # Only "Ask a question" has a question, and it must not be blank.
+            models.CheckConstraint(condition=(models.Q(tool="answer") & ~models.Q(question__regex=r"^\s*$"))
+                                   | (~models.Q(tool="answer") & models.Q(question="")),
+                                   name="airesult_question_matches_tool"),
+            models.CheckConstraint(condition=models.Q(shape_version__gte=1), name="airesult_shape_version_positive"),
+        ]

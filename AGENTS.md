@@ -106,3 +106,9 @@ number. Username and email are not editable there; email change needs its own re
 Download my data (PR #65): the export reads only through academics.queries.export_records
 in one signed student_transaction. It never includes file contents or fingerprints, keeps
 credit units as exact decimal strings, and returns 413 with no partial file when too large.
+
+AI study assistant: read docs/AI_STUDY_ASSISTANT_PLAN.md (approved, revision 4) and
+docs/AI_STUDY_ASSISTANT.md first. Build one stage per PR. The ledger (studyairequest) has no
+material link and no runtime DELETE; results are never updated. Keep forced RLS on all eight
+academic tables. Never call a provider from tests or CI, never store or log keys, file text,
+questions or responses outside the saved result, and never send without the confirm-page POST.

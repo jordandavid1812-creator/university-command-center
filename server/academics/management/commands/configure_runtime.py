@@ -67,12 +67,16 @@ class Command(BaseCommand):
                     sql.Identifier(schema), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile TO {}").format(sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
+            # AI ledger: never deleted by the website; results: never edited.
+            cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studyairequest TO {}").format(sql.Identifier(role)))
+            cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_studyairesult TO {}").format(sql.Identifier(role)))
             for table, columns in (
                 ("academics_semester", ("label", "display_order", "record_version", "updated_at")),
                 ("academics_course", ("semester_id", "original_code", "normalized_code", "name", "credit_units", "actual_grade", "record_version", "updated_at")),
                 ("academics_assignment", ("course_id", "title", "due_date", "completed", "record_version", "updated_at")),
                 ("academics_studymaterial", ("course_id", "title", "record_version", "updated_at")),
                 ("academics_studentprofile", ("display_name", "institution", "programme", "level", "matric_number", "record_version", "updated_at")),
+                ("academics_studyairequest", ("status", "error_category", "updated_at")),
             ):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))

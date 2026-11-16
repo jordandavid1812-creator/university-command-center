@@ -98,10 +98,12 @@ def require_runtime_role(connection):
                    OR r.rolinherit OR NOT r.rolcanlogin
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
-                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile') AND relowner=r.oid)
+                       ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
+                       'academics_studyairequest','academics_studyairesult') AND relowner=r.oid)
                    -- Grants configure_runtime never gives: TRUNCATE/REFERENCES/TRIGGER anywhere
                    -- academic, and any UPDATE on stored files (they are never edited).
-                   OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile']) AS t(name)
+                   OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
+                       'academics_studyairequest','academics_studyairesult']) AS t(name)
                        WHERE has_table_privilege(current_user, to_regclass('public.' || t.name),
                                                  'TRUNCATE, REFERENCES, TRIGGER'))
                    OR COALESCE(has_any_column_privilege(current_user,
@@ -109,6 +111,17 @@ def require_runtime_role(connection):
                    -- Profiles are edited, never deleted.
                    OR COALESCE(has_table_privilege(current_user,
                        to_regclass('public.academics_studentprofile'), 'DELETE'), false)
+                   -- AI results are never edited; the AI ledger is never deleted, and only
+                   -- its status, error category and update time may change.
+                   OR COALESCE(has_any_column_privilege(current_user,
+                       to_regclass('public.academics_studyairesult'), 'UPDATE'), false)
+                   OR COALESCE(has_table_privilege(current_user,
+                       to_regclass('public.academics_studyairequest'), 'DELETE'), false)
+                   OR EXISTS (SELECT 1 FROM pg_attribute a
+                       WHERE a.attrelid = to_regclass('public.academics_studyairequest')
+                         AND a.attnum > 0 AND NOT a.attisdropped
+                         AND a.attname NOT IN ('status', 'error_category', 'updated_at')
+                         AND has_column_privilege(current_user, a.attrelid, a.attnum, 'UPDATE'))
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
                    OR {support}
@@ -124,10 +137,11 @@ def require_runtime_role(connection):
         cursor.execute("""
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname IN
-            ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile')
+            ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
+                       'academics_studyairequest','academics_studyairesult')
             AND c.relrowsecurity AND c.relforcerowsecurity
         """)
-        if cursor.fetchone()[0] != 6:
+        if cursor.fetchone()[0] != 8:
             raise ImproperlyConfigured("All academic tables must have forced RLS enabled.")
 
 
