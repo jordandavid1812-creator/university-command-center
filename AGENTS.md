@@ -115,3 +115,4 @@ questions or responses outside the saved result, and never send without the conf
 PDF text (AI stage 2): pypdf runs only in student_web/pdf_text_child.py, a child started with -I,
 an empty environment, a time limit, an output cap and lowered pypdf limits (jbig2dec_binary=None).
 Never import pypdf in the website process or pass the website's environment to the child.
+The child must limit its own memory (RLIMIT_AS; Windows Job Object) before reading and stop if it cannot.

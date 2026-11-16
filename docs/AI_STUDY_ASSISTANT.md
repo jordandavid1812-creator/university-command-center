@@ -139,8 +139,13 @@ lone surrogates. Text is capped at **60,000 characters**.
     temporary working directory and an **empty environment**. On Windows the only
     variable is `SYSTEMROOT`. So it never sees API keys, database passwords or the
     signing key.
-  - The file bytes go in on stdin. The child sets a 768 MiB memory limit where the
-    system supports it (not Windows). `pypdf` messages can contain file fragments,
+  - Before reading anything, the child limits its own memory to **768 MiB**. On Linux
+    it uses `RLIMIT_AS`. On Windows it puts itself into a new **Job Object** (through
+    `ctypes`, standard library only) with a per-process memory limit and an
+    active-process limit of 1, so it also cannot start any other program. If the limit
+    cannot be set, the child stops with "could not be read" **without reading the
+    file** (fail closed).
+  - The file bytes go in on stdin. `pypdf` messages can contain file fragments,
     so the child points its own stderr (where Python's last-resort log handler and
     warnings print) at the null device and ignores warnings. It changes no logging
     settings, which the logging source audit forbids, and the parent discards stderr
@@ -173,6 +178,7 @@ Python 3.12. The newer 7.x releases were less than two weeks old when pinned.
 | Suite | Covers |
 | --- | --- |
 | `security_tests.test_study_ai_rls` | Raw SQL as the runtime role, with positive controls (the baseline rows are accepted): forced RLS on both tables, no-context access, own-only rows, cross-student writes and links, no ledger DELETE, status-only UPDATE, no result UPDATE, no TRUNCATE, material delete refused around Django, every CHECK value list, a result whose tool differs from its request |
+| `tests.test_pdf_child_memory` (no database) | Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
 | `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
