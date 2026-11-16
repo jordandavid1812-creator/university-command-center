@@ -212,7 +212,8 @@ class StudyAiServiceTests(StudentSecurityCase):
 
     def race(self, labels):
         """Two reservations. The first stops after its checks, holding the lock just before
-        its insert, until the second is waiting for the lock; then the first commits."""
+        its insert, until the second is waiting for that same lock (stale marking takes no
+        lock, so the second is blocked before its own checks); then the first commits."""
         original_clean, reached, release, results = StudyAiRequest.full_clean, Event(), Event(), {}
 
         def held_clean(request, *args, **kwargs):
@@ -247,7 +248,6 @@ class StudyAiServiceTests(StudentSecurityCase):
         results = self.race(["same", "same"])
         self.assertTrue(results["first"][1])
         self.assertEqual(results["second"], (results["first"][0], False))
-        self.assertEqual(ai.usage(self.a)["used_today"], 1)
         self.assertEqual(ai.usage(self.a)["used_today"], 1)
 
     def test_two_simultaneous_requests_at_49_cannot_both_pass(self):

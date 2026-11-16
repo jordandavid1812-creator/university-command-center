@@ -328,7 +328,9 @@ class AiRecords:
         Must be the outermost call (not inside another transaction), so its two steps
         commit separately:
         1. In its own transaction, this student's stale in-flight requests become
-           interrupted. A refusal in step 2 therefore cannot undo it.
+           interrupted. A refusal in step 2 therefore cannot undo it. No advisory lock
+           is needed here: it only touches rows over two minutes old, and row locks make
+           two concurrent markings safe (the second finds nothing left to mark).
         2. Under a per-student lock: an existing request with the same consent token is
            returned unchanged (created=False), so a repeated Send never sends twice.
            Otherwise the in-flight, daily and saved-result limits are checked, in that
@@ -337,9 +339,7 @@ class AiRecords:
         if connections[database_alias()].in_atomic_block:
             raise RuntimeError("ai.reserve must not run inside another transaction.")
         with student_transaction(identity):
-            owner = require_identity(identity)
-            self._lock(owner)
-            self._mark_stale(owner, timezone.now())
+            self._mark_stale(require_identity(identity), timezone.now())
         try:
             with student_transaction(identity):
                 owner = require_identity(identity)

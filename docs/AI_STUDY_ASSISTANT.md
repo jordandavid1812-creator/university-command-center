@@ -98,7 +98,8 @@ also refuses a runtime role holding any of these:
 `RuntimeError`, because a refusal could then undo step 0.
 
 0. In its own short transaction, it changes this student's `sent` requests older
-   than two minutes to `interrupted`, so a refusal cannot undo it.
+   than two minutes to `interrupted`, so a refusal cannot undo it. This step takes
+   no advisory lock; row locks make concurrent markings safe.
 
 Then, in one transaction under a per-student advisory lock:
 
@@ -128,5 +129,6 @@ restores the latest academics migration.
 ## Upgrade order
 
 As before: run `migrate`, then `configure_runtime`, with the migration settings,
-then start the website. The website refuses to start student services until both
+then start the website. A database already at stage 1 (0012) needs only `migrate`
+for 0013; it adds no grants, but re-running `configure_runtime` is harmless. The website refuses to start student services until both
 new tables exist with forced RLS.
