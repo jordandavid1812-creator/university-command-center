@@ -265,7 +265,7 @@ reservation.
 
 | Route | Method | What it does |
 | --- | --- | --- |
-| `/materials/<id>/tools/` | GET | The four tools, the question box, today's usage meter, and saved results for this file. Only for the student's own material with a stored file (otherwise 404) |
+| `/materials/<id>/tools/` | GET | Three tool cards (Summary, Quiz, Flashcards), each its own small form with a "Create …" button; a separate "Ask about this file" card with its own required question box; today's usage bar; saved results. Only for the student's own material with a stored file (otherwise 404) |
 | `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
 | `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
 | `/ai-requests/<id>/` | GET | In progress (reloads every 5 seconds, no JavaScript needed), failed (plain reason), interrupted, "result deleted", or a redirect to the result |
@@ -336,7 +336,7 @@ All of these work on a result already saved, and all work without JavaScript fir
   Printing shows every quiz answer.
 - **Dashboard AI panel** (above).
 
-`ai.js` is kept under 20,000 bytes and `ai.css` under 8,000, and a source audit checks
+`ai.js` is kept under 20,000 bytes and `ai.css` under 9,500, and a source audit checks
 that `ai.js` uses no browser storage, cookies, network calls, `eval`, or HTML insertion.
 AI text is only ever inserted with `textContent`, never as HTML. All motion is skipped
 when the device asks for reduced motion. The waiting page and spinner work without
@@ -353,6 +353,22 @@ check allows exactly those four columns.
 **After migrating, re-run `configure_runtime`** (the local launcher does both). Without
 the new grant, failures cannot be recorded, and every failed request would show as
 interrupted.
+
+### Page design (PR #74, after the owner's first real use)
+
+- The tools page has no radio buttons. Each quick tool is its own form posting exactly
+  `tool` and an empty `question`; the Ask card posts `tool=answer` and the question. The
+  server still refuses a question with any other tool, whatever the browser sends.
+- A refused question keeps its text. Its error appears in the focusable summary as a link
+  to the box, and inline above the box, which has `aria-invalid` and `aria-describedby`.
+- The confirm page shows a "What will be sent" summary, then the consent warnings in an
+  always-visible box (never collapsible), the usage bar and the Send buttons.
+- The answer page shows "You asked" above the answer.
+- Study materials is highlighted in the sidebar on AI request and result pages; their
+  URL prefixes come from the routes (`context.ai_prefixes`).
+- Flashcards: both faces share one grid cell, so the card grows to fit the longer face
+  and never scrolls. Faces over 180 characters use a smaller font, keeping a
+  600-character card about 400 pixels tall on a 360-pixel phone.
 
 ### `prune_ai_ledger`
 
