@@ -66,7 +66,7 @@ def html_for(tool, data, theme=None):
     request.user = NS(username='Synthetic preview')
     with override_settings(STUDENT_WEBSITE_ENABLED=True):
         context = foundation.navigation(request)
-    saved = NS(pk=uuid.UUID(int=7), request_id=uuid.UUID(int=8), tool=tool, question='',
+    saved = NS(pk=uuid.UUID(int=7), request_id=uuid.UUID(int=8), tool=tool, question=('What do mitochondria do?' if tool == 'answer' else ''),
                created_at=datetime(2026, 11, 16, 9, 30, tzinfo=timezone.utc))
     material = NS(pk=uuid.UUID(int=9), title='Synthetic notes')
     context.update(request=request, csrf_token='synthetic-token', messages=[], saved=saved, material=material,
@@ -225,6 +225,30 @@ class AiBrowserTests(unittest.TestCase):
                 self.assertEqual(page.locator('.ai-face-front').evaluate('e => e.scrollHeight <= e.clientHeight'), True)
                 if OUTPUT:
                     page.screenshot(path=str(OUTPUT / f'ai-flashcards-{width}.png'), full_page=True)
+
+    def test_flipping_shows_the_front_then_the_back(self):
+        page = self.page('flashcards', CARDS, motion='reduce')
+        centre = """() => { const b = document.querySelector('.ai-flip').getBoundingClientRect();
+            const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+            return hit && hit.closest('.ai-face') ? hit.closest('.ai-face').className : null; }"""
+        self.assertIn('ai-face-front', page.evaluate(centre))
+        page.locator('.ai-flip').click()
+        self.assertIn('ai-face-back', page.evaluate(centre))
+        page.locator('.ai-flip').click()
+        self.assertIn('ai-face-front', page.evaluate(centre))
+
+    def test_long_answers_grow_the_card_instead_of_scrolling(self):
+        long_back = ('This synthetic answer is deliberately long so that it needs many lines. ' * 9)[:600]
+        cards = {'cards': [{'front': 'Synthetic long term', 'back': long_back}] + CARDS['cards'][1:]}
+        for width in (390, 1280):
+            with self.subTest(width=width):
+                page = self.page('flashcards', cards, width=width)
+                page.locator('.ai-flip').click()
+                back = page.locator('.ai-face-back')
+                self.assertTrue(back.evaluate('e => e.scrollHeight <= e.clientHeight && e.scrollWidth <= e.clientWidth'))
+                self.assertGreaterEqual(page.locator('.ai-flip').bounding_box()['height'] + 1, back.bounding_box()['height'])
+                if OUTPUT and width == 390:
+                    page.screenshot(path=str(OUTPUT / 'ai-flashcards-long-390.png'), full_page=True)
 
     def test_copy_puts_the_plain_text_on_the_clipboard(self):
         page = self.page('summary', SUMMARY)
