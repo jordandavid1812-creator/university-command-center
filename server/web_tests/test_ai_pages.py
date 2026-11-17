@@ -87,6 +87,10 @@ class ToolsAndConfirmTests(AiCase):
         self.assertContains(page, "All 62 characters")
         self.assertContains(page, "“What do mitochondria do?”")
         self.assertContains(page, "Sent text cannot be recalled.")
+        self.assertContains(page, '<h2 id="warning-heading">Before you send</h2>')
+        # Consent warnings can never be folded away (the site's mobile menu is its own <details>).
+        self.assertContains(page, '<section class="notice warning ai-warning"')
+        self.assertNotContains(page, '<details class="notice')
         self.assertContains(page, "<dt>Not sent</dt>")
         self.assertContains(page, "Send to Gemini (Google)")
         self.assertContains(page, "Send to Grok (xAI)")
@@ -302,10 +306,18 @@ class RequestAndResultTests(AiCase):
             self.assertIn(f'<input type="hidden" name="tool" value="{tool}"><input type="hidden" name="question" value="">', page)
         self.assertIn('<input type="hidden" name="tool" value="answer"><label for="ai-question">', page)
         self.assertNotIn('type="radio"', page)
-        # A question typed for "Ask" keeps its text when the form comes back with an error.
+        # A refused question keeps its text, and its error is linked to the box (summary link,
+        # inline message, aria-invalid and aria-describedby).
         response = self.confirm("answer", "Why\x07 this?")
-        self.assertContains(response, "hidden control characters", status_code=400)
         self.assertContains(response, "Why\x07 this?</textarea>", status_code=400)
+        self.assertContains(response, '<a href="#ai-question">Your question: Remove the hidden control characters',
+                            status_code=400)
+        self.assertContains(response, '<ul class="errorlist" id="ai-question-error">', status_code=400)
+        self.assertContains(response, 'aria-describedby="ai-question-error ai-question-help" aria-invalid="true"',
+                            status_code=400)
+        fresh = self.client_a.get(self.url("ai-tools")).content.decode()
+        self.assertIn('aria-describedby="ai-question-help">', fresh)
+        self.assertNotIn('aria-invalid', fresh)
 
     def test_download_delete_and_owner_only_access(self):
         page = self.make("quiz", QUIZ)
@@ -363,7 +375,7 @@ class AuditTests(AiCase):
         root = Path(__file__).resolve().parents[1] / "student_web/static/student_web"
         script = (root / "ai.js").read_text()
         self.assertLessEqual((root / "ai.js").stat().st_size, 20_000)
-        self.assertLessEqual((root / "ai.css").stat().st_size, 12_000)
+        self.assertLessEqual((root / "ai.css").stat().st_size, 9_500)
         for forbidden in ("localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "XMLHttpRequest",
                           "innerHTML", "outerHTML", "insertAdjacentHTML", "eval(", "new Function"):
             self.assertNotIn(forbidden, script)

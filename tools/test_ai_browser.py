@@ -240,9 +240,12 @@ class AiBrowserTests(unittest.TestCase):
     def test_long_answers_grow_the_card_instead_of_scrolling(self):
         long_back = ('This synthetic answer is deliberately long so that it needs many lines. ' * 9)[:600]
         cards = {'cards': [{'front': 'Synthetic long term', 'back': long_back}] + CARDS['cards'][1:]}
-        for width in (390, 1280):
+        for width in (360, 390, 1280):
             with self.subTest(width=width):
                 page = self.page('flashcards', cards, width=width)
+                # Long faces use a smaller font, so the card stays a reasonable height on phones.
+                self.assertLessEqual(page.locator('.ai-flip').bounding_box()['height'], 480)
+                self.assertIn('ai-face-long', page.locator('.ai-face-back').get_attribute('class'))
                 page.locator('.ai-flip').click()
                 back = page.locator('.ai-face-back')
                 self.assertTrue(back.evaluate('e => e.scrollHeight <= e.clientHeight && e.scrollWidth <= e.clientWidth'))

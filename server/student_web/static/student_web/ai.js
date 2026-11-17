@@ -218,6 +218,9 @@
       flip.setAttribute('aria-pressed', 'false');
       front.textContent = card.front;
       back.textContent = card.back;
+      // Long text gets a smaller font, so the card stays a reasonable height on phones.
+      front.classList.toggle('ai-face-long', card.front.length > 180);
+      back.classList.toggle('ai-face-long', card.back.length > 180);
       flip.setAttribute('aria-label', `Card ${position + 1}: ${card.front}. Press to flip.`);
       count.textContent = `Card ${position + 1} of ${deck.length}`;
       piles.textContent = `Known ${known.size} · Review again ${review.size}`;
