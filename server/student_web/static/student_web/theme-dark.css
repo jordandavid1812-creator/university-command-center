@@ -3,6 +3,8 @@
    dark; screens only, so print stays light. Contrast-tested in tools/test_frontend_foundation_browser.py. */
 :root {
   --color-canvas:#101918;
+  --chart-1:#3987e5;
+  --chart-2:#d95926;
   --color-surface:#172321;
   --color-surface-raised:#20312D;
   --color-text:#F0F5F2;

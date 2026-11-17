@@ -201,6 +201,32 @@ class PlannerForm(StrictForm):
             raise forms.ValidationError(str(error)) from error
 
 
+class ProjectionForm(StrictForm):
+    """Graduation predictor: the student supplies the remaining credits and an expected average."""
+    expected = forms.DecimalField(label='Expected average for your remaining credits', min_value=0, max_value=5,
+                                  max_digits=5, decimal_places=4, initial='4.0000',
+                                  help_text='The GPA you expect to average from now on: 0–5, at most four decimal places.')
+    remaining = forms.DecimalField(label='Remaining credit units', min_value=Decimal('0.0001'), max_value=Decimal('1000000'),
+                                   max_digits=11, decimal_places=4, initial='30',
+                                   help_text='Include all remaining credits, including currently ungraded courses.')
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('auto_id', 'projection_%s')  # unique IDs beside the target form
+        super().__init__(*args, **kwargs)
+
+    def clean_expected(self):
+        try:
+            return checked_target(self.cleaned_data['expected'])
+        except ValueError as error:
+            raise forms.ValidationError(str(error).replace('Target CGPA', 'The expected average')) from error
+
+    def clean_remaining(self):
+        try:
+            return checked_credits(self.cleaned_data['remaining'])
+        except ValueError as error:
+            raise forms.ValidationError(str(error)) from error
+
+
 AI_TOOL_CHOICES = [("summary", "Summary"), ("quiz", "Quiz"), ("flashcards", "Flashcards"),
                    ("answer", "Ask a question")]
 

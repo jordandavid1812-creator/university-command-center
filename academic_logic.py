@@ -174,6 +174,49 @@ def target_plan(courses, target, remaining):
     return {"current": current, "total": total, "required": required, "status": status}
 
 
+def course_breakdown(courses):
+    """Step-by-step working behind academic_summary: each valid course's grade points and
+    quality points (points x units), per semester and overall. Same validation and duplicate
+    rules as academic_summary; ungraded courses are listed but count towards nothing."""
+    with localcontext() as context:
+        context.prec = 50
+        semesters, warnings = validate_courses(courses)
+        result = {"semesters": [], "points": Decimal(0), "units": Decimal(0), "warnings": warnings}
+        for semester, records in semesters.items():
+            row = {"semester": semester, "courses": [], "points": Decimal(0), "units": Decimal(0)}
+            for code, units, grade in records:
+                units = Decimal(str(units))
+                if grade:
+                    quality = GRADE_POINTS[grade] * units
+                    row["points"] += quality
+                    row["units"] += units
+                    row["courses"].append({"code": code, "units": units, "grade": grade,
+                                           "grade_points": GRADE_POINTS[grade], "quality_points": quality})
+                else:
+                    row["courses"].append({"code": code, "units": units, "grade": None,
+                                           "grade_points": None, "quality_points": None})
+            row["gpa"] = weighted_gpa(row["points"], row["units"])
+            result["semesters"].append(row)
+            result["points"] += row["points"]
+            result["units"] += row["units"]
+        result["gpa"] = weighted_gpa(result["points"], result["units"])
+        return result
+
+
+def projected_cgpa(courses, expected, remaining):
+    """Final CGPA if the student averages `expected` (0-5) over `remaining` credits they supply.
+    Read-only planning: actual grades stay fixed and nothing hypothetical is saved."""
+    expected = checked_target(expected)
+    remaining = checked_credits(remaining)
+    current = academic_summary(courses)
+    with localcontext() as context:
+        context.prec = 50
+        total = current["units"] + remaining
+        projected = (current["points"] + expected * remaining) / total
+    return {"current": current, "expected": expected, "remaining": remaining, "total": total,
+            "projected": projected}
+
+
 def validate_assignments(assignments, courses=None):
     """Return (original index, record) pairs; never repair or rewrite records."""
     if not isinstance(assignments, list):

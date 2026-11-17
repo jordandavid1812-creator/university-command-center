@@ -10,11 +10,13 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
-from academic_logic import academic_summary, predicted_summary, target_plan
+from academic_logic import (GRADE_POINTS, academic_summary, course_breakdown, predicted_summary, projected_cgpa,
+                            target_plan)
 from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
-from . import data, export, forms
+from . import charts, data, export, forms
+from .data import present
 from .context import DISPLAY_COOKIE, display_theme
 
 
@@ -275,7 +277,15 @@ def assignment_status(request, identity, identifier):
 
 @protected()
 def overview(request, identity):
-    return render(request, 'student_web/overview.html', data.snapshot(identity))
+    workspace = data.snapshot(identity)
+    return render(request, 'student_web/overview.html', {**workspace, **standing_context(workspace)})
+
+
+def standing_context(workspace):
+    """Chart, step-by-step breakdown and grade scale for the saved grades (read-only)."""
+    breakdown = present(course_breakdown(workspace['records']), workspace['labels'])
+    return {'chart': charts.semester_chart(workspace['summary']), 'breakdown': breakdown,
+            'grade_scale': sorted(GRADE_POINTS.items(), key=lambda item: -item[1])}
 
 
 @protected(('GET', 'POST'))
@@ -318,7 +328,31 @@ def planner(request, identity):
             result = target_plan(workspace['records'], form.cleaned_data['target'], form.cleaned_data['remaining'])
         else:
             status = 400
-    return render(request, 'student_web/planner.html', {**workspace, 'form': form, 'result': result}, status=status)
+    return render(request, 'student_web/planner.html', {**workspace, 'form': form, 'result': result,
+                  'projection_form': forms.ProjectionForm()}, status=status)
+
+
+@protected(('POST',))
+def planner_projection(request, identity):
+    """Graduation predictor: read-only, nothing hypothetical is saved."""
+    workspace = data.snapshot(identity)
+    form = forms.ProjectionForm(request.POST)
+    projection = None
+    status = 200
+    if form.is_valid():
+        projection = projected_cgpa(workspace['records'], form.cleaned_data['expected'], form.cleaned_data['remaining'])
+    else:
+        status = 400
+    return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(), 'result': None,
+                  'projection_form': form, 'projection': projection}, status=status)
+
+
+@protected()
+def standing_print(request, identity):
+    """One-page printable summary of the saved grades (read-only)."""
+    workspace = data.snapshot(identity)
+    return render(request, 'student_web/standing_print.html',
+                  {**workspace, **standing_context(workspace), 'printed_on': timezone.localdate()})
 
 
 @protected()

@@ -39,3 +39,9 @@ window.addEventListener('pageshow', () => {
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#error-summary')?.focus();
 });
+
+// Print buttons (hidden until this script runs; without JavaScript the page explains Ctrl+P).
+document.querySelectorAll('[data-print]').forEach((button) => {
+  button.hidden = false;
+  button.addEventListener('click', () => window.print());
+});
