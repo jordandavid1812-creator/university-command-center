@@ -66,7 +66,7 @@ def html_for(tool, data, theme=None):
     request.user = NS(username='Synthetic preview')
     with override_settings(STUDENT_WEBSITE_ENABLED=True):
         context = foundation.navigation(request)
-    saved = NS(pk=uuid.UUID(int=7), request_id=uuid.UUID(int=8), tool=tool, question='',
+    saved = NS(pk=uuid.UUID(int=7), request_id=uuid.UUID(int=8), tool=tool, question=('What do mitochondria do?' if tool == 'answer' else ''),
                created_at=datetime(2026, 11, 16, 9, 30, tzinfo=timezone.utc))
     material = NS(pk=uuid.UUID(int=9), title='Synthetic notes')
     context.update(request=request, csrf_token='synthetic-token', messages=[], saved=saved, material=material,

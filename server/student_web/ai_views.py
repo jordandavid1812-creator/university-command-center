@@ -45,6 +45,15 @@ STATUS_HINTS = {
 }
 
 
+# (tool, name, mark, description, button) for the tools page cards.
+QUICK_TOOLS = [
+    ("summary", "Summary", "S", "The key points of this file in up to 10 short bullets.", "Create summary"),
+    ("quiz", "Quiz", "Q", "5 to 10 multiple-choice questions with instant feedback and a score.", "Create quiz"),
+    ("flashcards", "Flashcards", "F", "5 to 20 flip cards with piles for what you know and what to review.",
+     "Create flashcards"),
+]
+
+
 def _material_with_text(identity, identifier):
     """The student's stored material and its extracted text, or an error page response."""
     material, content = services.materials.read_file(identity, identifier)
@@ -55,7 +64,7 @@ def _tools_context(identity, material, form):
     results = [{'saved': saved, 'tool_name': TOOL_NAMES[saved.tool]}
                for saved in services.ai.results_for(identity, material.pk)]
     return {'material': material, 'form': form, 'results': results, 'usage': services.ai.usage(identity),
-            'providers': ai_providers.available_providers()}
+            'providers': ai_providers.available_providers(), 'quick_tools': QUICK_TOOLS}
 
 
 @protected()

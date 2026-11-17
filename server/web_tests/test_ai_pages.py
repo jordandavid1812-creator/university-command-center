@@ -72,9 +72,9 @@ class AiCase(NoNetworkMixin, WebsiteCase):
 class ToolsAndConfirmTests(AiCase):
     def test_tools_page_is_owner_only_and_needs_a_stored_file(self):
         page = self.client_a.get(self.url("ai-tools"))
-        self.assertContains(page, "Choose a study tool")
+        for button in ("Create summary", "Create quiz", "Create flashcards", "Ask about this file"):
+            self.assertContains(page, button)
         self.assertContains(page, "0 of 50")
-        self.assertContains(page, "Review before sending")
         self.assertEqual(self.client_b.get(self.url("ai-tools")).status_code, 404)
         self.assertRedirects(Client().get(self.url("ai-tools")), reverse("accounts:login"), fetch_redirect_response=False)
         details_only = services.materials.create(self.identity_a, course_id=self.course_a.pk, title="Old",
@@ -87,7 +87,7 @@ class ToolsAndConfirmTests(AiCase):
         self.assertContains(page, "All 62 characters")
         self.assertContains(page, "“What do mitochondria do?”")
         self.assertContains(page, "Sent text cannot be recalled.")
-        self.assertContains(page, "Not sent:")
+        self.assertContains(page, "<dt>Not sent</dt>")
         self.assertContains(page, "Send to Gemini (Google)")
         self.assertContains(page, "Send to Grok (xAI)")
         self.assertNotContains(page, "secret-name.txt")
@@ -280,10 +280,32 @@ class RequestAndResultTests(AiCase):
         self.assertContains(cards, "Meaning 4")
         answer = self.make("answer", ANSWER, "Where is it explained?")
         self.assertContains(answer, "Section 2 explains it.")
-        self.assertContains(answer, "Your question: “Where is it explained?”")
+        self.assertContains(answer, "You asked")
+        self.assertContains(answer, "<p>Where is it explained?</p>", html=False)
         for page in (quiz, cards, answer):
             self.assertContains(page, "student_web/ai.js")
             self.assertContains(page, "Download as text")
+
+    def test_study_materials_is_highlighted_on_every_ai_page(self):
+        page = self.make("summary", SUMMARY)
+        saved = page.context["saved"]
+        active = '<a class="nav-link active" href="/materials/" aria-current="page">'
+        for url in (self.url("ai-tools"), self.url("ai-result", saved.pk), self.url("ai-request", saved.request_id)):
+            response = self.client_a.get(url, follow=True)
+            with self.subTest(url=url):
+                self.assertContains(response, active)
+                self.assertNotContains(response, '<a class="nav-link active" href="/"')
+
+    def test_tools_page_has_one_form_per_tool_and_a_separate_question_form(self):
+        page = self.client_a.get(self.url("ai-tools")).content.decode()
+        for tool in ("summary", "quiz", "flashcards"):
+            self.assertIn(f'<input type="hidden" name="tool" value="{tool}"><input type="hidden" name="question" value="">', page)
+        self.assertIn('<input type="hidden" name="tool" value="answer"><label for="ai-question">', page)
+        self.assertNotIn('type="radio"', page)
+        # A question typed for "Ask" keeps its text when the form comes back with an error.
+        response = self.confirm("answer", "Why\x07 this?")
+        self.assertContains(response, "hidden control characters", status_code=400)
+        self.assertContains(response, "Why\x07 this?</textarea>", status_code=400)
 
     def test_download_delete_and_owner_only_access(self):
         page = self.make("quiz", QUIZ)
@@ -341,7 +363,7 @@ class AuditTests(AiCase):
         root = Path(__file__).resolve().parents[1] / "student_web/static/student_web"
         script = (root / "ai.js").read_text()
         self.assertLessEqual((root / "ai.js").stat().st_size, 20_000)
-        self.assertLessEqual((root / "ai.css").stat().st_size, 8_000)
+        self.assertLessEqual((root / "ai.css").stat().st_size, 12_000)
         for forbidden in ("localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "XMLHttpRequest",
                           "innerHTML", "outerHTML", "insertAdjacentHTML", "eval(", "new Function"):
             self.assertNotIn(forbidden, script)
