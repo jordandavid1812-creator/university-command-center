@@ -213,6 +213,19 @@ class AiBrowserTests(unittest.TestCase):
         page.locator('.ai-deck').press('ArrowRight')
         self.assertIn('Card 1 of 1', page.locator('.ai-deck-count').text_content())
 
+    def test_flashcards_are_full_size_cards_at_desktop_and_phone_widths(self):
+        for width in (1280, 390):
+            with self.subTest(width=width):
+                page = self.page('flashcards', CARDS, width=width)
+                for face in ('.ai-face-front', '.ai-face-back'):
+                    box = page.locator(face).bounding_box()
+                    self.assertGreaterEqual(box['height'], 200, (face, box))
+                    self.assertGreaterEqual(box['width'], min(width - 120, 400), (face, box))
+                # The card text is not squeezed into a scrolling box.
+                self.assertEqual(page.locator('.ai-face-front').evaluate('e => e.scrollHeight <= e.clientHeight'), True)
+                if OUTPUT:
+                    page.screenshot(path=str(OUTPUT / f'ai-flashcards-{width}.png'), full_page=True)
+
     def test_copy_puts_the_plain_text_on_the_clipboard(self):
         page = self.page('summary', SUMMARY)
         page.get_by_role('button', name='Copy').click()
