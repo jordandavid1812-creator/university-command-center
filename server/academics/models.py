@@ -271,7 +271,9 @@ class StudyAiRequest(ValidatedRecord):
                                        code for code, _ in AI_ERROR_CATEGORIES])
                                    | (~models.Q(status="failed") & models.Q(error_category=""))),
                                    name="airequest_category_valid"),
-            models.CheckConstraint(condition=models.Q(status_class__in=["", "3xx", "4xx", "5xx"]),
+            # A status class only on a failed request, and only one of the three classes.
+            models.CheckConstraint(condition=models.Q(status_class="")
+                                   | models.Q(status="failed", status_class__in=["3xx", "4xx", "5xx"]),
                                    name="airequest_status_class_valid"),
         ]
 

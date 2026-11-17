@@ -135,6 +135,7 @@ class StudyAiRlsTests(StudentSecurityCase):
         baseline = self.spare_request()
         with student_transaction(self.a):
             self.assertEqual(self.sql(*self.insert_request(self.a.student_id)), 1)
+            self.assertEqual(self.sql(*self.insert_request(self.a.student_id, status_class="4xx")), 1)
             self.assertEqual(self.sql(*self.insert_result(self.a.student_id, self.material_a.pk, baseline.pk)), 1)
         bad_requests = {
             "tool": {"tool": "essay"}, "provider": {"provider": "other"}, "status": {"status": "done"},
@@ -142,6 +143,8 @@ class StudyAiRlsTests(StudentSecurityCase):
             "failure without category": {"error_category": ""}, "model newline": {"model": "synthetic-model\n"},
             "model case": {"model": "Synthetic"}, "no characters": {"characters_sent": 0},
             "too many characters": {"characters_sent": 60001}, "token hash": {"consent_token_hash": "ABC"},
+            "unknown status class": {"status_class": "6xx"},
+            "status class without failure": {"status": "succeeded", "error_category": "", "status_class": "4xx"},
         }
         for name, overrides in bad_requests.items():
             with self.subTest(request=name):

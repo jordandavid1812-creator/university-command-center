@@ -307,6 +307,14 @@
     actions.appendChild(status);
   };
 
+  // After the browser's Back button, the confirm page is usable again (site.js restores only
+  // the buttons it disabled itself).
+  window.addEventListener('pageshow', () => {
+    document.querySelectorAll('form[data-ai-send] button').forEach((button) => { button.disabled = false; });
+    const wait = document.querySelector('[data-ai-wait]');
+    if (wait) wait.hidden = true;
+  });
+
   // Printouts show every quiz answer.
   window.addEventListener('beforeprint', () => {
     document.querySelectorAll('.ai-answer').forEach((details) => { details.hidden = false; details.open = true; });

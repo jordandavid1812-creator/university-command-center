@@ -25,7 +25,8 @@ LIMIT_MESSAGES = {
     "busy": "Another AI request of yours is still in progress. Wait for it to finish, then try again.",
 }
 FAILURE_MESSAGES = {
-    "network": "The AI service could not be reached. Check your internet connection and try again.",
+    "network": "The request to the AI service could not be completed (for example no internet connection, or an "
+               "unexpected problem in this app). Nothing was saved; you can try again.",
     "timeout": "The AI service took longer than 60 seconds, so the request was stopped.",
     "redirect": "The AI service answered in an unexpected way (a redirect), so nothing was used.",
     "http_error": "The AI service refused the request. If this keeps happening, check the API key and model name.",

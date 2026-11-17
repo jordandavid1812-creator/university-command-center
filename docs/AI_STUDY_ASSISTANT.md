@@ -310,7 +310,9 @@ same single dashboard transaction (two extra queries). **Download my data** adds
    - Each failure writes one fixed-label log line (logger, level, route only). The
      details live on the ledger row, never in logs.
 
-Every Send response is a redirect, so refreshing never posts again. Only the file's
+Every Send response is a redirect, so refreshing never posts again. The one exception
+is a session that ends during the call: the student is signed out, so they get the
+"Please sign in again" page (403) and the request becomes interrupted. Only the file's
 extracted text and the question are sent: never the username, email, display name,
 matric number, file name or material title.
 
@@ -341,6 +343,17 @@ when the device asks for reduced motion. The waiting page and spinner work witho
 JavaScript. Site-wide premium animations (GSAP) are a separate, later task with its own
 plan.
 
+### Ledger status class (migration 0014)
+
+`0014_study_ai_status_class` adds the ledger's `status_class`: `""`, or `3xx`, `4xx` or
+`5xx` **only on a failed request** (CHECK constraint; database default `""`). The runtime
+may update it along with `status`, `error_category` and `updated_at`, and the startup
+check allows exactly those four columns.
+
+**After migrating, re-run `configure_runtime`** (the local launcher does both). Without
+the new grant, failures cannot be recorded, and every failed request would show as
+interrupted.
+
 ### `prune_ai_ledger`
 
 `python server/manage.py prune_ai_ledger --settings=config.settings.auth_migration`,
@@ -348,10 +361,7 @@ with the website stopped.
 
 - It refuses unless the current role owns both AI tables, so the runtime role is
   refused.
-- Migration `0014_study_ai_status_class` adds the ledger's `status_class` (`""`,
-  `3xx`, `4xx` or `5xx`, CHECK-constrained, database default `""`). The runtime may
-  update it along with `status`, `error_category` and `updated_at`, and the startup
-  check allows exactly those four columns.
+
 - In one transaction it checks deferred keys immediately, lifts `FORCE` on both
   tables, deletes ledger rows older than 365 days that have no result, and restores
   `FORCE`.
@@ -367,12 +377,22 @@ with the website stopped.
 | `tests.test_pdf_child_memory` (no database) | **Every platform:** a slow child's real Python process is gone after the time limit, and the call returns within 20 seconds instead of waiting for the child (on Windows this checks the process behind the virtual-environment launcher). Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
 | `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts; the child runs isolated (`-I`) in a removed `ucc-pdf-` folder with stderr discarded; setup failures are refusals that stop the child; byte-order marks; metadata that contradicts itself. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
 | `web_tests.test_ai_pages` (NoNetworkMixin; fake provider connection) | Since the PR #71 review: every outcome after reserving recorded and redirected (unexpected client error, database error while saving); 4xx/5xx status class stored and explained; control characters in questions refused; the dashboard panel adds exactly two AI reads within one verification; the 413 path for both new export sections; `ai.js`/`ai.css` size budgets and source audit. Also: | Tools page owner-only and stored-file-only; confirm shows what is and isn't sent and never sends or counts; GET never sends; question rules; only configured providers offered and a forged one refused; one click sends once and the result is shown escaped; only the text and question sent (no username, email, display name, matric, file name or title); a refresh or double click sends once; forged, other-tool, other-material and other-student tokens refused; an expired token sends nothing but still finds a finished request; missing CSRF never sends; failures recorded without retry or fallback; the daily limit; the session ending during the call discards the answer; no transaction open during the call; request page states; each tool without JavaScript; download headers; delete; owner-only results; invalid saved results; material deletion keeps the count; dashboard panel; export sections |
-| `tools/test_ai_browser.py` (Chromium) | **Clicking Send with `site.js` and `ai.js` loaded posts the chosen provider, token and tool** (also without JavaScript; shown to fail with the original named-button form); one Send disables both providers and shows the wait; interactive quiz (right/wrong, reason, score, final, try again), flashcard deck (flip, next, piles, review pile, keys), copy to the clipboard as plain text, everything without JavaScript, animations end visible with no script errors, light and dark contrast of every quiz state |
+| `tools/test_ai_browser.py` (Chromium) | Send posts the question for "Ask a question"; after the browser's Back button the Send buttons work again and the wait message is hidden (shown to fail without the restore); **clicking Send with `site.js` and `ai.js` loaded posts the chosen provider, token and tool** (also without JavaScript; shown to fail with the original named-button form); one Send disables both providers and shows the wait; interactive quiz (right/wrong, reason, score, final, try again), flashcard deck (flip, next, piles, review pile, keys), copy to the clipboard as plain text, everything without JavaScript, animations end visible with no script errors, light and dark contrast of every quiz state |
 | `security_tests.test_prune_ai_ledger` | Rows dated from the real clock (the command uses the database's clock). Old rows without results really removed for every student, others kept, `FORCE` restored, idempotent, runtime refused (shown to fail without lifting `FORCE`) |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
-No historical tests were changed. `security_tests/test_migrations.py` already
+No historical baseline tests were changed. `security_tests/test_migrations.py` already
 restores the latest academics migration.
+
+Tests from these AI stages that were later edited (all after review):
+
+- `security_tests.test_study_ai_service` (PR #67) lists `status_class` among the
+  ledger's columns (PR #72).
+- `security_tests.test_prune_ai_ledger` (PR #71) dates its rows from the real clock,
+  because the command uses the database's clock (PR #72).
+- `web_tests.test_ai_pages` (PR #71): the session-ended case now expects exactly the
+  403 sign-in page, and the failure wording follows the neutral `network` message
+  (PR #72).
 
 ## Upgrade order
 

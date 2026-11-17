@@ -26,7 +26,7 @@ CARDS = {'cards': [{'front': f'Synthetic term {n + 1}', 'back': f'Synthetic mean
 SUMMARY = {'points': ['Cells are the basic unit of life.', '<b>Markup</b> stays plain text.']}
 
 
-def confirm_html():
+def confirm_html(tool='summary', question=''):
     """The real confirm page with two configured providers."""
     sys.path.insert(0, str(ROOT / 'server'))
     from student_web.forms import AiSendForm
@@ -37,10 +37,10 @@ def confirm_html():
     with override_settings(STUDENT_WEBSITE_ENABLED=True):
         context = foundation.navigation(request)
     material = NS(pk=uuid.UUID(int=9), title='Synthetic notes')
-    send_form = AiSendForm(initial={'tool': 'summary', 'question': '', 'token': 'synthetic-token-value'},
+    send_form = AiSendForm(initial={'tool': tool, 'question': question, 'token': 'synthetic-token-value'},
                            providers=['gemini', 'grok'], auto_id=False)
-    context.update(request=request, csrf_token='synthetic-csrf', messages=[], material=material, tool='summary',
-                   tool_name='Summary', question='', amount='All 62 characters', send_form=send_form,
+    context.update(request=request, csrf_token='synthetic-csrf', messages=[], material=material, tool=tool,
+                   tool_name='Summary', question=question, amount='All 62 characters', send_form=send_form,
                    providers=[('gemini', 'Gemini (Google)'), ('grok', 'Grok (xAI)')],
                    usage={'used_today': 1, 'daily_limit': 50, 'results': 0, 'max_results': 500})
     return inline(render_to_string('student_web/ai_confirm.html', context))
@@ -124,6 +124,39 @@ class AiBrowserTests(unittest.TestCase):
                 fields = dict(pair.split('=', 1) for pair in posted[0].split('&'))
                 self.assertEqual(fields.get('provider'), 'grok')
                 self.assertEqual((fields.get('tool'), fields.get('token')), ('summary', 'synthetic-token-value'))
+
+    def test_send_posts_the_question_for_ask_a_question(self):
+        from urllib.parse import parse_qs
+        context = self.browser.new_context(viewport={'width': 1280, 'height': 900})
+        self.addCleanup(context.close)
+        page = context.new_page()
+        posted = []
+        html = confirm_html('answer', 'What do mitochondria do & why?')
+        page.route('http://localhost/materials/**', lambda route: (
+            posted.append(route.request.post_data or '') if route.request.method == 'POST' else None,
+            route.fulfill(status=200, content_type='text/html',
+                          body=html if route.request.method == 'GET' else '<p>sent</p>'))[-1])
+        page.goto('http://localhost/materials/synthetic/tools/confirm/')
+        page.get_by_role('button', name='Send to Gemini (Google)').click()
+        page.wait_for_load_state()
+        fields = {key: values[0] for key, values in parse_qs(posted[0]).items()}
+        self.assertEqual((fields['provider'], fields['tool'], fields['question']),
+                         ('gemini', 'answer', 'What do mitochondria do & why?'))
+
+    def test_back_button_makes_the_confirm_page_usable_again(self):
+        context = self.browser.new_context(viewport={'width': 1280, 'height': 900})
+        self.addCleanup(context.close)
+        page = context.new_page()
+        html = confirm_html()
+        page.route('http://localhost/materials/**', lambda route: route.fulfill(
+            status=200, content_type='text/html', body=html) if route.request.method == 'GET' else None)
+        page.goto('http://localhost/materials/synthetic/tools/confirm/')
+        page.evaluate("() => document.querySelectorAll('form[data-ai-send]').forEach(f => f.addEventListener('submit', e => e.preventDefault()))")
+        page.get_by_role('button', name='Send to Gemini (Google)').click()
+        self.assertTrue(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
+        page.evaluate("() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
+        self.assertFalse(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
+        self.assertTrue(page.locator('[data-ai-wait]').is_hidden())
 
     def test_one_send_disables_both_providers_and_shows_the_wait(self):
         context = self.browser.new_context(viewport={'width': 1280, 'height': 900})

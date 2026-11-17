@@ -204,7 +204,7 @@ class SendTests(AiCase):
             response = self.send(self.token())
         self.assertEqual(response.status_code, 302)
         page = self.client_a.get(response["Location"])
-        self.assertContains(page, "could not be reached")
+        self.assertContains(page, "could not be completed")
         from django.db import DatabaseError
         with patch.object(services.ai, "succeed", side_effect=DatabaseError("synthetic")):
             response = self.send(self.token())
@@ -244,7 +244,7 @@ class SendTests(AiCase):
             return FakeConnection(provider, 200, self.replies[provider])
         with patch.object(ai_providers, "_connect", connect_and_sign_out):
             response = self.send(self.token())
-        self.assertIn(response.status_code, (302, 403))
+        self.assertContains(response, "Please sign in again", status_code=403)
         self.login(self.client_a)
         identity = self.identity(self.client_a)
         self.assertEqual(services.ai.results_for(identity, self.material.pk), [])
