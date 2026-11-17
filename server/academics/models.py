@@ -239,6 +239,9 @@ class StudyAiRequest(ValidatedRecord):
     truncated = models.BooleanField()
     consent_token_hash = models.CharField(max_length=64)
     error_category = models.CharField(max_length=16, blank=True, choices=AI_ERROR_CATEGORIES)
+    # For a failed reply: "4xx" usually means a wrong key or model, "5xx" a provider problem.
+    status_class = models.CharField(max_length=3, blank=True, default="", db_default="",
+                                    choices=[("3xx", "3xx"), ("4xx", "4xx"), ("5xx", "5xx")])
 
     class Meta:
         indexes = [models.Index(fields=["owner", "created_at"], name="airequest_owner_created")]
@@ -268,6 +271,10 @@ class StudyAiRequest(ValidatedRecord):
                                        code for code, _ in AI_ERROR_CATEGORIES])
                                    | (~models.Q(status="failed") & models.Q(error_category=""))),
                                    name="airequest_category_valid"),
+            # A status class only on a failed request, and only one of the three classes.
+            models.CheckConstraint(condition=models.Q(status_class="")
+                                   | models.Q(status="failed", status_class__in=["3xx", "4xx", "5xx"]),
+                                   name="airequest_status_class_valid"),
         ]
 
 

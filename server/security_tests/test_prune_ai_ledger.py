@@ -9,7 +9,6 @@ from academics.services import ai, materials
 from .base import StudentSecurityCase
 
 FACTS = {"original_filename": "notes.txt", "file_type": "txt", "size_bytes": 15}
-NOW = datetime(2026, 11, 16, 12, 0, tzinfo=dt_timezone.utc)
 
 
 class PruneLedgerTests(StudentSecurityCase):
@@ -39,11 +38,13 @@ class PruneLedgerTests(StudentSecurityCase):
 
     def setUp(self):
         super().setUp()
+        # The command compares with the database's real clock, so date rows from the real time.
+        now = datetime.now(dt_timezone.utc)
         self.material = materials.create(self.a, course_id=self.course_a.pk, title="A notes", **FACTS)
-        self.old = self.request_at(NOW - timedelta(days=400), "old")
-        self.old_b = self.request_at(NOW - timedelta(days=400), "old-b", identity=self.b)
-        self.old_with_result = self.request_at(NOW - timedelta(days=400), "old-result", with_result=True)
-        self.recent = self.request_at(NOW - timedelta(days=30), "recent")
+        self.old = self.request_at(now - timedelta(days=400), "old")
+        self.old_b = self.request_at(now - timedelta(days=400), "old-b", identity=self.b)
+        self.old_with_result = self.request_at(now - timedelta(days=400), "old-result", with_result=True)
+        self.recent = self.request_at(now - timedelta(days=30), "recent")
 
     def test_old_rows_without_results_are_actually_removed_and_rls_is_restored(self):
         output = io.StringIO()

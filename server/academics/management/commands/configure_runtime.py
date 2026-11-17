@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 ("academics_assignment", ("course_id", "title", "due_date", "completed", "record_version", "updated_at")),
                 ("academics_studymaterial", ("course_id", "title", "record_version", "updated_at")),
                 ("academics_studentprofile", ("display_name", "institution", "programme", "level", "matric_number", "record_version", "updated_at")),
-                ("academics_studyairequest", ("status", "error_category", "updated_at")),
+                ("academics_studyairequest", ("status", "error_category", "status_class", "updated_at")),
             ):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))

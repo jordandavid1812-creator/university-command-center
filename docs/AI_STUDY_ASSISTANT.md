@@ -266,7 +266,7 @@ reservation.
 | Route | Method | What it does |
 | --- | --- | --- |
 | `/materials/<id>/tools/` | GET | The four tools, the question box, today's usage meter, and saved results for this file. Only for the student's own material with a stored file (otherwise 404) |
-| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. **Never sends and never counts.** No Send button at 50 a day or with no provider |
+| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
 | `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
 | `/ai-requests/<id>/` | GET | In progress (reloads every 5 seconds, no JavaScript needed), failed (plain reason), interrupted, "result deleted", or a redirect to the result |
 | `/ai-results/<id>/` | GET | The result, re-checked with `check_result` before display, labelled "AI-generated: check it against your notes". An invalid old row shows "can no longer be displayed" |
@@ -281,7 +281,7 @@ same single dashboard transaction (two extra queries). **Download my data** adds
 ### Send, step by step (`student_web/ai_views.py`)
 
 1. The form is checked: exact fields, tool from the list, and a question only for "Ask
-   a question" (1–500 characters).
+   a question" (1–500 characters, no control characters or lone surrogates).
 2. The consent token (`student_web/ai_consent.py`) is checked. It must have a valid
    signature (Django signing, its own salt) and match this student, material, tool and
    question. A forged token, or one for another student, material, tool or question,
@@ -297,11 +297,22 @@ same single dashboard transaction (two extra queries). **Download my data** adds
    a plain message. An existing request for the token redirects.
 7. `ai_providers.ask` runs with **no database transaction open**. A test records
    `in_atomic_block` while connecting.
-8. `succeed` saves the result, or `fail` records the category. If the session ended
-   during the call, the save is refused and the output discarded. A late answer for an
-   interrupted request is discarded.
+8. `succeed` saves the result, or `fail` records the category and, for an HTTP error,
+   the status class (`4xx`: usually a wrong key or model or no quota; `5xx`: a provider
+   problem). The request page explains which.
+   - **From the reservation on, every outcome is recorded and redirected.** An
+     unexpected client error counts as `network`; a database error while saving counts
+     as `save`.
+   - If even recording fails (database down, session ended), the row stays `sent` and
+     shows as interrupted after two minutes. It is never retried.
+   - If the session ended during the call, the save is refused and the output
+     discarded. A late answer for an interrupted request is discarded.
+   - Each failure writes one fixed-label log line (logger, level, route only). The
+     details live on the ledger row, never in logs.
 
-Every Send response is a redirect, so refreshing never posts again. Only the file's
+Every Send response is a redirect, so refreshing never posts again. The one exception
+is a session that ends during the call: the student is signed out, so they get the
+"Please sign in again" page (403) and the request becomes interrupted. Only the file's
 extracted text and the question are sent: never the username, email, display name,
 matric number, file name or material title.
 
@@ -325,10 +336,23 @@ All of these work on a result already saved, and all work without JavaScript fir
   Printing shows every quiz answer.
 - **Dashboard AI panel** (above).
 
+`ai.js` is kept under 20,000 bytes and `ai.css` under 8,000, and a source audit checks
+that `ai.js` uses no browser storage, cookies, network calls, `eval`, or HTML insertion.
 AI text is only ever inserted with `textContent`, never as HTML. All motion is skipped
 when the device asks for reduced motion. The waiting page and spinner work without
 JavaScript. Site-wide premium animations (GSAP) are a separate, later task with its own
 plan.
+
+### Ledger status class (migration 0014)
+
+`0014_study_ai_status_class` adds the ledger's `status_class`: `""`, or `3xx`, `4xx` or
+`5xx` **only on a failed request** (CHECK constraint; database default `""`). The runtime
+may update it along with `status`, `error_category` and `updated_at`, and the startup
+check allows exactly those four columns.
+
+**After migrating, re-run `configure_runtime`** (the local launcher does both). Without
+the new grant, failures cannot be recorded, and every failed request would show as
+interrupted.
 
 ### `prune_ai_ledger`
 
@@ -337,6 +361,7 @@ with the website stopped.
 
 - It refuses unless the current role owns both AI tables, so the runtime role is
   refused.
+
 - In one transaction it checks deferred keys immediately, lifts `FORCE` on both
   tables, deletes ledger rows older than 365 days that have no result, and restores
   `FORCE`.
@@ -351,13 +376,23 @@ with the website stopped.
 | `tests.test_repository_key_scan` | Key shapes found, ordinary text and near-misses ignored, a key at the end of a 6 MiB file and a key split across chunks found (shown to fail without the overlap), and the check fails on a tracked key in a temporary repository without printing the key or file name |
 | `tests.test_pdf_child_memory` (no database) | **Every platform:** a slow child's real Python process is gone after the time limit, and the call returns within 20 seconds instead of waiting for the child (on Windows this checks the process behind the virtual-environment launcher). Job Object structures match the Windows 64-bit layout, the right limits are sent in the right order (fake kernel32), any failed step means no limit, the child stops before reading without a limit, a real 1 GiB allocation is refused under the limit. **Windows only** (run on the owner's PC): the child cannot start another process, and a normal PDF still reads with the limit in place |
 | `web_tests.test_text_extraction` | TXT cleaning, cap and refusals; PDF text through the real child, Greek and maths text, the 60,000-character and 300-page stops and their wording, scans, encrypted and broken files, a decompression bomb stopped only by the lowered limits, no `pypdf` output on stderr; with stand-in children: no `UCC_`, `PG` or `DJANGO_` variables reach the child, the time limit, the output cap, strict metadata and UTF-8 checks, parent re-cleaning and capping, exit codes, the busy slot limit and oversized input refused before a child starts; the child runs isolated (`-I`) in a removed `ucc-pdf-` folder with stderr discarded; setup failures are refusals that stop the child; byte-order marks; metadata that contradicts itself. The bomb, stderr and environment tests were each shown to fail when their protection is removed |
-| `web_tests.test_ai_pages` (NoNetworkMixin; fake provider connection) | Tools page owner-only and stored-file-only; confirm shows what is and isn't sent and never sends or counts; GET never sends; question rules; only configured providers offered and a forged one refused; one click sends once and the result is shown escaped; only the text and question sent (no username, email, display name, matric, file name or title); a refresh or double click sends once; forged, other-tool, other-material and other-student tokens refused; an expired token sends nothing but still finds a finished request; missing CSRF never sends; failures recorded without retry or fallback; the daily limit; the session ending during the call discards the answer; no transaction open during the call; request page states; each tool without JavaScript; download headers; delete; owner-only results; invalid saved results; material deletion keeps the count; dashboard panel; export sections |
-| `tools/test_ai_browser.py` (Chromium) | Interactive quiz (right/wrong, reason, score, final, try again), flashcard deck (flip, next, piles, review pile, keys), copy to the clipboard as plain text, everything without JavaScript, animations end visible with no script errors, light and dark contrast of every quiz state |
-| `security_tests.test_prune_ai_ledger` | Old rows without results really removed for every student, others kept, `FORCE` restored, idempotent, runtime refused (shown to fail without lifting `FORCE`) |
+| `web_tests.test_ai_pages` (NoNetworkMixin; fake provider connection) | Since the PR #71 review: every outcome after reserving recorded and redirected (unexpected client error, database error while saving); 4xx/5xx status class stored and explained; control characters in questions refused; the dashboard panel adds exactly two AI reads within one verification; the 413 path for both new export sections; `ai.js`/`ai.css` size budgets and source audit. Also: | Tools page owner-only and stored-file-only; confirm shows what is and isn't sent and never sends or counts; GET never sends; question rules; only configured providers offered and a forged one refused; one click sends once and the result is shown escaped; only the text and question sent (no username, email, display name, matric, file name or title); a refresh or double click sends once; forged, other-tool, other-material and other-student tokens refused; an expired token sends nothing but still finds a finished request; missing CSRF never sends; failures recorded without retry or fallback; the daily limit; the session ending during the call discards the answer; no transaction open during the call; request page states; each tool without JavaScript; download headers; delete; owner-only results; invalid saved results; material deletion keeps the count; dashboard panel; export sections |
+| `tools/test_ai_browser.py` (Chromium) | Send posts the question for "Ask a question"; after the browser's Back button the Send buttons work again and the wait message is hidden (shown to fail without the restore); **clicking Send with `site.js` and `ai.js` loaded posts the chosen provider, token and tool** (also without JavaScript; shown to fail with the original named-button form); one Send disables both providers and shows the wait; interactive quiz (right/wrong, reason, score, final, try again), flashcard deck (flip, next, piles, review pile, keys), copy to the clipboard as plain text, everything without JavaScript, animations end visible with no script errors, light and dark contrast of every quiz state |
+| `security_tests.test_prune_ai_ledger` | Rows dated from the real clock (the command uses the database's clock). Old rows without results really removed for every student, others kept, `FORCE` restored, idempotent, runtime refused (shown to fail without lifting `FORCE`) |
 | `security_tests.test_study_ai_service` | Runs on a fixed clock (noon in Lagos), so no result depends on the real time of day. One request per consent token, the unique-violation fallback, the outermost-call guard, the 51st request refused whatever earlier outcomes, material deletion keeps the count, Lagos midnight boundary (23:59 and 00:00), saved-result cap, one in flight and stale requests interrupted, closing rules, invalid results, value lists, owner isolation and forged identities, result deletion keeps the ledger row, **two real connections** for the same-token race and the race at 49 (the first connection is held after its checks, just before its insert, while the second waits for the lock; locks are counted in this test database only), startup refusal of missing RLS and each stray grant |
 
-No historical tests were changed. `security_tests/test_migrations.py` already
+No historical baseline tests were changed. `security_tests/test_migrations.py` already
 restores the latest academics migration.
+
+Tests from these AI stages that were later edited (all after review):
+
+- `security_tests.test_study_ai_service` (PR #67) lists `status_class` among the
+  ledger's columns (PR #72).
+- `security_tests.test_prune_ai_ledger` (PR #71) dates its rows from the real clock,
+  because the command uses the database's clock (PR #72).
+- `web_tests.test_ai_pages` (PR #71): the session-ended case now expects exactly the
+  403 sign-in page, and the failure wording follows the neutral `network` message
+  (PR #72).
 
 ## Upgrade order
 

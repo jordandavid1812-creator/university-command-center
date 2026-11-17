@@ -38,8 +38,10 @@
   const waitOnSend = () => {
     document.querySelectorAll('form[data-ai-send]').forEach((form) => {
       form.addEventListener('submit', () => {
-        const wait = form.querySelector('[data-ai-wait]');
+        const wait = document.querySelector('[data-ai-wait]');
         if (wait) wait.hidden = false;
+        // One request at a time: the other provider's button stops too.
+        document.querySelectorAll('form[data-ai-send] button').forEach((button) => { button.disabled = true; });
       });
     });
   };
@@ -304,6 +306,14 @@
     actions.prepend(button);
     actions.appendChild(status);
   };
+
+  // After the browser's Back button, the confirm page is usable again (site.js restores only
+  // the buttons it disabled itself).
+  window.addEventListener('pageshow', () => {
+    document.querySelectorAll('form[data-ai-send] button').forEach((button) => { button.disabled = false; });
+    const wait = document.querySelector('[data-ai-wait]');
+    if (wait) wait.hidden = true;
+  });
 
   // Printouts show every quiz answer.
   window.addEventListener('beforeprint', () => {

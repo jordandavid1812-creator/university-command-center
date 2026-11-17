@@ -1,3 +1,4 @@
+import re
 import uuid
 from decimal import Decimal
 from django import forms
@@ -214,7 +215,9 @@ class AiToolForm(StrictForm):
     def clean(self):
         values = super().clean()
         tool, question = values.get('tool'), (values.get('question') or '').strip()
-        if tool == 'answer' and not question:
+        if re.search('[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff]', question):
+            self.add_error('question', 'Remove the hidden control characters from your question.')
+        elif tool == 'answer' and not question:
             self.add_error('question', 'Type the question you want answered.')
         elif tool and tool != 'answer' and question:
             self.add_error('question', 'Questions are only used with "Ask a question". Clear this box or '

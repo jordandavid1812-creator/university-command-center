@@ -310,6 +310,7 @@ class StudyAiServiceTests(StudentSecurityCase):
     def test_models_keep_no_file_text_question_or_response_in_the_ledger(self):
         columns = {field.name for field in StudyAiRequest._meta.get_fields() if field.concrete}
         self.assertEqual(columns, {"id", "created_at", "updated_at", "owner", "tool", "provider", "model", "status",
-                                   "characters_sent", "truncated", "consent_token_hash", "error_category"})
+                                   "characters_sent", "truncated", "consent_token_hash", "error_category",
+                                   "status_class"})
         self.assertFalse(any(field.name == "material" for field in StudyAiRequest._meta.get_fields()))
         self.assertEqual(StudyAiResult._meta.get_field("material").remote_field.on_delete.__name__, "CASCADE")

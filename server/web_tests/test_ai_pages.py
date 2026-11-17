@@ -199,6 +199,32 @@ class SendTests(AiCase):
         self.assertEqual(services.ai.results_for(self.identity_a, self.material.pk), [])
         self.assertEqual(self.usage()["used_today"], 1)
 
+    def test_every_outcome_after_reserving_is_recorded_and_redirected(self):
+        with patch.object(ai_providers, "ask", side_effect=RuntimeError("unexpected")):
+            response = self.send(self.token())
+        self.assertEqual(response.status_code, 302)
+        page = self.client_a.get(response["Location"])
+        self.assertContains(page, "could not be completed")
+        from django.db import DatabaseError
+        with patch.object(services.ai, "succeed", side_effect=DatabaseError("synthetic")):
+            response = self.send(self.token())
+        self.assertEqual(response.status_code, 302)
+        self.assertContains(self.client_a.get(response["Location"]), "could not be saved")
+        self.assertEqual(self.usage()["used_today"], 2)
+
+    def test_http_errors_show_whether_the_key_or_the_provider_is_at_fault(self):
+        for status, status_class, hint in ((401, "4xx", "API key or model name"), (503, "5xx", "problem on its side")):
+            with self.subTest(status=status):
+                with patch.object(ai_providers, "_connect", lambda provider, s=status: FakeConnection(provider, s, {})):
+                    response = self.send(self.token())
+                self.assertContains(self.client_a.get(response["Location"]), hint)
+                ledger_id = response["Location"].rstrip("/").rsplit("/", 1)[-1]
+                ledger = services.ai.get_request(self.identity_a, ledger_id)
+                self.assertEqual((ledger.error_category, ledger.status_class), ("http_error", status_class))
+
+    def test_questions_with_control_characters_are_refused(self):
+        self.assertContains(self.confirm("answer", "Why\x07 this?"), "hidden control characters", status_code=400)
+
     def test_daily_limit_hides_send_and_refuses(self):
         token = self.token()
         with patch.object(services, "AI_REQUESTS_PER_DAY", 0):
@@ -218,7 +244,7 @@ class SendTests(AiCase):
             return FakeConnection(provider, 200, self.replies[provider])
         with patch.object(ai_providers, "_connect", connect_and_sign_out):
             response = self.send(self.token())
-        self.assertIn(response.status_code, (302, 403))
+        self.assertContains(response, "Please sign in again", status_code=403)
         self.login(self.client_a)
         identity = self.identity(self.client_a)
         self.assertEqual(services.ai.results_for(identity, self.material.pk), [])
@@ -287,6 +313,41 @@ class RequestAndResultTests(AiCase):
         material = services.materials.retrieve(self.identity_a, self.material.pk)
         services.materials.delete(self.identity_a, material.pk, version=material.record_version)
         self.assertEqual(self.usage(), {"used_today": 1, "daily_limit": 50, "results": 0, "max_results": 500})
+
+
+class AuditTests(AiCase):
+    def test_dashboard_ai_panel_adds_exactly_two_queries_in_the_same_transaction(self):
+        from datetime import date
+        from django.test.utils import CaptureQueriesContext
+        from academics import queries
+        with CaptureQueriesContext(connections[database_alias()]) as captured:
+            queries.dashboard_reads(self.identity_a, date(2026, 11, 16))
+        statements = [query["sql"] for query in captured.captured_queries]
+        ai_reads = [sql for sql in statements if 'FROM "academics_studyai' in sql]
+        self.assertEqual(len(ai_reads), 2, ai_reads)
+        self.assertEqual(sum("ucc_security.current_student()" in sql for sql in statements), 1)
+
+    def test_export_refuses_with_413_when_the_ai_sections_are_too_large(self):
+        from academics import queries
+        self.send(self.token())
+        for limit in ("MAX_EXPORT_AI_REQUESTS", "MAX_AI_RESULTS_PER_STUDENT"):
+            with self.subTest(limit=limit), patch.object(queries, limit, 0):
+                response = self.client_a.get(reverse("student_web:data-export"))
+                self.assertEqual(response.status_code, 413)
+                self.assertNotIn("Content-Disposition", response)
+
+    def test_ai_assets_stay_small_and_never_use_browser_storage_or_html_insertion(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1] / "student_web/static/student_web"
+        script = (root / "ai.js").read_text()
+        self.assertLessEqual((root / "ai.js").stat().st_size, 20_000)
+        self.assertLessEqual((root / "ai.css").stat().st_size, 8_000)
+        for forbidden in ("localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "XMLHttpRequest",
+                          "innerHTML", "outerHTML", "insertAdjacentHTML", "eval(", "new Function"):
+            self.assertNotIn(forbidden, script)
+        css = (root / "ai.css").read_text()
+        self.assertNotIn("@import", css)
+        self.assertNotIn("url(", css)
 
 
 class DashboardAndExportTests(AiCase):
