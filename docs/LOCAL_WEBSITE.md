@@ -10,6 +10,7 @@ Run it from the project folder:
 | `python tools/run_local_web.py setup` | Once: creates local-only database roles, a database and private secrets |
 | `python tools/run_local_web.py ai` | Add, change or remove a Gemini or Grok API key and model (typed hidden) |
 | `python tools/run_local_web.py check` | Tests each saved key and model and times one tiny answer ("fast" means 15 seconds or less) |
+| `python tools/run_local_web.py speed` | Times one tiny answer from each Gemini Flash text model your key can use, fastest first. Changes nothing |
 | `python tools/run_local_web.py` | Every time: applies database updates, then starts the website |
 
 ## Where secrets live
@@ -23,6 +24,13 @@ Database passwords and AI keys are kept in `local-web-secrets.json` **outside th
 The launcher refuses to keep them inside the project folder, `.gitignore` ignores the file
 name, and `tools/check_repository_safety.py` fails if that file is ever tracked. Keys are
 never printed. Never paste a key into a chat, an issue or a commit.
+
+## Choosing a fast model
+
+Speed depends mostly on the model. In November 2026 `gemini-3.6-flash` took 18–30 seconds even
+for a one-word reply, and `gemini-3.5-flash-lite` took 1.6 seconds with the same key and
+connection. Run `speed` to compare your models, then `ai` to save the one you want. Press
+Enter at the key question to keep your saved key.
 
 ## AI speed setting
 

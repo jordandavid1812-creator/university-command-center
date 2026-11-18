@@ -77,3 +77,48 @@ class FocusTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RememberedPdfTests(unittest.TestCase):
+    """The confirm page and Send read the same PDF: the second read comes from memory."""
+
+    def setUp(self):
+        text_extraction._recent.clear()
+        self.addCleanup(text_extraction._recent.clear)
+        self.reads = []
+
+        def fake_pdf(content):
+            self.reads.append(content)
+            return ExtractedText(text=f"text of {len(content)} bytes", truncated=False, pages_read=1, pages_total=1)
+        patcher = patch.object(text_extraction, "_from_pdf", fake_pdf)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_same_bytes_are_read_once_and_different_bytes_again(self):
+        first = text_extraction.extract_text_remembered("pdf", b"%PDF synthetic one")
+        again = text_extraction.extract_text_remembered("pdf", b"%PDF synthetic one")
+        other = text_extraction.extract_text_remembered("pdf", b"%PDF synthetic other")
+        self.assertIs(first, again)
+        self.assertEqual(len(self.reads), 2)
+        self.assertNotEqual(first, other)
+        # The plain reader is unchanged: it never uses the memory.
+        text_extraction.extract_text("pdf", b"%PDF synthetic one")
+        self.assertEqual(len(self.reads), 3)
+
+    def test_memory_expires_and_holds_only_a_few_files(self):
+        with patch.object(text_extraction.time, "monotonic", return_value=1000.0):
+            text_extraction.extract_text_remembered("pdf", b"%PDF synthetic one")
+        with patch.object(text_extraction.time, "monotonic", return_value=1000.0 + 15 * 60 + 1):
+            text_extraction.extract_text_remembered("pdf", b"%PDF synthetic one")
+        self.assertEqual(len(self.reads), 2)  # read again after 15 minutes
+        for number in range(6):
+            text_extraction.extract_text_remembered("pdf", f"%PDF synthetic {number}".encode())
+        self.assertLessEqual(len(text_extraction._recent), 4)
+
+    def test_text_files_and_failures_are_never_remembered(self):
+        text_extraction.extract_text_remembered("txt", b"Plain notes")
+        self.assertEqual(len(text_extraction._recent), 0)
+        with patch.object(text_extraction, "_from_pdf", side_effect=text_extraction.ExtractionFailed("no_text")):
+            with self.assertRaises(text_extraction.ExtractionFailed):
+                text_extraction.extract_text_remembered("pdf", b"%PDF synthetic broken")
+        self.assertEqual(len(text_extraction._recent), 0)

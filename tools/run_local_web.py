@@ -6,6 +6,7 @@ local-only roles and a separate database, never the automated test databases.
   python tools/run_local_web.py setup   once: create roles, database and private secrets
   python tools/run_local_web.py ai      add, change or remove a Gemini/Grok API key and model
   python tools/run_local_web.py check   test each saved key and model, and time one tiny answer
+  python tools/run_local_web.py speed   time a tiny answer from each Gemini Flash model your key can use
   python tools/run_local_web.py         each time: migrate + provision, then start the site
 
 Secrets are random, stored only in a private file OUTSIDE the repository
@@ -111,7 +112,11 @@ def ai():
     model = input("Model name exactly as the provider lists it (for example lowercase-with-dashes): ").strip()
     if not re.fullmatch(MODEL_PATTERN, model):
         raise SystemExit("Nothing changed: model names use only lowercase letters, digits, dots and dashes.")
-    key = getpass.getpass("Paste the API key (it will not be shown), then press Enter: ").strip()
+    previous = saved.get(choice, {}).get("key")
+    prompt = "Paste the API key (it will not be shown), then press Enter"
+    key = getpass.getpass(prompt + (" (or just Enter to keep the saved key): " if previous else ": ")).strip()
+    if not key and previous:
+        key = previous  # only the model changes
     if not re.fullmatch(KEY_PATTERN, key):
         raise SystemExit("Nothing changed: that does not look like an API key (no spaces, 8-512 characters).")
     saved[choice] = {"model": model, "key": key}
@@ -119,16 +124,18 @@ def ai():
     print(f"{AI_NAMES[choice]} saved with model {model}. The key was not shown or printed.")
 
 
-def _call(host, method, path, headers, body=None):
+def _call(host, method, path, headers, body=None, timeout=60):
     """One HTTPS request. Returns (status, parsed JSON or {}, seconds). Never prints the key."""
     import http.client
     import ssl
-    connection = http.client.HTTPSConnection(host, 443, timeout=60, context=ssl.create_default_context())
+    connection = http.client.HTTPSConnection(host, 443, timeout=timeout, context=ssl.create_default_context())
     started = time.monotonic()
     try:
         connection.request(method, path, body=json.dumps(body) if body else None, headers=headers)
         response = connection.getresponse()
         data = response.read(2_000_000)
+    except TimeoutError:
+        return None, {}, timeout
     except OSError as error:
         raise SystemExit(f"Could not reach {host} ({type(error).__name__}). Check the internet connection.")
     finally:
@@ -178,6 +185,9 @@ def check_gemini(key, model):
     status, data, seconds = _call(host, "POST", f"/v1beta/models/{model}:generateContent", headers,
                                   {"contents": [{"role": "user", "parts": [{"text": "Reply with the single word OK."}]}],
                                    "generationConfig": config})
+    if status is None:
+        print(f"2. Tiny test request to {model}: no answer within 60 seconds. Try the speed command.")
+        return
     print(f"2. Tiny test request to {model}: HTTP {status}" + ("" if status == 200 else f" ({_error_code(data)})"))
     if status == 200:
         print(f"   Gemini works: {_speed(seconds)}.")
@@ -209,6 +219,9 @@ def check_grok(key, model):
     status, data, seconds = _call(host, "POST", "/v1/chat/completions", headers,
                                   {"model": model, "max_tokens": 50,
                                    "messages": [{"role": "user", "content": "Reply with the single word OK."}]})
+    if status is None:
+        print(f"2. Tiny test request to {model}: no answer within 60 seconds. Try the speed command.")
+        return
     print(f"2. Tiny test request to {model}: HTTP {status}" + ("" if status == 200 else f" ({_error_code(data)})"))
     if status == 200:
         print(f"   Grok works: {_speed(seconds)}.")
@@ -216,6 +229,51 @@ def check_grok(key, model):
         print("   Rate limit or credits used up. Check your account at https://console.x.ai")
     else:
         print("   xAI refused the request. Share the line above (it contains no key).")
+
+
+SPEED_SKIP = ("tts", "image", "omni", "audio", "live", "embedding")
+SPEED_TIMEOUT = 20
+
+
+def speed():
+    """Time one tiny answer from each Gemini Flash text model the saved key can use, fastest first.
+    Changes nothing: save the model you like with the `ai` command. Never prints the key."""
+    settings = load_secrets().get("ai", {}).get("gemini")
+    if not settings:
+        raise SystemExit("No Gemini key saved yet. Run:  python tools/run_local_web.py ai")
+    headers = {"x-goog-api-key": settings["key"], "Content-Type": "application/json"}
+    host = "generativelanguage.googleapis.com"
+    status, data, _ = _call(host, "GET", "/v1beta/models?pageSize=1000", headers)
+    if status != 200:
+        raise SystemExit(f"Listing models failed: HTTP {status} ({_error_code(data)}). Run check for details.")
+    models = sorted(item["name"].split("/", 1)[-1] for item in data.get("models", [])
+                    if "generateContent" in item.get("supportedGenerationMethods", []))
+    models = [name for name in models if "flash" in name and not any(word in name for word in SPEED_SKIP)]
+    print(f"Timing {len(models)} Flash models (up to {SPEED_TIMEOUT} seconds each)...")
+    results = []
+    for model in models:
+        config = {"maxOutputTokens": 50}
+        if model.startswith("gemini-3"):
+            config["thinkingConfig"] = {"thinkingLevel": "low"}
+        body = {"contents": [{"role": "user", "parts": [{"text": "Reply with the single word OK."}]}],
+                "generationConfig": config}
+        status, data, seconds = _call(host, "POST", f"/v1beta/models/{model}:generateContent", headers, body,
+                                      timeout=SPEED_TIMEOUT)
+        if status is None:
+            print(f"   {model}: no answer within {SPEED_TIMEOUT} seconds")
+        elif status != 200:
+            print(f"   {model}: HTTP {status} ({_error_code(data)})")
+        else:
+            print(f"   {model}: {seconds:.1f} seconds")
+            results.append((seconds, model))
+    if not results:
+        print("No model answered. Run check for details.")
+        return
+    results.sort()
+    current = settings["model"]
+    print(f"\nFastest: {results[0][1]} ({results[0][0]:.1f} seconds). Your saved model: {current}.")
+    print("Speeds change from minute to minute; 'lite' models are usually the quickest.")
+    print("To switch, run  python tools/run_local_web.py ai  (press Enter at the key question to keep your key).")
 
 
 def check():
@@ -296,7 +354,9 @@ if __name__ == "__main__":
         ai()
     elif command == ["check"]:
         check()
+    elif command == ["speed"]:
+        speed()
     elif not command:
         run()
     else:
-        raise SystemExit("Use: python tools/run_local_web.py [setup | ai | check]")
+        raise SystemExit("Use: python tools/run_local_web.py [setup | ai | check | speed]")

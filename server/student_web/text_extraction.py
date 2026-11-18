@@ -4,7 +4,9 @@ TXT files are already checked UTF-8 and are cleaned here. PDFs are parsed only i
 separate child process (pdf_text_child.py) with no secrets in its environment, a hard
 time limit and an output cap; its output is checked strictly before any text is used.
 """
+import collections
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -12,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +59,46 @@ class ExtractedText:
     @property
     def characters(self):
         return len(self.text)
+
+
+# Reading a long PDF takes seconds. The confirm page and the Send step read the same file a few
+# moments apart, so the text of the last few PDFs is kept briefly IN MEMORY ONLY (never on disk),
+# keyed by a SHA-256 of the exact file bytes: only the same bytes, which the caller has already
+# read with its own ownership checks, can get the same text back.
+_RECENT_SECONDS = 15 * 60
+_RECENT_LIMIT = 4
+_recent = collections.OrderedDict()  # sha256 -> (time stored, ExtractedText)
+_recent_lock = threading.Lock()
+
+
+def _remembered(digest):
+    with _recent_lock:
+        entry = _recent.get(digest)
+        if entry is None or time.monotonic() - entry[0] > _RECENT_SECONDS:
+            _recent.pop(digest, None)
+            return None
+        _recent.move_to_end(digest)
+        return entry[1]
+
+
+def _remember(digest, extracted):
+    with _recent_lock:
+        _recent[digest] = (time.monotonic(), extracted)
+        _recent.move_to_end(digest)
+        while len(_recent) > _RECENT_LIMIT:
+            _recent.popitem(last=False)
+
+
+def extract_text_remembered(file_type, content):
+    """extract_text for the AI pages: a PDF read for the confirm page is not read again at Send."""
+    if file_type != "pdf" or type(content) is not bytes:
+        return extract_text(file_type, content)
+    digest = hashlib.sha256(content).hexdigest()
+    known = _remembered(digest)
+    if known is None:
+        known = extract_text(file_type, content)
+        _remember(digest, known)
+    return known
 
 
 def extract_text(file_type, content):

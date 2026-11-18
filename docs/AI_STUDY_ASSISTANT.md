@@ -456,5 +456,13 @@ Answers used to take most of a minute, sometimes timing out after 60 seconds. Tw
      size check still holds. The ledger records `truncated = true` when less than all was sent.
 
 Summary, quiz and flashcards still use the whole extract. The 60-second safety limit stays.
+
+The confirm page and the Send step read the same PDF a few moments apart. The AI pages use
+`text_extraction.extract_text_remembered`, which keeps the text of the last 4 PDFs for 15 minutes,
+**in memory only** (never on disk). It is keyed by a SHA-256 of the exact file bytes, which the
+caller has already read with its ownership checks, so Send does not read the PDF again. Text
+files are never remembered, failures are never remembered, and the plain `extract_text` is
+unchanged. On the owner's PC the model mattered most (see `docs/LOCAL_WEBSITE.md`, "Choosing a
+fast model").
 The pages now say a request usually takes 5 to 20 seconds, and the timeout message explains
 what happened in plain words.
