@@ -82,6 +82,15 @@
 .main-content .panel .table-scroll table { background:transparent; }
 .main-content .panel .table-scroll caption { padding:.75rem 1rem .25rem; text-align:left; font-weight:650; }
 
+/* ---------- Warning boxes such as "Before you send": a clear card ---------- */
+.main-content .notice.ai-warning { padding:var(--space-5) var(--space-6); border-radius:20px; border-width:1px 1px 1px 6px;
+  font-size:var(--type-body); }
+.notice.ai-warning h2 { display:flex; align-items:center; gap:var(--space-2); font-size:var(--type-section); margin:0 0 var(--space-3); }
+.notice.ai-warning h2::before { content:"!"; display:grid; place-items:center; width:1.75rem; height:1.75rem; flex:none;
+  border-radius:50%; background:var(--color-warning-text); color:var(--color-warning-bg); font-size:1rem; font-weight:800; }
+.notice.ai-warning ul { display:grid; gap:var(--space-2); margin:0; padding-left:var(--space-6); color:var(--color-text); line-height:1.55; }
+.notice.ai-warning li::marker { color:var(--color-warning-text); }
+
 /* ---------- Flashcards: bold coloured faces on a plain card, a new colour per card ---------- */
 .main-content .panel:has(.ai-deck) { --card:var(--color-surface); --edge:var(--color-border-subtle); }
 .ai-face { --face:var(--deck-1); --face-edge:var(--tint-1-edge); background:var(--face); border:2px solid var(--face-edge);
@@ -131,7 +140,7 @@
   /* !important also beats a running animation, so nothing prints faded or half-counted. */
   [data-reveal], .ucc-motion :is(.page-heading, .notice, .panel, .metric, .ai-tool-card, .standing-chart,
     .dashboard-attention, .ai-question, .ai-deck, .table-scroll, .empty-state, .standing-bar path, .standing-cgpa) {
-    opacity:1 !important; transform:none !important; }
+    opacity:1 !important; transform:none !important; transition:none !important; }
   .ucc-counting { color:var(--ucc-ink) !important; }
   .ucc-counting::after { content:none; }
   .ucc-progress, .ucc-glide, .ucc-ripple { display:none; }

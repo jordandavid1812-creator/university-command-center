@@ -88,8 +88,9 @@ function setUpReveals(): void {
       observer.unobserve(element);
       enter(element, index * 80);
     });
-    // Threshold 0: any visible part counts, so even a section many screens tall appears.
-  }, { rootMargin: '0px 0px -6% 0px', threshold: 0 });
+    // Threshold 0 and no margin: any visible pixel counts, so a section many screens tall, or a
+    // small one at the very bottom of the page, always appears.
+  }, { threshold: 0 });
   later.forEach((element) => {
     element.setAttribute('data-reveal', 'waiting');
     observer.observe(element);

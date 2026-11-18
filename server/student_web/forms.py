@@ -237,6 +237,9 @@ class AiToolForm(StrictForm):
     question = forms.CharField(max_length=500, required=False, label='Your question',
                                widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 500}),
                                help_text='Only for "Ask a question". Up to 500 characters.')
+    # Sent only by the buttons on the confirm page that hide or show the "Before you send" notes.
+    notes = forms.ChoiceField(choices=[('', ''), ('hide', 'Hide'), ('show', 'Show')], required=False,
+                              widget=forms.HiddenInput())
 
     def clean(self):
         values = super().clean()
@@ -258,10 +261,18 @@ class AiSendForm(AiToolForm):
     provider = forms.ChoiceField(choices=[])
 
     def __init__(self, *args, providers, **kwargs):
+        from .ai_providers import PUBLIC_CODES
         super().__init__(*args, **kwargs)
-        self.fields['provider'].choices = [(code, code) for code in providers]
+        # The page posts a neutral code ("main" or "backup"); the internal name is also accepted.
+        self.fields['provider'].choices = ([(PUBLIC_CODES[code], code) for code in providers]
+                                           + [(code, code) for code in providers])
         for name in ('tool', 'question'):
             self.fields[name].widget = forms.HiddenInput()
+
+    def clean_provider(self):
+        from .ai_providers import INTERNAL_CODES
+        value = self.cleaned_data['provider']
+        return INTERNAL_CODES.get(value, value)
 
 
 class ConfirmDeleteForm(StrictForm):

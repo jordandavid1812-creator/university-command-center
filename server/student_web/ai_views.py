@@ -5,6 +5,7 @@ consent token. The call runs with no database transaction open. Every other page
 reads or deletes the student's own records.
 """
 import logging
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.db import DatabaseError
 from django.http import HttpResponse
@@ -19,6 +20,7 @@ from . import ai_consent, ai_providers, forms, text_extraction
 from .views import error_page, protected
 
 TOOL_NAMES = dict(forms.AI_TOOL_CHOICES)
+AI_NOTES_COOKIE = 'ucc_ai_notes'  # 'hidden' after "Got it, don't show again"; nothing else is stored
 LIMIT_MESSAGES = {
     "daily": "You have used all 50 AI requests for today. The count starts again at midnight (Lagos time).",
     "results": "You have 500 saved AI results, the most you can keep. Delete some results to make room.",
@@ -86,20 +88,36 @@ def confirm(request, identity, identifier):
         if material.pk not in services.materials.stored_ids(identity):
             raise services.RecordNotFound()
         return render(request, 'student_web/ai_tools.html', _tools_context(identity, material, form), status=400)
+    # "Got it, don't show again" is remembered in this browser only (like the Display setting),
+    # even if the file cannot be read this time.
+    choice = form.cleaned_data.get('notes')
     try:
         material, extracted = _material_with_text(identity, identifier)
     except text_extraction.ExtractionFailed as failure:
-        return error_page(request, 'Cannot use this file', failure.message, 503 if failure.reason == 'busy' else 422)
+        return _remember_notes(error_page(request, 'Cannot use this file', failure.message,
+                                          503 if failure.reason == 'busy' else 422), choice)
     tool, question = form.cleaned_data['tool'], form.cleaned_data['question']
     token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters)
     providers = ai_providers.available_providers()
     send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers,
                                  auto_id=False)
-    return render(request, 'student_web/ai_confirm.html', {
+    notes_hidden = choice == 'hide' or (choice != 'show' and request.COOKIES.get(AI_NOTES_COOKIE) == 'hidden')
+    response = render(request, 'student_web/ai_confirm.html', {
         'material': material, 'tool': tool, 'tool_name': TOOL_NAMES[tool], 'question': question,
         'amount': text_extraction.describe(extracted), 'send_form': send_form,
-        'providers': [(code, ai_providers.PROVIDER_NAMES[code]) for code in providers],
-        'usage': services.ai.usage(identity)})
+        'providers': ai_providers.send_buttons(providers),
+        'usage': services.ai.usage(identity), 'notes_hidden': notes_hidden})
+    return _remember_notes(response, choice)
+
+
+def _remember_notes(response, choice):
+    """Store or clear the "Got it, don't show again" choice on this response."""
+    if choice == 'hide':
+        response.set_cookie(AI_NOTES_COOKIE, 'hidden', max_age=365 * 24 * 60 * 60, httponly=True, samesite='Lax',
+                            secure=django_settings.SESSION_COOKIE_SECURE)
+    elif choice == 'show':
+        response.delete_cookie(AI_NOTES_COOKIE, samesite='Lax')
+    return response
 
 
 @protected(('POST',))
@@ -195,7 +213,6 @@ def request_status(request, identity, identifier):
         status = 'deleted'
     return render(request, 'student_web/ai_request.html', {
         'ledger': ledger, 'status': status, 'tool_name': TOOL_NAMES[ledger.tool],
-        'provider_name': ai_providers.PROVIDER_NAMES[ledger.provider],
         'failure': FAILURE_MESSAGES.get(ledger.error_category, ''),
         'status_hint': STATUS_HINTS.get(ledger.status_class, '')}, status=200)
 

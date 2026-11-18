@@ -1,0 +1,19 @@
+/* Account settings page only: the display choices as pill options, and spaced sections.
+    Loaded by settings.html; colours come from the shared tokens. */
+.display-form { margin-top:var(--space-8); }
+/* Pills keep their natural width and wrap onto new lines only when the screen is narrow. */
+.display-choices { display:flex; flex-wrap:wrap; gap:var(--space-3);
+  margin:0; padding:var(--space-5); border:1px solid var(--edge); border-radius:16px; background:var(--color-surface); }
+.display-choices legend { float:left; width:100%; padding:0; margin-bottom:var(--space-1); font-size:var(--type-body); }
+.display-choices > p { flex-basis:100%; margin:0 0 var(--space-1); }
+.display-choices .form-field { margin:0; flex:1 1 auto; }
+.display-choices label { display:flex; align-items:center; gap:var(--space-3); min-height:3rem; margin:0; cursor:pointer;
+  padding:var(--space-2) var(--space-4); border:1px solid var(--color-border-control); border-radius:999px;
+  background:var(--color-canvas); font-size:var(--type-body); font-weight:600; transition:background-color .18s, border-color .18s; }
+.display-choices label:hover { border-color:var(--color-primary); }
+.display-choices label:has(:checked) { background:var(--color-active-bg); border-color:var(--color-primary); color:var(--color-active-text); }
+.display-choices .form-field input[type=radio] { width:1.25rem; height:1.25rem; min-height:0;
+  margin:0; padding:0; flex:none; accent-color:var(--color-primary); }
+.display-form .action-row { margin-top:var(--space-4); }
+.form-panel > section { margin-top:var(--space-8); padding-top:var(--space-6); border-top:1px solid var(--edge); }
+.form-panel > section ~ p:last-child { margin-top:var(--space-6); }

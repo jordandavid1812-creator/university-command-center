@@ -41,7 +41,7 @@ def confirm_html(tool='summary', question=''):
                            providers=['gemini', 'grok'], auto_id=False)
     context.update(request=request, csrf_token='synthetic-csrf', messages=[], material=material, tool=tool,
                    tool_name='Summary', question=question, amount='All 62 characters', send_form=send_form,
-                   providers=[('gemini', 'Gemini (Google)'), ('grok', 'Grok (xAI)')],
+                   providers=[('main', 'Send'), ('backup', 'Send with the backup service')],
                    usage={'used_today': 1, 'daily_limit': 50, 'results': 0, 'max_results': 500})
     return inline(render_to_string('student_web/ai_confirm.html', context))
 
@@ -118,11 +118,11 @@ class AiBrowserTests(unittest.TestCase):
                 # Both scripts are really on the page: site.js (busy buttons) and ai.js (wait message).
                 self.assertIn("button.textContent = 'Working…'", html)
                 self.assertIn('data-ai-wait', html)
-                page.get_by_role('button', name='Send to Grok (xAI)').click()
+                page.get_by_role('button', name='Send with the backup service').click()
                 page.wait_for_load_state()
                 self.assertEqual(len(posted), 1)
                 fields = dict(pair.split('=', 1) for pair in posted[0].split('&'))
-                self.assertEqual(fields.get('provider'), 'grok')
+                self.assertEqual(fields.get('provider'), 'backup')
                 self.assertEqual((fields.get('tool'), fields.get('token')), ('summary', 'synthetic-token-value'))
 
     def test_send_posts_the_question_for_ask_a_question(self):
@@ -137,11 +137,11 @@ class AiBrowserTests(unittest.TestCase):
             route.fulfill(status=200, content_type='text/html',
                           body=html if route.request.method == 'GET' else '<p>sent</p>'))[-1])
         page.goto('http://localhost/materials/synthetic/tools/confirm/')
-        page.get_by_role('button', name='Send to Gemini (Google)').click()
+        page.get_by_role('button', name='Send', exact=True).click()
         page.wait_for_load_state()
         fields = {key: values[0] for key, values in parse_qs(posted[0]).items()}
         self.assertEqual((fields['provider'], fields['tool'], fields['question']),
-                         ('gemini', 'answer', 'What do mitochondria do & why?'))
+                         ('main', 'answer', 'What do mitochondria do & why?'))
 
     def test_back_button_makes_the_confirm_page_usable_again(self):
         context = self.browser.new_context(viewport={'width': 1280, 'height': 900})
@@ -152,10 +152,10 @@ class AiBrowserTests(unittest.TestCase):
             status=200, content_type='text/html', body=html) if route.request.method == 'GET' else None)
         page.goto('http://localhost/materials/synthetic/tools/confirm/')
         page.evaluate("() => document.querySelectorAll('form[data-ai-send]').forEach(f => f.addEventListener('submit', e => e.preventDefault()))")
-        page.get_by_role('button', name='Send to Gemini (Google)').click()
-        self.assertTrue(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
+        page.get_by_role('button', name='Send', exact=True).click()
+        self.assertTrue(page.get_by_role('button', name='Send with the backup service').is_disabled())
         page.evaluate("() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        self.assertFalse(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
+        self.assertFalse(page.get_by_role('button', name='Send with the backup service').is_disabled())
         self.assertTrue(page.locator('[data-ai-wait]').is_hidden())
 
     def test_one_send_disables_both_providers_and_shows_the_wait(self):
@@ -168,9 +168,9 @@ class AiBrowserTests(unittest.TestCase):
         page.goto('http://localhost/materials/synthetic/tools/confirm/')
         page.evaluate("""() => document.querySelectorAll('form[data-ai-send]').forEach(f =>
             f.addEventListener('submit', e => e.preventDefault()))""")
-        page.get_by_role('button', name='Send to Gemini (Google)').click()
+        page.get_by_role('button', name='Send', exact=True).click()
         self.assertTrue(page.locator('[data-ai-wait]').is_visible())
-        self.assertTrue(page.get_by_role('button', name='Send to Grok (xAI)').is_disabled())
+        self.assertTrue(page.get_by_role('button', name='Send with the backup service').is_disabled())
 
     def test_interactive_quiz_scores_and_retries(self):
         page = self.page('quiz', QUIZ)

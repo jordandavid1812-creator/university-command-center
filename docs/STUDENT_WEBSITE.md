@@ -390,6 +390,11 @@ validation, deeper search/selector scaling and production operations remain defe
   - Pages that reload themselves (the AI "still working" page), a reload, and Back/Forward
     do not replay the entrance animations.
   - Parts of the AI pages that `ai.js` already animates are left to `ai.js`.
+  - Account settings: the Display choices are pill-shaped options (still ordinary radio
+    buttons, so saving works without JavaScript), and each section is separated by a line.
+    Styles: `static/student_web/settings.css`, loaded on that page only.
+  - "Before you send" on the AI confirm page is a clear warning card with an icon and
+    full-contrast text.
   - The coloured card borders keep the status stripes: red for an impossible target or a
     failed AI request, green for an achievable target.
   - The count-up is drawn on top of the real number. The page text always holds the true value.

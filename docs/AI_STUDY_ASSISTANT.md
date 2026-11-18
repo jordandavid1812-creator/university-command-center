@@ -266,7 +266,7 @@ reservation.
 | Route | Method | What it does |
 | --- | --- | --- |
 | `/materials/<id>/tools/` | GET | Three tool cards (Summary, Quiz, Flashcards), each its own small form with a "Create …" button; a separate "Ask about this file" card with its own required question box; today's usage bar; saved results. Only for the student's own material with a stored file (otherwise 404) |
-| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
+| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send** button per configured provider (**Send** and, with two, **Send with the backup service**; no company or model names). Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
 | `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
 | `/ai-requests/<id>/` | GET | In progress (reloads every 5 seconds, no JavaScript needed), failed (plain reason), interrupted, "result deleted", or a redirect to the result |
 | `/ai-results/<id>/` | GET | The result, re-checked with `check_result` before display, labelled "AI-generated: check it against your notes". An invalid old row shows "can no longer be displayed" |
@@ -361,8 +361,26 @@ interrupted.
   server still refuses a question with any other tool, whatever the browser sends.
 - A refused question keeps its text. Its error appears in the focusable summary as a link
   to the box, and inline above the box, which has `aria-invalid` and `aria-describedby`.
-- The confirm page shows a "What will be sent" summary, then the consent warnings in an
-  always-visible box (never collapsible), the usage bar and the Send buttons.
+- The confirm page shows a "What will be sent" summary, then the consent warnings, the
+  usage bar and the Send buttons. The warnings are shown in full, in an open box, until the
+  student presses **Got it, don't show again** (owner decision, November 2026; this replaces
+  the earlier "never collapsible" rule). That button re-posts the same tool and question to
+  the confirm page with `notes=hide`. The response sets the `ucc_ai_notes=hidden` cookie
+  (HttpOnly, SameSite=Lax, one year, this browser only) and shows the same page again.
+  - After that the page shows one short line ("Sent to an outside AI service · AI answers
+    can be wrong.") with the full notes behind **Show details**, which works without
+    JavaScript.
+  - **Show these notes every time** posts `notes=show`, which deletes the cookie.
+  - The cookie changes only the notes. It never changes what is sent, never sends anything
+    and never counts. Any other cookie value shows the full notes.
+  - Tests: `web_tests/test_ai_notes.py` and `tools/test_redesign_browser.py`.
+- Pages never name the AI company or model (owner decision, November 2026). With one
+  configured service the confirm page has one **Send** button; with two, **Send** (Gemini)
+  and **Send with the backup service** (Grok). The buttons post the neutral codes `main` and
+  `backup`, which `AiSendForm` maps back to the internal names (`ai_providers.PUBLIC_CODES`).
+  The warnings say "an outside AI service", and the request status page shows only the tool.
+  The student's data export leaves them out as well: AI requests list the tool, status,
+  characters sent and time, but not the service or model.
 - The answer page shows "You asked" above the answer.
 - Study materials is highlighted in the sidebar on AI request and result pages; their
   URL prefixes come from the routes (`context.ai_prefixes`).
