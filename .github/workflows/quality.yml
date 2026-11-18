@@ -190,3 +190,4 @@ jobs:
       - run: python tools/test_redesign_browser.py -v
       - run: python tools/test_class_bands_browser.py -v
       - run: python tools/test_reminders_browser.py -v
+      - run: python tools/test_results_pdf_browser.py -v

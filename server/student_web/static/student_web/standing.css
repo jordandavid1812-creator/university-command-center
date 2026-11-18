@@ -23,10 +23,20 @@
 .standing-total { font-size:1.125rem; }
 .standing-panel .planner-result { margin-top:var(--space-5); }
 .standing-result { font-size:2.25rem; font-weight:800; margin:var(--space-2) 0; }
+/* PDF pages: A4, a header and "Page 1 of 3" (Chrome and Edge draw these page margin boxes). */
+@page { size:A4; margin:16mm 14mm 18mm;
+  @top-left { content:"University Command Center \00B7  Academic summary"; font:9pt system-ui, sans-serif; color:#555; }
+  @bottom-center { content:"Page " counter(page) " of " counter(pages); font:9pt system-ui, sans-serif; color:#555; } }
+.print-details { display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:0 0 var(--space-2); }
 @media print {
+  * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
   .sidebar, .topbar, .mobile-nav, .page-footer, .skip-link, .action-row, .standing-noprint { display:none !important; }
   .main-content, .workspace { margin:0; padding:0; }
-  .panel, .standing-table { break-inside:avoid; box-shadow:none; }
+  .panel { box-shadow:none; }
+  /* Long sections may continue on the next page, but a table row, chart or bar is never cut. */
+  .main-content .panel { break-inside:auto; }
+  .standing-table, .standing-chart, .class-bar, .metric, tr { break-inside:avoid; }
+  h2, h3 { break-after:avoid; }
   .standing-bar path { fill:#2a78d6; }
   .standing-cgpa { stroke:#eb6834; }
 }
