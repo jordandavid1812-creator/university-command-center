@@ -137,12 +137,24 @@ class ServerPackageTests(unittest.TestCase):
         """Register, confirm the email link, sign in, add a semester and a course, and see it,
         all through Caddy, gunicorn and the restricted database logins."""
         jar = {}
-        self.browse(jar, 'GET', '/accounts/register/')
+        _, _, page = self.browse(jar, 'GET', '/accounts/register/')
+        self.assertIn('name="invite_code"', page)  # the public site is invite-only
         password = 'Synthetic-Long-Passphrase-42'
-        status, _, _ = self.browse(jar, 'POST', '/accounts/register/', {
-            'username': 'synthetic_student', 'email': 'synthetic.student@example.invalid',
-            'password1': password, 'password2': password})
+        details = {'username': 'synthetic_student', 'email': 'synthetic.student@example.invalid',
+                   'password1': password, 'password2': password}
+        _, _, page = self.browse(jar, 'POST', '/accounts/register/', details)
+        self.assertIn('This field is required', page)
+        _, _, page = self.browse(jar, 'POST', '/accounts/register/', {**details, 'invite_code': 'AAAA-BBBB-CCCC-DDDD-EEEE'})
+        self.assertIn('This invite code is not valid', page)
+        # The owner's command, exactly as in docs/SERVER_GUIDE.md, prints one new code.
+        created = self.compose('run', '--rm', 'migrate', 'python', 'manage.py', 'invites', 'create', '--note', 'Synthetic').stdout
+        code = re.search(r'[A-Z2-9]{4}(?:-[A-Z2-9]{4}){4}', created).group(0)
+        status, _, page = self.browse(jar, 'POST', '/accounts/register/', {**details, 'invite_code': code})
         self.assertEqual(status, 200)
+        self.assertIn('If these details are eligible', page)
+        listing = self.compose('run', '--rm', 'migrate', 'python', 'manage.py', 'invites', 'list').stdout
+        self.assertRegex(listing, r'(?<!un)used \d{4}-\d\d-\d\d +Synthetic')
+        self.assertNotIn(code, listing)
         # The smoke run uses the console email backend, so the link is in the website's output.
         link = re.findall(r'https://' + re.escape(HOST) + r'(/accounts/verify/[^\s]+/)', self.compose('logs', 'web').stdout)
         self.assertEqual(len(link), 1, 'one verification link expected')

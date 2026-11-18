@@ -25,6 +25,10 @@ services:
     image: ucc-web:local
     profiles: [tools]
     env_file: ${UCC_SECRETS:-./secrets}/migrator.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.auth_migration
+    # Default: database update. Also the owner's tools, for example invite codes:
+    #   docker compose -f deploy/compose.yml run --rm migrate python manage.py invites create --count 3
     command: ["/app/deploy/provision.sh"]
     networks: [backend]
     read_only: true

@@ -72,3 +72,7 @@ STORAGES = {
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
 }
 UCC_LOCAL_STATIC = False
+
+# Launch step 3: only people with an invite code can create an account.
+UCC_PUBLIC_SITE = True
+UCC_REQUIRE_INVITE = True

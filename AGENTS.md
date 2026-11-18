@@ -138,3 +138,6 @@ Server package (launch step 2): deploy/ holds the only supported server setup. T
 must keep no published port, a read-only file system, no capabilities and only runtime/auth logins;
 migrations run only in the one-off migrate container. Never print or commit deploy/secrets/.
 Run tools/test_server_package.py (Docker) before changing deploy/; never use `down -v` on the server.
+Invites (launch step 3): the public profile must keep UCC_REQUIRE_INVITE (check E106). Store only
+code digests; codes are made only by the owner's `invites` command with the migrator login. The auth
+role keeps exactly SELECT + UPDATE(used_at) on accounts_invitecode; the runtime role has none.

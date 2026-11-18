@@ -19,7 +19,7 @@ from .forms import (EmailRequestForm, RegistrationForm, BoundedAuthenticationFor
 from .models import Student
 from .principals import principal_for_request
 from .throttling import rate_limit
-from . import tokens
+from . import invites, tokens
 
 
 @never_cache
@@ -32,8 +32,15 @@ def register(request):
             return limited
     form = RegistrationForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
-        tokens.register(form.cleaned_data)
-        return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
+        # The invite is used up in the same transaction as the account (and only when the rest of
+        # the form is valid), so a failure leaves it unused. A duplicate username or email still
+        # uses it and gets the same generic reply, so a code cannot be reused to probe accounts.
+        with transaction.atomic(using='auth'):
+            if getattr(settings, 'UCC_REQUIRE_INVITE', False) and not invites.consume(form.cleaned_data['invite_code']):
+                form.add_error('invite_code', invites.INVALID)
+            else:
+                tokens.register(form.cleaned_data)
+                return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Register', 'submit': 'Register'})
 
 

@@ -55,3 +55,10 @@ def secure_email_check(app_configs=None, **kwargs):
     if not approved:
         return [Error('Secure email backend is not approved.', id='accounts.E105')]
     return []
+
+
+@register()
+def public_invite_check(app_configs=None, **kwargs):
+    if getattr(settings, 'UCC_PUBLIC_SITE', False) is True and getattr(settings, 'UCC_REQUIRE_INVITE', False) is not True:
+        return [Error('The public site requires invite-only sign-up (UCC_REQUIRE_INVITE).', id='accounts.E106')]
+    return []

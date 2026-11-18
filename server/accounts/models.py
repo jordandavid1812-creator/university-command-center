@@ -140,3 +140,25 @@ class LoginLimit(models.Model):
             models.CheckConstraint(condition=models.Q(bucket__regex=HEX_DIGEST), name="loginlimit_bucket_hex"),
             models.CheckConstraint(condition=models.Q(kind__in=[kind for kind, _ in LOGIN_LIMIT_KINDS]), name="loginlimit_kind"),
         ]
+
+
+class InviteCode(models.Model):
+    """A one-use sign-up invitation (launch step 3). Only a SHA-256 digest of the code is stored.
+
+    Codes are created by the owner with the migrator login (manage.py invites create). The auth
+    role may only read rows and set used_at; the academic runtime role has no access at all.
+    """
+    id = models.BigAutoField(primary_key=True)
+    code_hash = models.CharField(max_length=64, unique=True)
+    note = models.CharField(max_length=60, blank=True, default='')
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(code_hash__regex=r'^[0-9a-f]{64}$'), name='invite_code_hash_hex'),
+            models.CheckConstraint(condition=models.Q(expires_at__gt=models.F('created_at')), name='invite_expires_after_creation'),
+            models.CheckConstraint(condition=models.Q(used_at__isnull=True) | models.Q(used_at__gte=models.F('created_at')),
+                                   name='invite_used_after_creation'),
+        ]

@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, SetPasswordForm
 from .models import Student
@@ -10,6 +11,22 @@ class RegistrationForm(forms.Form):
     email = forms.EmailField(max_length=254)
     password1 = forms.CharField(label="Password", widget=forms.PasswordInput, strip=False, max_length=128)
     password2 = forms.CharField(label="Confirm password", widget=forms.PasswordInput, strip=False, max_length=128)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Launch step 3: the public site is invite-only (UCC_REQUIRE_INVITE in web_production).
+        if getattr(settings, 'UCC_REQUIRE_INVITE', False):
+            self.fields['invite_code'] = forms.CharField(
+                label='Invite code', max_length=64,
+                help_text='Ask the site owner for one. Each code works once, for one account.',
+                widget=forms.TextInput(attrs={'autocomplete': 'off', 'autocapitalize': 'characters',
+                                              'spellcheck': 'false'}))
+
+    def clean_invite_code(self):
+        from .invites import INVALID, normalize
+        if normalize(self.cleaned_data['invite_code']) is None:
+            raise forms.ValidationError(INVALID)
+        return self.cleaned_data['invite_code']
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
