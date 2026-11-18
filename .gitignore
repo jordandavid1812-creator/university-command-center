@@ -28,3 +28,6 @@ htmlcov/
 
 # Local verification scripts, logs and ephemeral test credentials.
 /work/
+
+# Frontend build tooling (TypeScript compiler); only compiled JS is committed.
+node_modules/

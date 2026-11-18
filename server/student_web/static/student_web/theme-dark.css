@@ -29,6 +29,14 @@
   --color-info-bg:#20314C;
   --color-inverse-surface:#F0F5F2;
   --color-inverse-text:#101918;
+  --tint-1:#15302A; --tint-1-edge:#2F6A59; --tint-1-ink:#A2E2CE;
+  --tint-2:#172A44; --tint-2-edge:#355F96; --tint-2-ink:#B4D0FF;
+  --tint-3:#33281A; --tint-3-edge:#7A5E2C; --tint-3-ink:#F2D28D;
+  --tint-4:#261F3A; --tint-4-edge:#5B4A8C; --tint-4-ink:#D3C4FA;
+  --tint-5:#351E26; --tint-5-edge:#7E4152; --tint-5-ink:#FFADB6;
+  --deck-1:#1C4237; --deck-2:#1F3A5E; --deck-3:#4A3920; --deck-4:#352B52; --deck-5:#4C2735;
+  --lift:0 14px 34px rgb(0 0 0 / 45%);
+  --glow:rgb(255 255 255 / 7%);
   color-scheme:dark
 }
 /* These panels define their glass colours on themselves, so override them there too. */

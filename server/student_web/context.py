@@ -24,19 +24,18 @@ def navigation(request):
     authenticated = enabled and getattr(request, 'student_identity', None) is not None
     items = []
     if authenticated:
-        for name, label, mark in (
-            ('dashboard', 'Dashboard', '01'), ('course-list', 'Courses', '02'),
-            ('semester-list', 'Semesters', '03'), ('assignment-list', 'Assignments', '04'),
-            ('overview', 'GPA & CGPA', '05'), ('predictor', 'GPA Predictor', '06'),
-            ('planner', 'Target CGPA Planner', '07'), ('material-list', 'Study materials', '08'),
-            ('settings', 'Account settings', '09'),
+        for name, label in (
+            ('dashboard', 'Dashboard'), ('course-list', 'Courses'), ('semester-list', 'Semesters'),
+            ('assignment-list', 'Assignments'), ('overview', 'GPA & CGPA'), ('predictor', 'GPA Predictor'),
+            ('planner', 'Target CGPA Planner'), ('material-list', 'Study materials'),
+            ('settings', 'Account settings'),
         ):
             url = reverse('student_web:' + name)
             active = request.path == url if name == 'dashboard' else request.path.startswith(url)
             # AI requests and results belong to Study materials.
             if name == 'material-list' and request.path.startswith(ai_prefixes()):
                 active = True
-            items.append({'url': url, 'label': label, 'mark': mark, 'active': active})
+            items.append({'url': url, 'label': label, 'active': active})
     return {'website_enabled': enabled, 'workspace_authenticated': authenticated,
             'navigation': items, 'student_username': request.user.username if authenticated else '',
             'display_theme': display_theme(request)}

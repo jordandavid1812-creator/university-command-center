@@ -173,11 +173,6 @@ a,button,summary {
   font-weight:700
 }
 .nav-link.active:hover { text-decoration:underline; text-decoration-thickness:2px; }
-.nav-mark {
-  font-size:.75rem;
-  color:inherit;
-  letter-spacing:.5px
-}
 .sidebar-footer {
   margin-top:auto;
   border-top:1px solid var(--line);

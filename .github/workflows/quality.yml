@@ -178,3 +178,13 @@ jobs:
       - run: python tools/test_premium_auth_browser.py -v
       - run: python tools/test_dashboard_browser.py -v
       - run: python tools/test_ai_browser.py -v
+      # The motion layer: TypeScript 6.0.3 from the lockfile (integrity-checked), no install scripts.
+      # The committed app.js must be exactly what the compiler produces from frontend/src/app.ts.
+      - run: npm ci --ignore-scripts --no-fund
+        working-directory: frontend
+      - run: npm audit --audit-level=low
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: git diff --exit-code -- server/student_web/static/student_web/app.js
+      - run: python tools/test_redesign_browser.py -v
