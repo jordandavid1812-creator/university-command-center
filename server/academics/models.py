@@ -116,6 +116,41 @@ class Assignment(ValidatedRecord):
             models.CheckConstraint(condition=models.Q(record_version__gte=1), name="assignment_version_positive"),
         ]
 
+# Timetable: one weekly class (a lecture, tutorial, lab...) of one of the student's courses.
+WEEKDAYS = [(0, "Monday"), (1, "Tuesday"), (2, "Wednesday"), (3, "Thursday"), (4, "Friday"),
+            (5, "Saturday"), (6, "Sunday")]
+CLASS_KINDS = [("lecture", "Lecture"), ("tutorial", "Tutorial"), ("lab", "Practical or lab"), ("other", "Other")]
+
+
+class ClassSession(ValidatedRecord):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                              related_name="class_sessions")
+    # Deleting a course removes its timetable entries (they mean nothing without it).
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="class_sessions")
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAYS)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    kind = models.CharField(max_length=10, choices=CLASS_KINDS, default="lecture")
+    venue = models.CharField(max_length=100, blank=True)
+    record_version = models.PositiveBigIntegerField(default=1)
+
+    def clean(self):
+        if self.course_id and self.owner_id and not Course.objects.using(self._state.db).filter(
+                pk=self.course_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"course": "Course must belong to the class owner."})
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValidationError({"end_time": "The class must end after it starts (on the same day)."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(weekday__gte=0, weekday__lte=6), name="class_weekday_valid"),
+            models.CheckConstraint(condition=models.Q(end_time__gt=models.F("start_time")), name="class_ends_after_start"),
+            models.CheckConstraint(condition=models.Q(kind__in=[code for code, _ in CLASS_KINDS]), name="class_kind_valid"),
+            models.CheckConstraint(condition=~models.Q(venue__regex=r"^\s|\s$"), name="class_venue_trimmed"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1), name="class_version_positive"),
+        ]
+
+
 MAX_MATERIAL_BYTES = 10 * 1024 * 1024  # Keep in step with student_web/upload_validation.py.
 
 

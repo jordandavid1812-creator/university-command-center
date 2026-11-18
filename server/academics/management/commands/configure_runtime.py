@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("REVOKE ALL ({}) ON {}.{} FROM PUBLIC, {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)),
                     sql.Identifier(schema), sql.Identifier(table), sql.Identifier(role)))
-            cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile, public.academics_materialtext TO {}").format(sql.Identifier(role)))
+            cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile, public.academics_materialtext, public.academics_classsession TO {}").format(sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
             # AI ledger: never deleted by the website; results: never edited.
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studyairequest TO {}").format(sql.Identifier(role)))
@@ -79,6 +79,7 @@ class Command(BaseCommand):
                                               "first_class_min", "second_upper_min", "second_lower_min", "third_class_min",
                                               "pass_min", "record_version", "updated_at")),
                 ("academics_studyairequest", ("status", "error_category", "status_class", "updated_at")),
+                ("academics_classsession", ("course_id", "weekday", "start_time", "end_time", "kind", "venue", "record_version", "updated_at")),
             ):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))

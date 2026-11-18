@@ -498,3 +498,28 @@ validation, deeper search/selector scaling and production operations remain defe
   - Nothing is sent to an AI service.
 - Tests: `security_tests/test_material_text_rls.py`, `web_tests/test_material_search.py` and
   `tools/test_search_browser.py`.
+
+## Timetable
+
+- **Timetable** (menu, `/timetable/`): the student's weekly classes, Monday to Sunday, in time
+  order, using Africa/Lagos times.
+  - Each class has a course, day, start and end time, type (lecture, tutorial, practical or
+    lab, other) and an optional venue.
+  - Today is outlined. A class that starts before the previous one on the same day has ended
+    is marked as a clash, with a warning at the top (a warning only; nothing is blocked).
+  - On phones only today and days with classes are shown.
+- Classes are added, edited and deleted through the shared record pages (kind `session`,
+  shown as "class"): version checks, owner-only course choices, and "not found" for anyone
+  else's class.
+- **Dashboard → Today's classes**: today's classes in time order. Finished ones are marked
+  "Done", and the next one (or the one in progress) is highlighted "Next" or "Now". They are
+  read in the same verified dashboard visit.
+- Storage: `academics_classsession` (migrations 0018–0019).
+  - Forced RLS `student_owner` and a same-owner foreign key to the course.
+  - Database checks: day 0–6, end after start, a known type, trimmed venue.
+  - The runtime role has SELECT, INSERT and DELETE, plus UPDATE on the editable columns only.
+  - `require_runtime_role` now requires forced RLS on 10 tables; the auth role may not read it.
+  - Deleting a course deletes its classes.
+- The data export includes a `timetable` list. At most 300 classes.
+- Tests: `security_tests/test_class_session_rls.py`, `web_tests/test_timetable.py` and
+  `tools/test_timetable_browser.py`.

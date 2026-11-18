@@ -1,0 +1,18 @@
+/* Timetable page (timetable.html) and the dashboard's "Today's classes" list. */
+.timetable-days { list-style:none; margin:0; padding:0; display:grid; gap:var(--space-4);
+  grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); }
+.timetable-day { min-width:0; padding:var(--space-4); border-radius:18px; background:var(--color-surface);
+  border:1px solid var(--color-border-subtle); }
+.timetable-day.is-today { border:2px solid var(--color-primary); }
+.timetable-day h2 { display:flex; align-items:center; gap:var(--space-2); margin:0 0 var(--space-3); font-size:var(--type-section); }
+.timetable-day ul, .today-classes { list-style:none; margin:0; padding:0; display:grid; gap:var(--space-3); }
+.timetable-class, .today-classes li { padding:var(--space-3); border-radius:12px; background:var(--color-surface-raised);
+  border-left:4px solid var(--color-primary); min-width:0; }
+.timetable-class.has-clash { border-left-color:var(--color-warning-text); background:var(--color-warning-bg); }
+.timetable-class p, .today-classes p { margin:0; }
+.timetable-time { font-weight:800; font-variant-numeric:tabular-nums; }
+.timetable-meta, .timetable-free { color:var(--color-text-muted); font-size:var(--type-meta); }
+.timetable-class .action-row { margin-top:var(--space-2); }
+.today-classes li.is-next { border-left-color:var(--color-warning-text); box-shadow:0 0 0 2px var(--color-warning-text); }
+.today-classes li.is-over { opacity:1; border-left-color:var(--color-border-control); }
+@media (max-width:640px) { .timetable-day.is-free:not(.is-today) { display:none; } }

@@ -65,6 +65,11 @@ def dashboard(request, identity):
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
     selected = selector.cleaned_data['semester']
     current = next((row for row in workspace['summary']['semesters'] if row['semester'] == selected), None)
+    # Today's classes: ones already over are dimmed; the next one (or the one in progress) is marked.
+    now = timezone.localtime().time()
+    upcoming = [item for item in workspace['today_classes'] if item.end_time > now]
+    workspace['next_class'] = upcoming[0].pk if upcoming else None
+    workspace['now'] = now
     names = dict(forms.AI_TOOL_CHOICES)
     for item in workspace['ai_panel']['recent']:
         item['tool_name'] = names.get(item['tool'], item['tool'])
@@ -109,7 +114,10 @@ KINDS = {
     'course': (services.courses, forms.CourseForm, 'course-list'),
     'assignment': (services.assignments, forms.AssignmentForm, 'assignment-list'),
     'material': (services.materials, None, 'material-list'),
+    'session': (services.class_sessions, forms.ClassSessionForm, 'timetable'),
 }
+# What the pages call each kind ("session" is a "class" to the student).
+KIND_LABELS = {'session': 'class'}
 
 
 def edit_form(kind, request, identity, record):
@@ -120,7 +128,7 @@ def edit_form(kind, request, identity, record):
     kwargs = {'initial': initial}
     if kind == 'course':
         kwargs['semesters'] = queries.options(identity, 'semester')
-    elif kind == 'assignment':
+    elif kind in ('assignment', 'session'):
         kwargs['courses'] = queries.options(identity, 'course')
     form = form_type(request.POST if request.method == 'POST' else None, **kwargs)
     if record:
@@ -155,13 +163,14 @@ def edit(request, identity, kind, identifier=None):
                     form.add_error(None, 'These details could not be saved. Check the fields and try again.')
                 status = 400
             else:
-                messages.success(request, kind.capitalize() + ' saved.')
+                messages.success(request, KIND_LABELS.get(kind, kind).capitalize() + ' saved.')
                 return redirect('student_web:' + destination)
         else:
             status = 400
     parent_empty = ((kind == 'course' and len(form.fields['semester_id'].choices) == 1)
-                    or (kind == 'assignment' and len(form.fields['course_id'].choices) == 1))
+                    or (kind in ('assignment', 'session') and len(form.fields['course_id'].choices) == 1))
     return render(request, 'student_web/edit.html', {'form': form, 'kind': kind, 'record': record,
+                  'kind_label': KIND_LABELS.get(kind, kind),
                   'parent_empty': parent_empty, 'conflict': status == 409,
                   'cancel_url': reverse('student_web:' + destination)}, status=status)
 
@@ -185,16 +194,22 @@ def delete(request, identity, kind, identifier):
                 detail = {'semester': 'This semester still contains courses. Move or remove them before deleting the semester.',
                           'course': 'This course still has assignments or study materials. Remove them before deleting the course.',
                           'assignment': 'This assignment could not be deleted. Reload and try again.',
-                          'material': 'This material could not be deleted. Reload and try again.'}
+                          'material': 'This material could not be deleted. Reload and try again.',
+                          'session': 'This class could not be deleted. Reload and try again.'}
                 form.add_error(None, detail[kind])
                 status = 400
             else:
-                messages.success(request, kind.capitalize() + ' deleted.')
+                messages.success(request, KIND_LABELS.get(kind, kind).capitalize() + ' deleted.')
                 return redirect('student_web:' + destination)
         else:
             status = 400
-    label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
+    if kind == 'session':
+        course = services.courses.retrieve(identity, record.course_id)
+        label = f'{course.normalized_code} on {record.get_weekday_display()} at {record.start_time:%H:%M}'
+    else:
+        label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
     return render(request, 'student_web/delete.html', {'form': form, 'kind': kind, 'record_label': label,
+                  'kind_label': KIND_LABELS.get(kind, kind),
                   'conflict': status == 409, 'cancel_url': reverse('student_web:' + destination)}, status=status)
 
 
@@ -205,6 +220,14 @@ def material_list(request, identity):
     rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in storage['ids']}
             for item in services.materials.list(identity)]
     return render(request, 'student_web/materials.html', {'rows': rows, 'storage': storage})
+
+
+@protected()
+def timetable(request, identity):
+    """The student's weekly classes, Monday to Sunday, with today highlighted."""
+    days, clashes = data.timetable_days(queries.timetable(identity))
+    return render(request, 'student_web/timetable.html', {'days': days, 'clashes': clashes,
+                  'today': timezone.localdate().weekday(), 'has_classes': any(day['classes'] for day in days)})
 
 
 @protected()

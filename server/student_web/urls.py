@@ -20,6 +20,7 @@ urlpatterns = [
     path('settings/export/', views.data_export, name='data-export'),
     path('materials/new/', views.material_upload, name='material-upload'),
     path('materials/', views.material_list, name='material-list'),
+    path('timetable/', views.timetable, name='timetable'),
     path('materials/search/', views.material_search, name='material-search'),
     path('materials/<uuid:identifier>/delete/', views.delete, {'kind': 'material'}, name='material-delete'),
     path('materials/<uuid:identifier>/download/', views.material_download, name='material-download'),
@@ -31,7 +32,7 @@ urlpatterns = [
     path('ai-results/<uuid:identifier>/download/', ai_views.result_download, name='ai-result-download'),
     path('ai-results/<uuid:identifier>/delete/', ai_views.result_delete, name='ai-result-delete'),
 ]
-for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments')):
+for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments'), ('session', 'timetable')):
     urlpatterns += [
         path(f'{plural}/new/', views.edit, {'kind': kind}, name=kind + '-create'),
         path(f'{plural}/<uuid:identifier>/edit/', views.edit, {'kind': kind}, name=kind + '-edit'),
