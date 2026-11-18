@@ -310,7 +310,9 @@ def class_standing_view(cgpa, bands, custom):
     # Round the distance up, so "0.01 more" is never shown when a little more is really needed.
     gap = None if gap is None else gap.quantize(Decimal('0.01'), rounding=ROUND_CEILING)
     return {**standing, 'segments': [s for s in segments if s['width'] > 0], 'gap': gap, 'custom': custom,
-            'marker': None if cgpa is None else float(cgpa) * 20}
+            'marker': None if cgpa is None else float(cgpa) * 20,
+            # Near either end the label lines up with the bar's edge instead of centring past it.
+            'marker_side': '' if cgpa is None or 0.6 <= cgpa <= 4.4 else (' at-start' if cgpa < 1 else ' at-end')}
 
 
 def standing_context(workspace):

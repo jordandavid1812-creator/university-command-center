@@ -31,3 +31,6 @@ htmlcov/
 
 # Frontend build tooling (TypeScript compiler); only compiled JS is committed.
 node_modules/
+
+# The local launcher's private passwords and AI keys (kept outside the repository by design).
+local-web-secrets.json

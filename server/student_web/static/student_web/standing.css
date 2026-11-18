@@ -53,6 +53,8 @@
 .class-marker span { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:.25rem; padding:.1rem .45rem;
   white-space:nowrap;
   border-radius:6px; background:var(--color-text); color:var(--color-canvas); font-size:var(--type-meta); font-weight:700; }
+.class-marker.at-start span { left:-2px; transform:none; }
+.class-marker.at-end span { left:auto; right:-2px; transform:none; }
 .class-scale { display:flex; justify-content:space-between; color:var(--color-text-muted); font-size:var(--type-meta); margin-bottom:var(--space-4); }
 .class-swatch { display:inline-block; width:.75rem; height:.75rem; margin-right:var(--space-2); border-radius:3px; vertical-align:middle; }
 .class-table tr.is-current th, .class-table tr.is-current td { font-weight:700; }

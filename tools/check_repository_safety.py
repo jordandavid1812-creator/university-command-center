@@ -19,7 +19,7 @@ def private_path(filename):
     if any(part in {".venv", "venv", "env", ".env", ".tox", ".nox", "__pypackages__", "__pycache__"}
            or part.startswith((".venv-", "venv-")) for part in path.parts):
         return True
-    return (name in {"courses.json", "assignments.json", "secrets.toml", "pyvenv.cfg"}
+    return (name in {"courses.json", "assignments.json", "secrets.toml", "pyvenv.cfg", "local-web-secrets.json"}
             or (name.startswith(".env") and name != ".env.example")
             or name.endswith((".bak", ".tmp", ".pyc")) or ".bak." in name
             or name.startswith(".ucc-"))
