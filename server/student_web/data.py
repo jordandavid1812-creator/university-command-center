@@ -1,6 +1,6 @@
 """Adapt PostgreSQL records to the established pure academic engine."""
 from academic_logic import academic_summary
-from academics.queries import academic_snapshot, dashboard_reads
+from academics.queries import academic_snapshot, dashboard_reads, standing_snapshot
 
 
 def snapshot(identity, today=None):
@@ -11,6 +11,12 @@ def snapshot(identity, today=None):
     semesters, courses, totals, upcoming, greeting_name, ai_panel = dashboard_reads(identity, today)
     return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
             'ai_panel': ai_panel}
+
+
+def standing(identity):
+    """Records for the GPA, print and planner pages, plus the profile holding the class bands."""
+    semesters, courses, profile = standing_snapshot(identity)
+    return {**workspace(semesters, courses), 'profile': profile}
 
 
 def workspace(semesters, courses):

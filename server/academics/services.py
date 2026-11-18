@@ -265,7 +265,9 @@ class ProfileRecords(StudentRecords):
         raise InvalidRecord()
 
 
-profiles = ProfileRecords(StudentProfile, {"display_name", "institution", "programme", "level", "matric_number"})
+PROFILE_FIELDS = {"display_name", "institution", "programme", "level", "matric_number"}
+CLASS_BAND_FIELDS = ("first_class_min", "second_upper_min", "second_lower_min", "third_class_min", "pass_min")
+profiles = ProfileRecords(StudentProfile, PROFILE_FIELDS | set(CLASS_BAND_FIELDS))
 
 
 # AI study assistant records (docs/AI_STUDY_ASSISTANT_PLAN.md, stage 1). No provider code here.

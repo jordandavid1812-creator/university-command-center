@@ -30,3 +30,32 @@
   .standing-bar path { fill:#2a78d6; }
   .standing-cgpa { stroke:#eb6834; }
 }
+
+/* Where you stand: class bands on a 0-5 bar, lowest (left) to highest (right). Your band uses the
+   strong colour; the others the soft one (no transparency, so contrast checks stay exact). */
+.class-standing { --tone-0:var(--color-border-control); --soft-0:var(--color-surface-raised);
+  --tone-1:var(--tint-5-edge, #EDB0BC); --soft-1:color-mix(in srgb, var(--tone-1) 40%, var(--color-surface)); --tone-2:var(--tint-3-edge, #E3BE73); --soft-2:color-mix(in srgb, var(--tone-2) 40%, var(--color-surface));
+  --tone-3:var(--tint-4-edge, #C6B5EA); --soft-3:color-mix(in srgb, var(--tone-3) 40%, var(--color-surface)); --tone-4:var(--tint-2-edge, #A9C3EC); --soft-4:color-mix(in srgb, var(--tone-4) 40%, var(--color-surface));
+  --tone-5:var(--tint-1-edge, #9FD3C2); --soft-5:color-mix(in srgb, var(--tone-5) 40%, var(--color-surface)); }
+.class-summary { font-size:1.125rem; }
+.class-bar { position:relative; height:1.5rem; margin:3rem 0 var(--space-1); border-radius:999px;
+  background:var(--color-surface); box-shadow:inset 0 0 0 1px var(--color-border-subtle); }
+.class-segment { position:absolute; top:0; bottom:0; border-right:2px solid var(--color-surface); }
+.class-segment:first-child { border-radius:999px 0 0 999px; }
+.class-segment:nth-last-child(2) { border-radius:0 999px 999px 0; border-right:0; }
+.class-segment.tone-0 { background:var(--soft-0); } .class-segment.tone-1 { background:var(--soft-1); }
+.class-segment.tone-2 { background:var(--soft-2); } .class-segment.tone-3 { background:var(--soft-3); }
+.class-segment.tone-4 { background:var(--soft-4); } .class-segment.tone-5 { background:var(--soft-5); }
+.tone-0.is-current, .class-swatch.tone-0 { background:var(--tone-0); } .tone-1.is-current, .class-swatch.tone-1 { background:var(--tone-1); }
+.tone-2.is-current, .class-swatch.tone-2 { background:var(--tone-2); } .tone-3.is-current, .class-swatch.tone-3 { background:var(--tone-3); }
+.tone-4.is-current, .class-swatch.tone-4 { background:var(--tone-4); } .tone-5.is-current, .class-swatch.tone-5 { background:var(--tone-5); }
+.class-marker { position:absolute; top:-.4rem; bottom:-.4rem; width:4px; margin-left:-2px; border-radius:2px; background:var(--color-text); }
+.class-marker span { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:.25rem; padding:.1rem .45rem;
+  white-space:nowrap;
+  border-radius:6px; background:var(--color-text); color:var(--color-canvas); font-size:var(--type-meta); font-weight:700; }
+.class-scale { display:flex; justify-content:space-between; color:var(--color-text-muted); font-size:var(--type-meta); margin-bottom:var(--space-4); }
+.class-swatch { display:inline-block; width:.75rem; height:.75rem; margin-right:var(--space-2); border-radius:3px; vertical-align:middle; }
+.class-table tr.is-current th, .class-table tr.is-current td { font-weight:700; }
+.class-aims { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-bottom:var(--space-5); }
+.class-aims p { flex-basis:100%; margin:0; }
+@media print { .class-marker, .class-marker span { background:#000; color:#fff; } }

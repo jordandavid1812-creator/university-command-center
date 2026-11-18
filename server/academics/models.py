@@ -192,6 +192,13 @@ class StudentProfile(ValidatedRecord):
     level = models.CharField(max_length=3, blank=True, choices=LEVEL_CHOICES)
     matric_number = models.CharField(max_length=32, blank=True, validators=[
         RegexValidator(MATRIC_PATTERN, "Use letters, digits and / . _ - only.")])
+    # The student's own class-of-degree bands (lowest CGPA for each class). All five empty means
+    # "use the common guide" (academic_logic.DEFAULT_CLASS_BANDS). A guide only, never a ruling.
+    first_class_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    second_upper_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    second_lower_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    third_class_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    pass_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
     record_version = models.PositiveBigIntegerField(default=1)
 
     class Meta:
@@ -205,6 +212,20 @@ class StudentProfile(ValidatedRecord):
                                    & ~models.Q(programme__regex=NO_EDGE_SPACE),
                                    name="profile_text_trimmed"),
             models.CheckConstraint(condition=models.Q(record_version__gte=1), name="profile_version_positive"),
+            # Bands: all empty, or all set, within 0-5 and strictly falling from First to Pass.
+            models.CheckConstraint(
+                condition=models.Q(first_class_min__isnull=True, second_upper_min__isnull=True,
+                                   second_lower_min__isnull=True, third_class_min__isnull=True,
+                                   pass_min__isnull=True)
+                # "isnull=False" matters: a comparison with an empty value is unknown, and a CHECK lets unknown pass.
+                | models.Q(first_class_min__isnull=False, second_upper_min__isnull=False,
+                           second_lower_min__isnull=False, third_class_min__isnull=False, pass_min__isnull=False,
+                           first_class_min__lte=5, pass_min__gte=0,
+                           first_class_min__gt=models.F("second_upper_min"),
+                           second_upper_min__gt=models.F("second_lower_min"),
+                           second_lower_min__gt=models.F("third_class_min"),
+                           third_class_min__gt=models.F("pass_min")),
+                name="profile_class_bands_valid"),
         ]
 
 

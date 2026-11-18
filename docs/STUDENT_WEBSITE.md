@@ -404,3 +404,32 @@ validation, deeper search/selector scaling and production operations remain defe
   after changing `app.ts`, run `npm ci --ignore-scripts` and `npm run build` in `frontend/`, and
   commit the new `app.js`. CI rebuilds it and fails if the committed file is different.
   `site.js` loads `app.js` from the same folder.
+
+## Know where you stand (part B): class of degree
+
+- **Class bands** are the lowest CGPA for each class: First Class, Second Class Upper,
+  Second Class Lower, Third Class and Pass. Until a student saves their own, the common
+  Nigerian 5-point guide is used (4.50, 3.50, 2.40, 1.50, 1.00:
+  `academic_logic.DEFAULT_CLASS_BANDS`). Every page says the bands are a guide and the
+  student's university handbook decides their actual class. Nothing here decides graduation,
+  repeat-course or excluded-credit rules.
+- **Storage.** Five optional columns on `academics_studentprofile` (migration 0015), exact
+  decimals with up to four places. The runtime role gets column-level UPDATE on them
+  (`configure_runtime`). The database CHECK `profile_class_bands_valid` allows only all five
+  empty, or all five set, within 0–5 and strictly falling from First to Pass. Its explicit
+  `IS NOT NULL` parts stop a partly filled set from slipping through as "unknown".
+- **Settings → Class of degree** shows the bands. **Edit class bands** (`/settings/class-bands/`)
+  checks them with `academic_logic.checked_bands`, which uses the shared `checked_target`
+  (never silently rounded), and saves them through `services.profiles` with the usual version
+  check. **Reset to the common guide** clears them.
+- **GPA & CGPA → Where you stand** (also on the printable summary): a 0–5 bar coloured by band
+  with a marker at the actual CGPA, the current band, and the distance to the next band
+  (rounded up, so it never understates). It uses the unrounded CGPA and is hidden until a
+  course is graded. The page reads the profile in the same verified database visit as the
+  grades (`queries.standing_snapshot`), keeping the existing query budget.
+- **Target CGPA Planner → Aim for a class**: buttons link to `?aim=0..4`. These only fill in
+  the target with that band's lowest CGPA; nothing is saved, and other query values are
+  refused with 400.
+- The data export includes the student's own bands (exact strings) or `null`.
+- Tests: `tests/test_class_bands.py`, `security_tests/test_class_bands.py`,
+  `web_tests/test_class_bands.py`, `tools/test_class_bands_browser.py`.

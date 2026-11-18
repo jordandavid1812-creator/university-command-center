@@ -1,5 +1,6 @@
 """Build the "Download my data" JSON document from already-read records. No I/O here."""
 import json
+from academics.services import CLASS_BAND_FIELDS
 
 FORMAT = "university-command-center-export"
 VERSION = 1
@@ -19,6 +20,9 @@ def document(records, account, exported_at):
         "profile": None if profile is None else {
             "display_name": profile.display_name, "institution": profile.institution,
             "programme": profile.programme, "level": profile.level, "matric_number": profile.matric_number,
+            # Own class-of-degree bands as exact decimal strings, or null when the common guide is used.
+            "class_bands": None if profile.first_class_min is None else {
+                name: str(getattr(profile, name)) for name in CLASS_BAND_FIELDS},
         },
         "semesters": [{"id": str(s.pk), "label": s.label, "display_order": s.display_order,
                        "created_at": _when(s.created_at)} for s in records["semesters"]],
