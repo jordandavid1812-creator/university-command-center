@@ -1,0 +1,12 @@
+# Build context for deploy/Dockerfile: only what the website needs. Everything else (git
+# history, secrets, local data, backups, tests, tools) stays out of the image.
+*
+!requirements-django-lock.txt
+!academic_logic.py
+!server/
+!deploy/start-web.sh
+!deploy/provision.sh
+**/__pycache__
+**/*.pyc
+server/*_tests
+server/**/tests

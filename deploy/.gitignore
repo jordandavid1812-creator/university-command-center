@@ -1,0 +1,2 @@
+# Private settings made on the server by make_secrets.py. Never commit them.
+secrets/

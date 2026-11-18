@@ -134,3 +134,7 @@ otherwise. Keep every RLS role, signed-context and runtime-privilege rule; the w
 gets migration or DBA credentials. Secrets live only in the server's private environment file,
 never in the repository, images, logs or chat. gunicorn and whitenoise are approved packages;
 ask before adding any other. Use synthetic data in tests; never copy real student data off the server.
+Server package (launch step 2): deploy/ holds the only supported server setup. The web container
+must keep no published port, a read-only file system, no capabilities and only runtime/auth logins;
+migrations run only in the one-off migrate container. Never print or commit deploy/secrets/.
+Run tools/test_server_package.py (Docker) before changing deploy/; never use `down -v` on the server.
