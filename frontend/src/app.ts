@@ -12,7 +12,7 @@ const REVEAL = [
   '.main-content > .page-heading', '.main-content > .notice', '.panel', '.metric', '.ai-tool-card',
   '.standing-chart', '.dashboard-attention', '.ai-question', '.ai-deck', '.table-scroll', '.empty-state',
 ].join(',');
-const COUNTERS = '.metric strong, .dashboard-gpa strong, .standing-result, [data-count]';
+const COUNTERS = '.metric strong, .dashboard-gpa strong, .standing-result';
 const RIPPLE = '.button, button, .main-content a, .public-nav a';
 const EASE = 'cubic-bezier(.2,.75,.2,1)';
 
@@ -47,11 +47,34 @@ function staggerIndex(element: Element, group: Element[]): number {
   return Math.min(group.indexOf(element), 6);
 }
 
+/** Finishes every entrance, count-up and chart animation now (used before printing). */
+function finishAll(): void {
+  document.querySelectorAll<HTMLElement>('[data-reveal]').forEach(settle);
+  document.querySelectorAll<HTMLElement>('.ucc-counting').forEach(stopCount);
+  document.getAnimations().forEach((animation) => {
+    // Endless animations (such as a waiting spinner) cannot be finished; leave them alone.
+    if (animation.effect?.getComputedTiming().endTime !== Infinity) animation.finish();
+  });
+}
+
+/** True when this page load should not replay entrance motion: an automatic refresh
+ *  (the AI "still working" page reloads every few seconds), a reload, or Back/Forward. */
+function quietEntrance(): boolean {
+  if (document.querySelector('meta[http-equiv="refresh" i]')) return true;
+  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  return navigation?.type === 'reload' || navigation?.type === 'back_forward';
+}
+
 function setUpReveals(): void {
+  window.addEventListener('beforeprint', finishAll);
+  if (quietEntrance()) return;
+  const focused = document.activeElement;
   const targets = Array.from(document.querySelectorAll<HTMLElement>(REVEAL))
-    // Skip anything not on screen at all (hidden, or inside a closed section), and cards
-    // inside another animated card, which move with it.
-    .filter((element) => element.getClientRects().length > 0 && !element.parentElement?.closest(REVEAL));
+    // Skip anything not on screen at all (hidden, or inside a closed section), cards inside
+    // another animated card (they move with it), AI page parts that ai.js already animates,
+    // and whatever holds keyboard focus right now.
+    .filter((element) => element.getClientRects().length > 0 && !element.parentElement?.closest(REVEAL)
+      && !element.closest('[data-ai-reveal]') && !(focused && focused !== document.body && element.contains(focused)));
   const first = targets.filter(inView);
   first.forEach((element) => enter(element, 80 + staggerIndex(element, first) * 70));
   const later = targets.filter((element) => !first.includes(element));
@@ -65,13 +88,15 @@ function setUpReveals(): void {
       observer.unobserve(element);
       enter(element, index * 80);
     });
-  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    // Threshold 0: any visible part counts, so even a section many screens tall appears.
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0 });
   later.forEach((element) => {
     element.setAttribute('data-reveal', 'waiting');
     observer.observe(element);
   });
-  // Never leave anything hidden when it is needed: keyboard focus, links to a section,
-  // find-in-page jumps and printing all show the content straight away.
+  // Never leave anything hidden when it is needed: keyboard focus and links to a section show
+  // it straight away, printing finishes everything (see finishAll), and a find-in-page jump
+  // scrolls the section into view, which starts its entrance.
   const showAll = (): void => {
     document.querySelectorAll<HTMLElement>('[data-reveal]').forEach(settle);
     observer.disconnect();
@@ -81,7 +106,7 @@ function setUpReveals(): void {
     if (holder) { observer.unobserve(holder); settle(holder); startCounters(holder); growChart(holder); }
   });
   window.addEventListener('hashchange', showAll);
-  window.addEventListener('beforeprint', showAll);
+  window.addEventListener('beforeprint', () => observer.disconnect());
   if (location.hash) showAll();
 }
 
@@ -102,18 +127,24 @@ function countUp(element: HTMLElement): void {
   const started = performance.now();
   const duration = 900;
   const frame = (now: number): void => {
+    if (!element.classList.contains('ucc-counting')) return; // stopped early (printing)
     const progress = Math.min((now - started) / duration, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
     element.dataset.countNow = (target * eased).toFixed(places);
     if (progress < 1) {
       requestAnimationFrame(frame);
     } else {
-      element.classList.remove('ucc-counting');
-      delete element.dataset.countNow;
-      element.style.removeProperty('--ucc-ink');
+      stopCount(element);
     }
   };
   requestAnimationFrame(frame);
+}
+
+/** Ends a count-up and shows the real number again. */
+function stopCount(element: HTMLElement): void {
+  element.classList.remove('ucc-counting');
+  delete element.dataset.countNow;
+  element.style.removeProperty('--ucc-ink');
 }
 
 function startCounters(scope: HTMLElement): void {
@@ -128,7 +159,8 @@ function growChart(scope: HTMLElement): void {
       { duration: 700, delay: 150 + index * 90, easing: EASE, fill: 'backwards' });
   });
   scope.querySelectorAll<SVGLineElement>('.standing-cgpa').forEach((line) => {
-    line.animate([{ strokeDashoffset: '640', strokeDasharray: '640' }, { strokeDashoffset: '0', strokeDasharray: '640' }],
+    // Grows from the left; the line keeps its own dash pattern throughout.
+    line.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
       { duration: 900, delay: 400, easing: EASE, fill: 'backwards' });
   });
 }
@@ -228,8 +260,7 @@ function start(): void {
 calm.addEventListener('change', () => {
   if (!calm.matches) return;
   root.classList.replace('ucc-motion', 'ucc-calm');
-  document.querySelectorAll<HTMLElement>('[data-reveal]').forEach(settle);
-  document.getAnimations().forEach((animation) => animation.finish());
+  finishAll();
 });
 
 if (document.readyState === 'loading') {

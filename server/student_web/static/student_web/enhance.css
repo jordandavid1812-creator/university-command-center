@@ -62,6 +62,14 @@
   --card:var(--tint-4); --edge:var(--tint-4-edge); --ink:var(--tint-4-ink); }
 .main-content .panel:nth-of-type(4n+4), .metric:nth-child(4n+4), .ai-tool-card:nth-child(4n+4) {
   --card:var(--tint-3); --edge:var(--tint-3-edge); --ink:var(--tint-3-ink); }
+/* The card border above would hide the coloured status stripes from site.css and ai.css,
+   so they are put back here: planner/prediction results and AI request states. */
+.main-content .panel:is(.prediction-result, .planner-result.achievable, .planner-result.guaranteed,
+  .planner-result.impossible, .ai-status-failed, .ai-status-interrupted, .ai-status-deleted) { border-left-width:4px; }
+.main-content .panel.prediction-result { border-left-color:var(--color-primary); }
+.main-content .panel.planner-result:is(.achievable, .guaranteed) { border-left-color:var(--color-success-text); }
+.main-content .panel:is(.planner-result.impossible, .ai-status-failed) { border-left-color:var(--color-error-text); }
+.main-content .panel:is(.ai-status-interrupted, .ai-status-deleted) { border-left-color:var(--color-warning-text); }
 .metric:hover, .ai-tool-card:hover { transform:translateY(-3px); box-shadow:var(--lift); border-color:var(--edge); }
 .metric span, .metric small { color:var(--color-text-muted); }
 .metric strong, .ai-tool-mark { color:var(--ink); }
@@ -104,6 +112,7 @@
   .has-ripple { position:relative; overflow:hidden; isolation:isolate; }
   .ucc-ripple { position:absolute; border-radius:50%; background:currentColor; pointer-events:none; z-index:-1; }
   .standing-bar path { transform-box:fill-box; transform-origin:50% 100%; }
+  .standing-cgpa { transform-box:fill-box; transform-origin:0 50%; }
   .ucc-motion :is(.panel, .metric, .ai-tool-card) { position:relative; isolation:isolate; }
   .ucc-motion :is(.panel, .metric, .ai-tool-card)::after { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit;
     pointer-events:none; opacity:0; transition:opacity .3s;
@@ -119,7 +128,12 @@
   .button:hover:not(:disabled), .metric:hover, .ai-tool-card:hover, .main-content a:hover { transform:none; }
 }
 @media print {
-  [data-reveal] { opacity:1 !important; transform:none !important; }
+  /* !important also beats a running animation, so nothing prints faded or half-counted. */
+  [data-reveal], .ucc-motion :is(.page-heading, .notice, .panel, .metric, .ai-tool-card, .standing-chart,
+    .dashboard-attention, .ai-question, .ai-deck, .table-scroll, .empty-state, .standing-bar path, .standing-cgpa) {
+    opacity:1 !important; transform:none !important; }
+  .ucc-counting { color:var(--ucc-ink) !important; }
+  .ucc-counting::after { content:none; }
   .ucc-progress, .ucc-glide, .ucc-ripple { display:none; }
   .main-content .panel, .metric, .ai-tool-card { box-shadow:none; background:#fff; }
   .main-content a:not(.button) { border:0; padding:0; background:none; }

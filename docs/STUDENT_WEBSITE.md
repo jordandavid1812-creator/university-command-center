@@ -383,8 +383,15 @@ validation, deeper search/selector scaling and production operations remain defe
   as you scroll, numbers count up, chart bars grow, a progress bar shows how far down the page
   you are, and buttons ripple when pressed.
   - Nothing is hidden by the HTML or CSS. Only the script hides a section, just before it
-    animates it in. Keyboard focus, links to a section, find-in-page and printing show
-    everything at once.
+    animates it in, and never one that already has keyboard focus. Keyboard focus and links
+    to a section show it at once; printing finishes every animation first; a find-in-page
+    jump scrolls the section into view, which starts its entrance. Sections of any height
+    appear as soon as any part of them is on screen.
+  - Pages that reload themselves (the AI "still working" page), a reload, and Back/Forward
+    do not replay the entrance animations.
+  - Parts of the AI pages that `ai.js` already animates are left to `ai.js`.
+  - The coloured card borders keep the status stripes: red for an impossible target or a
+    failed AI request, green for an achievable target.
   - The count-up is drawn on top of the real number. The page text always holds the true value.
   - "Reduce motion" in the device settings turns all motion off.
   - The script stores nothing and sends nothing.

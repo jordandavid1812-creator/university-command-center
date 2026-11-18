@@ -57,6 +57,25 @@ def standing_html():
     return render_to_string('student_web/overview.html', context)
 
 
+EXTRA = ('<section class="panel planner-result impossible" id="impossible"><h2>Synthetic impossible target</h2></section>'
+         '<section class="panel planner-result achievable" id="achievable"><h2>Synthetic achievable target</h2></section>'
+         '<section class="panel ai-status ai-status-failed" id="failed"><p>Synthetic failed request</p></section>'
+         '<section class="panel" id="tall" style="height:14000px"><h2>Synthetic very tall section</h2></section>'
+         '<section class="panel" id="focused-holder"><label>Synthetic field <input id="focused"></label></section>'
+         '<script>document.getElementById("focused").focus({preventScroll: true})</script>')
+
+
+def with_extra():
+    """The GPA page plus status cards, a section 20 screens tall and a field that has focus
+    before app.js loads, all placed below the fold."""
+    return standing_html().replace('</main>', EXTRA + '</main>')
+
+
+def auto_refreshing():
+    """Like the AI 'still working' page, which reloads itself (600 s here, so the test never reloads)."""
+    return standing_html().replace('</head>', '<meta http-equiv="refresh" content="600"></head>')
+
+
 PAGES = {
     'dashboard': lambda: served(dashboard.html_for('graded')),
     'overview': standing_html,
@@ -64,6 +83,7 @@ PAGES = {
     'cards-dark': lambda: served(ai.html_for('flashcards', ai.CARDS, theme='dark')),
     'login': lambda: served(foundation.fixture_html(public=True)),
 }
+EXTRA_PAGES = {'extra': with_extra, 'refresh': auto_refreshing}
 
 
 def luminance(colour):
@@ -82,7 +102,7 @@ class RedesignBrowserTests(unittest.TestCase):
     def setUpClass(cls):
         cls.driver = sync_playwright().start()
         cls.browser = cls.driver.chromium.launch(headless=True, executable_path=os.environ.get('UCC_CHROMIUM_EXECUTABLE'))
-        cls.html = {name: build() for name, build in PAGES.items()}
+        cls.html = {name: build() for name, build in {**PAGES, **EXTRA_PAGES}.items()}
 
     @classmethod
     def tearDownClass(cls):
@@ -153,10 +173,11 @@ class RedesignBrowserTests(unittest.TestCase):
         self.assertGreater(waiting.count(), 0)
         self.assertEqual(waiting.first.evaluate('e => getComputedStyle(e).opacity'), '0')
         # Keyboard focus inside a waiting section shows it at once.
-        target = page.locator('[data-reveal=waiting] a, [data-reveal=waiting] button').first
-        if target.count():
-            target.focus()
-            self.assertEqual(target.evaluate('e => e.closest("[data-reveal]")'), None)
+        found = page.locator('[data-reveal=waiting] :is(a, button, [tabindex="0"])')
+        self.assertGreater(found.count(), 0)
+        target = found.first.element_handle()  # fixed element: the locator would move on once it is revealed
+        target.focus()
+        self.assertEqual(target.evaluate('e => e.closest("[data-reveal]")'), None)
         self.settle(page)
         self.assertEqual(page.locator('[data-reveal]').count(), 0)
 
@@ -183,11 +204,51 @@ class RedesignBrowserTests(unittest.TestCase):
                 self.assertEqual(page.evaluate("""() => [...document.querySelectorAll('main *')]
                     .filter(e => getComputedStyle(e).opacity !== '1').length"""), 0)
 
-    def test_print_shows_waiting_sections(self):
+    def test_print_shows_waiting_and_still_entering_sections(self):
         page = self.page('overview', height=500)
         page.wait_for_function('document.querySelectorAll("[data-reveal]").length > 0')
+        # Right after opening: the sections on screen are still in their entrance delay.
+        self.assertGreater(page.evaluate('document.getAnimations().filter(a => a.playState === "running").length'), 0)
         page.emulate_media(media='print')
-        self.assertEqual(page.locator('[data-reveal]').first.evaluate('e => getComputedStyle(e).opacity'), '1')
+        faded = page.evaluate("""() => [...document.querySelectorAll('main .panel, main .metric, main .page-heading, .standing-bar path')]
+            .filter(e => getComputedStyle(e).opacity !== '1' || getComputedStyle(e).transform !== 'none').length""")
+        self.assertEqual(faded, 0)
+        self.assertEqual(page.evaluate("""() => [...document.querySelectorAll('.ucc-counting')]
+            .filter(e => getComputedStyle(e).color === 'rgba(0, 0, 0, 0)').length"""), 0)
+
+    def test_a_very_tall_section_still_appears(self):
+        page = self.page('extra', width=390, height=700)
+        page.wait_for_function('document.querySelector("#tall")?.dataset.reveal === "waiting"')
+        page.locator('#tall h2').scroll_into_view_if_needed()
+        page.wait_for_function('!document.querySelector("#tall").hasAttribute("data-reveal")')
+        page.wait_for_function('getComputedStyle(document.querySelector("#tall")).opacity === "1"')
+
+    def test_focused_content_is_never_hidden(self):
+        page = self.page('extra', height=500)
+        page.wait_for_function('document.documentElement.classList.contains("ucc-motion")')
+        self.assertEqual(page.evaluate('document.activeElement.id'), 'focused')
+        self.assertIsNone(page.locator('#focused-holder').get_attribute('data-reveal'))
+        self.assertEqual(page.locator('#focused-holder').evaluate('e => getComputedStyle(e).opacity'), '1')
+
+    def test_status_stripes_survive_the_card_colours(self):
+        for scheme in ('light', 'dark'):
+            with self.subTest(scheme=scheme):
+                page = self.page('extra', motion='reduce', scheme=scheme)
+                tokens = page.evaluate("""() => { const s = getComputedStyle(document.documentElement);
+                    const probe = document.createElement('i'); document.body.append(probe);
+                    const resolve = name => { probe.style.color = s.getPropertyValue(name).trim(); return getComputedStyle(probe).color; };
+                    return {error: resolve('--color-error-text'), success: resolve('--color-success-text')}; }""")
+                for selector, colour in (('#impossible', tokens['error']), ('#failed', tokens['error']),
+                                         ('#achievable', tokens['success'])):
+                    left = page.locator(selector).evaluate('e => [getComputedStyle(e).borderLeftWidth, getComputedStyle(e).borderLeftColor]')
+                    self.assertEqual(left, ['4px', colour], selector)
+
+    def test_an_auto_refreshing_page_does_not_replay_entrances(self):
+        page = self.page('refresh', height=500)
+        page.wait_for_function('document.documentElement.classList.contains("ucc-motion")')
+        self.assertEqual(page.locator('[data-reveal], .ucc-counting').count(), 0)
+        # Only small hover/menu transitions may run; no entrance, count-up or chart animation.
+        self.assertEqual(page.evaluate('document.getAnimations().filter(a => !(a instanceof CSSTransition)).length'), 0)
 
     def test_menu_has_no_numbers_and_a_highlight_follows_the_pointer(self):
         page = self.page('overview', motion='reduce')
