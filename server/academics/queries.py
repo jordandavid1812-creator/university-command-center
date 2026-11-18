@@ -4,6 +4,7 @@ All data is evaluated inside the existing signed student transaction. Never retu
 querysets or use the migration connection. Mutations remain in academics.services.
 """
 from dataclasses import dataclass
+from datetime import timedelta
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
 from .models import (Assignment, Course, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
@@ -142,6 +143,18 @@ def _assignment_metrics(owner, today):
     return totals, upcoming
 
 
+WEEK_DAYS = 7
+WEEK_LIMIT = 50
+
+
+def _due_this_week(owner, today):
+    """Pending assignments due from today through the next six days (at most WEEK_LIMIT + 1, so
+    the page can say when there are more)."""
+    return list(_records(Assignment, owner).filter(
+        completed=False, due_date__gte=today, due_date__lte=today + timedelta(days=WEEK_DAYS - 1))
+        .select_related('course').order_by('due_date', 'id')[:WEEK_LIMIT + 1])
+
+
 def assignment_metrics(identity, today):
     with student_transaction(identity):
         return _assignment_metrics(identity.student_id, today)
@@ -154,7 +167,7 @@ def dashboard_reads(identity, today):
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
         name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
-        return semesters, records, totals, upcoming, name or '', _ai_panel(owner)
+        return semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today)
 
 
 def _ai_panel(owner):

@@ -1,6 +1,7 @@
 """Adapt PostgreSQL records to the established pure academic engine."""
+from datetime import timedelta
 from academic_logic import academic_summary
-from academics.queries import academic_snapshot, dashboard_reads, standing_snapshot
+from academics.queries import WEEK_DAYS, WEEK_LIMIT, academic_snapshot, dashboard_reads, standing_snapshot
 
 
 def snapshot(identity, today=None):
@@ -8,9 +9,27 @@ def snapshot(identity, today=None):
     returns assignment totals, upcoming work and the greeting name, in one transaction."""
     if today is None:
         return workspace(*academic_snapshot(identity))
-    semesters, courses, totals, upcoming, greeting_name, ai_panel = dashboard_reads(identity, today)
+    semesters, courses, totals, upcoming, greeting_name, ai_panel, due = dashboard_reads(identity, today)
     return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
-            'ai_panel': ai_panel}
+            'ai_panel': ai_panel, 'week': due_this_week(due, today)}
+
+
+def due_this_week(assignments, today):
+    """Seven days from today, each with its pending assignments, plus counts for the reminder
+    pop-up. The counts hold no titles, so a pop-up never shows course work on a lock screen."""
+    more = len(assignments) > WEEK_LIMIT
+    assignments = assignments[:WEEK_LIMIT]
+    days = []
+    for offset in range(WEEK_DAYS):
+        day = today + timedelta(days=offset)
+        label = 'Today' if offset == 0 else 'Tomorrow' if offset == 1 else f'{day:%a} {day.day} {day:%b}'  # %-d fails on Windows
+        items = [item for item in assignments if item.due_date == day]
+        # Course codes once each, A to Z (a stable order); titles stay in "Upcoming deadlines" (five at most).
+        codes = sorted({item.course.normalized_code for item in items})
+        days.append({'date': day, 'label': label, 'items': items, 'codes': codes})
+    return {'days': days, 'total': len(assignments), 'more': more,
+            'counts': {'date': today.isoformat(), 'today': len(days[0]['items']), 'tomorrow': len(days[1]['items']),
+                       'week': len(assignments)}}
 
 
 def standing(identity):
