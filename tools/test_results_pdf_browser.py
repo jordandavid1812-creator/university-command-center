@@ -5,6 +5,7 @@ from decimal import Decimal
 from io import BytesIO
 import os
 import re
+import unicodedata
 from types import SimpleNamespace as NS
 import unittest
 
@@ -52,7 +53,8 @@ class ResultsPdfTests(unittest.TestCase):
         if OUTPUT:
             (OUTPUT / f'results-{name}-{scheme}.pdf').write_bytes(data)
         reader = PdfReader(BytesIO(data))
-        return page, reader, [re.sub(r'\s+', ' ', p.extract_text()) for p in reader.pages]
+        # NFKC turns font ligatures (for example "ﬃ" on some systems) back into plain letters.
+        return page, reader, [re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', p.extract_text())) for p in reader.pages]
 
     def test_pdf_has_a4_pages_header_page_numbers_and_the_results(self):
         page, reader, pages = self.pdf('short')
