@@ -16,7 +16,7 @@ from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, acad
 from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
-from . import charts, data, export, forms
+from . import charts, data, export, forms, search
 from .data import present
 from .context import DISPLAY_COOKIE, display_theme
 
@@ -207,6 +207,27 @@ def material_list(request, identity):
     return render(request, 'student_web/materials.html', {'rows': rows, 'storage': storage})
 
 
+@protected()
+def material_search(request, identity):
+    """Find words in all of the student's own study files (their saved text)."""
+    form = forms.MaterialSearchForm(request.GET if request.GET else None)
+    context = {'form': form, 'results': None}
+    if not request.GET:
+        return render(request, 'student_web/material_search.html', context)
+    if not form.is_valid():
+        return render(request, 'student_web/material_search.html', context, status=400)
+    waiting = search.prepare(identity)
+    words = form.cleaned_data['q']
+    found, no_text = services.search_texts.search(identity, words)
+    results = []
+    for material, text in found[:services.MAX_SEARCH_RESULTS]:
+        pieces, count = search.snippets(text, words)
+        results.append({'material': material, 'pieces': pieces, 'count': count})
+    context.update(results=results, more=len(found) > services.MAX_SEARCH_RESULTS, waiting=waiting,
+                   no_text=no_text, words=words)
+    return render(request, 'student_web/material_search.html', context)
+
+
 def upload_too_large(request):
     try:
         return int(request.META.get('CONTENT_LENGTH') or 0) > django_settings.FILE_UPLOAD_MAX_MEMORY_SIZE
@@ -225,7 +246,7 @@ def material_upload(request, identity):
     if request.method == 'POST':
         if form.is_valid():
             try:
-                services.materials.create_with_file(
+                material = services.materials.create_with_file(
                     identity, title=form.cleaned_data['title'], course_id=form.cleaned_data['course_id'],
                     original_filename=form.file_facts['original_filename'],
                     file_type=form.file_facts['file_type'], content=form.file_content)
@@ -237,6 +258,8 @@ def material_upload(request, identity):
                 form.add_error(None, 'This material could not be saved. Check the fields and try again.')
                 status = 400
             else:
+                # Save its text for search now (if the reader is busy, the search page does it later).
+                search.save_text(identity, material.pk, form.file_content, form.file_facts['file_type'])
                 messages.success(request, 'Material checked and stored privately.')
                 return redirect('student_web:material-list')
         else:

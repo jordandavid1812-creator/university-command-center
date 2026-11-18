@@ -20,6 +20,7 @@ urlpatterns = [
     path('settings/export/', views.data_export, name='data-export'),
     path('materials/new/', views.material_upload, name='material-upload'),
     path('materials/', views.material_list, name='material-list'),
+    path('materials/search/', views.material_search, name='material-search'),
     path('materials/<uuid:identifier>/delete/', views.delete, {'kind': 'material'}, name='material-delete'),
     path('materials/<uuid:identifier>/download/', views.material_download, name='material-download'),
     path('materials/<uuid:identifier>/tools/', ai_views.tools, name='ai-tools'),

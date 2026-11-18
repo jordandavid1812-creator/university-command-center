@@ -258,6 +258,20 @@ AI_TOOL_CHOICES = [("summary", "Summary"), ("quiz", "Quiz"), ("flashcards", "Fla
                    ("answer", "Ask a question")]
 
 
+class MaterialSearchForm(StrictForm):
+    """Words to find in the student's own study files: taken literally, any letter case."""
+    q = forms.CharField(label='Search your study files', min_length=2, max_length=100,
+                        help_text='2 to 100 characters. Finds these exact words in any letter case.')
+
+    def clean_q(self):
+        words = ' '.join(self.cleaned_data['q'].split())
+        if re.search('[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff]', words):
+            raise forms.ValidationError('Remove the hidden control characters from your search.')
+        if len(words) < 2:
+            raise forms.ValidationError('Type at least 2 characters.')
+        return words
+
+
 class AiToolForm(StrictForm):
     """Choose a tool (and a question for "Ask a question"). Posting this never sends anything."""
     tool = forms.ChoiceField(choices=AI_TOOL_CHOICES, widget=forms.RadioSelect, label='Study tool')

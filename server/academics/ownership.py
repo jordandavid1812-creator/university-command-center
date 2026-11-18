@@ -99,15 +99,18 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult') AND relowner=r.oid)
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext') AND relowner=r.oid)
                    -- Grants configure_runtime never gives: TRUNCATE/REFERENCES/TRIGGER anywhere
                    -- academic, and any UPDATE on stored files (they are never edited).
                    OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult']) AS t(name)
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext']) AS t(name)
                        WHERE has_table_privilege(current_user, to_regclass('public.' || t.name),
                                                  'TRUNCATE, REFERENCES, TRIGGER'))
                    OR COALESCE(has_any_column_privilege(current_user,
                        to_regclass('public.academics_materialfile'), 'UPDATE'), false)
+                   -- Search text is saved once and never edited either.
+                   OR COALESCE(has_any_column_privilege(current_user,
+                       to_regclass('public.academics_materialtext'), 'UPDATE'), false)
                    -- Profiles are edited, never deleted.
                    OR COALESCE(has_table_privilege(current_user,
                        to_regclass('public.academics_studentprofile'), 'DELETE'), false)
@@ -138,10 +141,10 @@ def require_runtime_role(connection):
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname IN
             ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult')
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext')
             AND c.relrowsecurity AND c.relforcerowsecurity
         """)
-        if cursor.fetchone()[0] != 8:
+        if cursor.fetchone()[0] != 9:
             raise ImproperlyConfigured("All academic tables must have forced RLS enabled.")
 
 
