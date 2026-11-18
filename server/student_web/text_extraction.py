@@ -4,8 +4,10 @@ TXT files are already checked UTF-8 and are cleaned here. PDFs are parsed only i
 separate child process (pdf_text_child.py) with no secrets in its environment, a hard
 time limit and an output cap; its output is checked strictly before any text is used.
 """
+import dataclasses
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,6 +50,8 @@ class ExtractedText:
     pages_read: int | None = None       # PDF only
     pages_total: int | None = None      # PDF only
     total_characters: int | None = None  # TXT only (the whole cleaned file)
+    picked_from: int | None = None      # "Ask a question": characters the matching parts were picked from
+    matched: bool | None = None         # ... and whether any part matched the question's words
 
     @property
     def characters(self):
@@ -199,8 +203,89 @@ def _from_pdf(content):
     return ExtractedText(text=text, truncated=truncated, pages_read=pages_read, pages_total=pages_total)
 
 
+# "Ask a question" sends only the parts of the text that best match the question: much less to
+# read, so the AI answers in seconds, and the parts about the question are what it sees.
+FOCUS_CHARACTERS = 16_000
+FOCUS_PIECE = 1_200
+_WORD = re.compile(r"[^\W_]+")
+_COMMON = frozenset("""the and for are was were has have had can could would should will what which when where who
+whom whose why how does did doing this that these those with from into about than then them they their there here
+explain define definition meaning mean means describe tell give list name state show write discuss please its
+your you our not but all any some more most other such only also very just""".split())
+
+
+def _question_words(question):
+    words = set()
+    for word in _WORD.findall(question):
+        # Two-letter words count only as capitals (IP, OS); longer ones unless very common.
+        if (len(word) >= 3 and word.lower() not in _COMMON) or (len(word) == 2 and word.isupper()):
+            words.add(word.lower())
+    return words
+
+
+def _pieces(text):
+    """(start, end) pieces of about FOCUS_PIECE characters, cut at whitespace when possible."""
+    pieces, start = [], 0
+    while start < len(text):
+        end = min(start + FOCUS_PIECE, len(text))
+        if end < len(text):
+            space = text.rfind(" ", start + FOCUS_PIECE // 2, end)
+            end = space + 1 if space != -1 else end
+        pieces.append((start, end))
+        start = end
+    return pieces
+
+
+def focus_on_question(extracted, question):
+    """The same text when it is short; otherwise the pieces that mention the question's words most
+    (in their original order, up to FOCUS_CHARACTERS), or the first FOCUS_CHARACTERS when none
+    match. Deterministic, so the confirm page and the send step pick exactly the same text."""
+    text = extracted.text
+    if len(text) <= FOCUS_CHARACTERS:
+        return extracted
+    words = _question_words(question)
+    pieces = _pieces(text)
+    scored = []
+    for index, (start, end) in enumerate(pieces):
+        found = [word.lower() for word in _WORD.findall(text[start:end])]
+        score = sum(found.count(word) for word in words)
+        if score:
+            scored.append((-score, index))
+    # Best matches first, each with the piece before and after it for context.
+    chosen, used = set(), 0
+    for _, index in sorted(scored):
+        for near in (index, index - 1, index + 1):
+            if 0 <= near < len(pieces) and near not in chosen:
+                size = pieces[near][1] - pieces[near][0]
+                if used + size <= FOCUS_CHARACTERS:
+                    chosen.add(near)
+                    used += size
+    chosen = [pieces[index] for index in sorted(chosen)]
+    if chosen:
+        # Neighbouring pieces join up again; a gap between parts is marked [...].
+        parts, last_end = [], None
+        for start, end in chosen:
+            if last_end is not None and start == last_end:
+                parts[-1] += text[start:end]
+            else:
+                parts.append(text[start:end])
+            last_end = end
+        picked = "\n[...]\n".join(part.strip() for part in parts)
+    else:
+        picked = text[:FOCUS_CHARACTERS]
+    # `truncated` keeps describing the file read; the send step records that less than all was sent.
+    return dataclasses.replace(extracted, text=picked, picked_from=len(text), matched=bool(chosen))
+
+
 def describe(extracted):
     """The confirm page's wording, using only facts extraction actually knows."""
+    if extracted.picked_from is not None:
+        source = describe(dataclasses.replace(extracted, text="x" * extracted.picked_from, picked_from=None))
+        source = source[0].lower() + source[1:]
+        if extracted.matched:
+            return f"The {extracted.characters:,} characters that best match your question, picked from {source}"
+        return (f"The first {extracted.characters:,} characters (no part matched your question's words), "
+                f"picked from {source}")
     count = f"{extracted.characters:,}"
     if extracted.pages_total is not None:
         if extracted.truncated:

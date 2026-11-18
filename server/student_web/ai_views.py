@@ -29,7 +29,8 @@ LIMIT_MESSAGES = {
 FAILURE_MESSAGES = {
     "network": "The request to the AI service could not be completed (for example no internet connection, or an "
                "unexpected problem in this app). Nothing was saved; you can try again.",
-    "timeout": "The AI service took longer than 60 seconds, so the request was stopped.",
+    "timeout": "The AI service did not answer within 60 seconds, so we stopped waiting and nothing was saved. "
+               "This is usually a busy moment at the service or a slow connection. Please try again in a minute.",
     "redirect": "The AI service answered in an unexpected way (a redirect), so nothing was used.",
     "http_error": "The AI service refused the request. If this keeps happening, check the API key and model name.",
     "too_large": "The AI service sent back far too much, so the answer was not used.",
@@ -56,10 +57,14 @@ QUICK_TOOLS = [
 ]
 
 
-def _material_with_text(identity, identifier):
-    """The student's stored material and its extracted text, or an error page response."""
+def _material_with_text(identity, identifier, tool='', question=''):
+    """The student's stored material and the text that would be sent. For "Ask a question" only
+    the parts that best match the question are sent (the same on the confirm page and at send)."""
     material, content = services.materials.read_file(identity, identifier)
-    return material, text_extraction.extract_text(material.file_type, content)
+    extracted = text_extraction.extract_text(material.file_type, content)
+    if tool == 'answer':
+        extracted = text_extraction.focus_on_question(extracted, question)
+    return material, extracted
 
 
 def _tools_context(identity, material, form):
@@ -92,7 +97,8 @@ def confirm(request, identity, identifier):
     # even if the file cannot be read this time.
     choice = form.cleaned_data.get('notes')
     try:
-        material, extracted = _material_with_text(identity, identifier)
+        material, extracted = _material_with_text(identity, identifier, form.cleaned_data['tool'],
+                                                  form.cleaned_data['question'])
     except text_extraction.ExtractionFailed as failure:
         return _remember_notes(error_page(request, 'Cannot use this file', failure.message,
                                           503 if failure.reason == 'busy' else 422), choice)
@@ -148,7 +154,7 @@ def send(request, identity, identifier):
         return error_page(request, 'Request not sent', 'That AI service is not set up, so nothing was sent.', 400)
     # 1. Read and extract again. A bad file stops here: nothing sent, nothing counted.
     try:
-        material, extracted = _material_with_text(identity, identifier)
+        material, extracted = _material_with_text(identity, identifier, data['tool'], data['question'])
     except text_extraction.ExtractionFailed as failure:
         return error_page(request, 'Cannot use this file', failure.message, 503 if failure.reason == 'busy' else 422)
     if extracted.characters != characters:
@@ -158,7 +164,8 @@ def send(request, identity, identifier):
     _, model = ai_providers.configured(data['provider'])
     try:
         ledger, created = services.ai.reserve(identity, tool=data['tool'], provider=data['provider'], model=model,
-                                              characters_sent=extracted.characters, truncated=extracted.truncated,
+                                              characters_sent=extracted.characters,
+                                              truncated=extracted.truncated or extracted.picked_from is not None,
                                               consent_token_hash=token_hash)
     except AiLimitReached as refused:
         return error_page(request, 'Request not sent', LIMIT_MESSAGES[refused.reason], 429)

@@ -434,3 +434,27 @@ As before: run `migrate`, then `configure_runtime`, with the migration settings,
 then start the website. A database already at stage 1 (0012) needs only `migrate`
 for 0013; it adds no grants, but re-running `configure_runtime` is harmless. The website refuses to start student services until both
 new tables exist with forced RLS.
+
+## Speed (November 2026)
+
+Answers used to take most of a minute, sometimes timing out after 60 seconds. Two causes:
+
+1. **Gemini 3 models "think" before answering by default.** For any model whose name starts
+   with `gemini-3`, requests now send `generationConfig.thinkingConfig.thinkingLevel = "low"`
+   (Google's advice when speed matters). The owner may set `UCC_GEMINI_THINKING` to `minimal`,
+   `low`, `medium` or `high`, or to `default` to send no setting. Other models never get a
+   thinking setting, so an older model is never sent a field it would refuse. The value is read
+   through the same checked `_setting` helper as the key and model.
+2. **"Ask a question" sent up to 60,000 characters.** It now sends only the parts of the
+   extracted text that mention the question's words, plus the text just before and after each
+   match, up to 16,000 characters, in file order (`text_extraction.focus_on_question`).
+   - If nothing matches, it sends the first 16,000 characters and says so.
+   - Short files are sent whole.
+   - The confirm page states exactly what is sent ("The 3,588 characters that best match your
+     question, picked from …").
+   - The pick is deterministic, so the send step picks the same text and the consent token's
+     size check still holds. The ledger records `truncated = true` when less than all was sent.
+
+Summary, quiz and flashcards still use the whole extract. The 60-second safety limit stays.
+The pages now say a request usually takes 5 to 20 seconds, and the timeout message explains
+what happened in plain words.
