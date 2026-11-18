@@ -261,10 +261,18 @@ class AiSendForm(AiToolForm):
     provider = forms.ChoiceField(choices=[])
 
     def __init__(self, *args, providers, **kwargs):
+        from .ai_providers import PUBLIC_CODES
         super().__init__(*args, **kwargs)
-        self.fields['provider'].choices = [(code, code) for code in providers]
+        # The page posts a neutral code ("main" or "backup"); the internal name is also accepted.
+        self.fields['provider'].choices = ([(PUBLIC_CODES[code], code) for code in providers]
+                                           + [(code, code) for code in providers])
         for name in ('tool', 'question'):
             self.fields[name].widget = forms.HiddenInput()
+
+    def clean_provider(self):
+        from .ai_providers import INTERNAL_CODES
+        value = self.cleaned_data['provider']
+        return INTERNAL_CODES.get(value, value)
 
 
 class ConfirmDeleteForm(StrictForm):

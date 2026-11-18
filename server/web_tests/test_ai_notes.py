@@ -3,6 +3,7 @@
 The choice is a browser cookie only (like the Display setting). It never changes what is sent,
 never sends anything, never counts towards the daily limit, and the full notes stay one click away.
 """
+from tests.test_ai_providers import FakeConnection
 from .test_ai_pages import AiCase
 
 FULL = '<section class="notice warning ai-warning"'
@@ -57,3 +58,30 @@ class AiNotesTests(AiCase):
     def test_a_cookie_alone_cannot_change_anything_but_the_notes(self):
         self.client_a.cookies['ucc_ai_notes'] = 'something-else'
         self.assertContains(self.confirm(), FULL)
+
+
+class NoAiNamesTests(AiCase):
+    NAMES = ('Gemini', 'gemini', 'Grok', 'grok', 'Google', 'xAI')
+
+    def test_pages_never_name_the_ai_company_or_model(self):
+        page = self.confirm()
+        for name in self.NAMES:
+            self.assertNotContains(page, name)
+        self.assertContains(page, 'name="provider" value="main"')
+        self.assertContains(page, 'name="provider" value="backup"')
+        self.assertContains(page, 'an outside AI service')
+        short = self.client_a.post(self.url('ai-confirm'), {'tool': 'summary', 'question': '', 'notes': 'hide'})
+        for name in self.NAMES:
+            self.assertNotContains(short, name)
+        # The request status page (after a failed send) shows only the tool name.
+        self.replies['gemini'] = {}  # an unusable answer, so the request ends as failed
+        status = self.client_a.get(self.send(self.token(), provider='main')['Location'])
+        self.assertContains(status, '<p class="eyebrow">Summary</p>', html=False)
+        for name in self.NAMES:
+            self.assertNotContains(status, name)
+
+    def test_main_and_backup_reach_the_right_service(self):
+        self.send(self.token(), provider='main')
+        self.send(self.token(), provider='backup')
+        self.assertEqual([made.provider for made in FakeConnection.made], ['gemini', 'grok'])
+        self.assertEqual(self.send(self.token(), provider='other').status_code, 400)

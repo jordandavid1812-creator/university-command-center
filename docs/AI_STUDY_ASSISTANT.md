@@ -374,6 +374,12 @@ interrupted.
   - The cookie changes only the notes. It never changes what is sent, never sends anything
     and never counts. Any other cookie value shows the full notes.
   - Tests: `web_tests/test_ai_notes.py` and `tools/test_redesign_browser.py`.
+- Pages never name the AI company or model (owner decision, November 2026). With one
+  configured service the confirm page has one **Send** button; with two, **Send** (Gemini)
+  and **Send with the backup service** (Grok). The buttons post the neutral codes `main` and
+  `backup`, which `AiSendForm` maps back to the internal names (`ai_providers.PUBLIC_CODES`).
+  The warnings say "an outside AI service", and the request status page shows only the tool.
+  The student's own data export still records which service and model answered each request.
 - The answer page shows "You asked" above the answer.
 - Study materials is highlighted in the sidebar on AI request and result pages; their
   URL prefixes come from the routes (`context.ai_prefixes`).

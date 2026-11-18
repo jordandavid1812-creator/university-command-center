@@ -21,7 +21,18 @@ import time
 HOSTS = {"gemini": "generativelanguage.googleapis.com", "grok": "api.x.ai"}
 KEY_VARIABLES = {"gemini": "UCC_GEMINI_API_KEY", "grok": "UCC_GROK_API_KEY"}
 MODEL_VARIABLES = {"gemini": "UCC_GEMINI_MODEL", "grok": "UCC_GROK_MODEL"}
-PROVIDER_NAMES = {"gemini": "Gemini (Google)", "grok": "Grok (xAI)"}
+PROVIDER_NAMES = {"gemini": "Gemini (Google)", "grok": "Grok (xAI)"}  # setup and docs only, never shown on pages
+# Pages never name the AI company or model (owner decision). Buttons post these neutral codes.
+PUBLIC_CODES = {"gemini": "main", "grok": "backup"}
+INTERNAL_CODES = {public: internal for internal, public in PUBLIC_CODES.items()}
+
+
+def send_buttons(providers):
+    """(posted code, button text) for each configured provider, with no company or model names."""
+    if len(providers) == 1:
+        return [(PUBLIC_CODES[providers[0]], "Send")]
+    return [(PUBLIC_CODES[code], "Send" if index == 0 else "Send with the backup service")
+            for index, code in enumerate(providers)]
 
 DEADLINE_SECONDS = 60
 MAX_RESPONSE_BYTES = 1024 * 1024

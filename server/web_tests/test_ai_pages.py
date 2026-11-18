@@ -92,8 +92,8 @@ class ToolsAndConfirmTests(AiCase):
         self.assertContains(page, '<section class="notice warning ai-warning"')
         self.assertNotContains(page, '<details class="notice')
         self.assertContains(page, "<dt>Not sent</dt>")
-        self.assertContains(page, "Send to Gemini (Google)")
-        self.assertContains(page, "Send to Grok (xAI)")
+        self.assertContains(page, '<button class="button" type="submit">Send</button>', html=False)
+        self.assertContains(page, '<button class="button" type="submit">Send with the backup service</button>', html=False)
         self.assertNotContains(page, "secret-name.txt")
         self.assertEqual((FakeConnection.made, self.usage()["used_today"]), ([], 0))
 
@@ -110,8 +110,8 @@ class ToolsAndConfirmTests(AiCase):
     def test_only_configured_providers_are_offered(self):
         with patch.dict(os.environ, {"UCC_GROK_API_KEY": "", "UCC_GROK_MODEL": ""}):
             page = self.confirm()
-            self.assertContains(page, "Send to Gemini (Google)")
-            self.assertNotContains(page, "Send to Grok")
+            self.assertContains(page, '<button class="button" type="submit">Send</button>', html=False)
+            self.assertNotContains(page, "backup service")
             token = page.context["send_form"].initial["token"]
             self.assertEqual(self.send(token, provider="grok").status_code, 400)
         self.assertEqual((FakeConnection.made, self.usage()["used_today"]), ([], 0))
@@ -240,7 +240,7 @@ class SendTests(AiCase):
         self.assertContains(page, "1 of 50")
         with patch("student_web.ai_views.services.ai.usage", return_value={"used_today": 50, "daily_limit": 50,
                                                                              "results": 1, "max_results": 500}):
-            self.assertNotContains(self.confirm(), "Send to Gemini")
+            self.assertNotContains(self.confirm(), '<button class="button" type="submit">Send</button>', html=False)
 
     def test_session_ending_during_the_call_discards_the_answer(self):
         def connect_and_sign_out(provider):

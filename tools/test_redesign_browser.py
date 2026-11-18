@@ -103,7 +103,7 @@ def confirm_short_html():
                    tool='summary', tool_name='Summary', question='', amount='All 62 characters', notes_hidden=True,
                    send_form=AiSendForm(initial={'tool': 'summary', 'question': '', 'token': 'synthetic-token-value'},
                                         providers=['gemini'], auto_id=False),
-                   providers=[('gemini', 'Gemini (Google)')],
+                   providers=[('main', 'Send')],
                    usage={'used_today': 1, 'daily_limit': 50, 'results': 0, 'max_results': 500})
     return render_to_string('student_web/ai_confirm.html', context)
 

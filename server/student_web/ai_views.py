@@ -103,7 +103,7 @@ def confirm(request, identity, identifier):
     response = render(request, 'student_web/ai_confirm.html', {
         'material': material, 'tool': tool, 'tool_name': TOOL_NAMES[tool], 'question': question,
         'amount': text_extraction.describe(extracted), 'send_form': send_form,
-        'providers': [(code, ai_providers.PROVIDER_NAMES[code]) for code in providers],
+        'providers': ai_providers.send_buttons(providers),
         'usage': services.ai.usage(identity), 'notes_hidden': notes_hidden})
     if choice == 'hide':
         response.set_cookie(AI_NOTES_COOKIE, 'hidden', max_age=365 * 24 * 60 * 60, httponly=True, samesite='Lax',
@@ -206,7 +206,6 @@ def request_status(request, identity, identifier):
         status = 'deleted'
     return render(request, 'student_web/ai_request.html', {
         'ledger': ledger, 'status': status, 'tool_name': TOOL_NAMES[ledger.tool],
-        'provider_name': ai_providers.PROVIDER_NAMES[ledger.provider],
         'failure': FAILURE_MESSAGES.get(ledger.error_category, ''),
         'status_hint': STATUS_HINTS.get(ledger.status_class, '')}, status=200)
 
