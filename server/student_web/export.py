@@ -34,7 +34,7 @@ def document(records, account, exported_at):
         "ai_results": [{"id": str(r.pk), "material_id": str(r.material_id), "request_id": str(r.request_id),
                         "tool": r.tool, "question": r.question, "result": r.result, "shape_version": r.shape_version,
                         "created_at": _when(r.created_at)} for r in records["ai_results"]],
-        "ai_requests": [{"id": str(r.pk), "tool": r.tool, "provider": r.provider, "model": r.model,
+        "ai_requests": [{"id": str(r.pk), "tool": r.tool,  # no AI company or model names (owner decision)
                          "status": r.status, "error_category": r.error_category,
                          "characters_sent": r.characters_sent, "truncated": r.truncated,
                          "created_at": _when(r.created_at)} for r in records["ai_requests"]],

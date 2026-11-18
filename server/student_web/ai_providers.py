@@ -25,6 +25,8 @@ PROVIDER_NAMES = {"gemini": "Gemini (Google)", "grok": "Grok (xAI)"}  # setup an
 # Pages never name the AI company or model (owner decision). Buttons post these neutral codes.
 PUBLIC_CODES = {"gemini": "main", "grok": "backup"}
 INTERNAL_CODES = {public: internal for internal, public in PUBLIC_CODES.items()}
+if set(PUBLIC_CODES) != set(HOSTS):  # a new provider needs a neutral code, or every send page would fail
+    raise RuntimeError("Every AI provider needs an entry in PUBLIC_CODES.")
 
 
 def send_buttons(providers):

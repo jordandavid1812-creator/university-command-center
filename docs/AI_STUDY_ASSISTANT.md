@@ -266,7 +266,7 @@ reservation.
 | Route | Method | What it does |
 | --- | --- | --- |
 | `/materials/<id>/tools/` | GET | Three tool cards (Summary, Quiz, Flashcards), each its own small form with a "Create …" button; a separate "Ask about this file" card with its own required question box; today's usage bar; saved results. Only for the student's own material with a stored file (otherwise 404) |
-| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send to Gemini (Google)** / **Send to Grok (xAI)** button per configured provider. Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
+| `/materials/<id>/tools/confirm/` | POST | The confirm page: what is sent (`describe()` wording), what is not, the warnings, the usage meter, and one **Send** button per configured provider (**Send** and, with two, **Send with the backup service**; no company or model names). Each button is its own small form with a hidden `provider` field: the site-wide busy script disables buttons on submit, and a disabled button's own value would not be sent (PR #71 review). **Never sends and never counts.** No Send button at 50 a day or with no provider |
 | `/materials/<id>/tools/send/` | POST | The only route that can call a provider. Always redirects |
 | `/ai-requests/<id>/` | GET | In progress (reloads every 5 seconds, no JavaScript needed), failed (plain reason), interrupted, "result deleted", or a redirect to the result |
 | `/ai-results/<id>/` | GET | The result, re-checked with `check_result` before display, labelled "AI-generated: check it against your notes". An invalid old row shows "can no longer be displayed" |
@@ -367,7 +367,7 @@ interrupted.
   the earlier "never collapsible" rule). That button re-posts the same tool and question to
   the confirm page with `notes=hide`. The response sets the `ucc_ai_notes=hidden` cookie
   (HttpOnly, SameSite=Lax, one year, this browser only) and shows the same page again.
-  - After that the page shows one short line ("Sent to the company you choose · AI answers
+  - After that the page shows one short line ("Sent to an outside AI service · AI answers
     can be wrong.") with the full notes behind **Show details**, which works without
     JavaScript.
   - **Show these notes every time** posts `notes=show`, which deletes the cookie.
@@ -379,7 +379,8 @@ interrupted.
   and **Send with the backup service** (Grok). The buttons post the neutral codes `main` and
   `backup`, which `AiSendForm` maps back to the internal names (`ai_providers.PUBLIC_CODES`).
   The warnings say "an outside AI service", and the request status page shows only the tool.
-  The student's own data export still records which service and model answered each request.
+  The student's data export leaves them out as well: AI requests list the tool, status,
+  characters sent and time, but not the service or model.
 - The answer page shows "You asked" above the answer.
 - Study materials is highlighted in the sidebar on AI request and result pages; their
   URL prefixes come from the routes (`context.ai_prefixes`).

@@ -88,23 +88,30 @@ def confirm(request, identity, identifier):
         if material.pk not in services.materials.stored_ids(identity):
             raise services.RecordNotFound()
         return render(request, 'student_web/ai_tools.html', _tools_context(identity, material, form), status=400)
+    # "Got it, don't show again" is remembered in this browser only (like the Display setting),
+    # even if the file cannot be read this time.
+    choice = form.cleaned_data.get('notes')
     try:
         material, extracted = _material_with_text(identity, identifier)
     except text_extraction.ExtractionFailed as failure:
-        return error_page(request, 'Cannot use this file', failure.message, 503 if failure.reason == 'busy' else 422)
+        return _remember_notes(error_page(request, 'Cannot use this file', failure.message,
+                                          503 if failure.reason == 'busy' else 422), choice)
     tool, question = form.cleaned_data['tool'], form.cleaned_data['question']
     token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters)
     providers = ai_providers.available_providers()
     send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers,
                                  auto_id=False)
-    # "Got it, don't show again" is remembered in this browser only (like the Display setting).
-    choice = form.cleaned_data.get('notes')
     notes_hidden = choice == 'hide' or (choice != 'show' and request.COOKIES.get(AI_NOTES_COOKIE) == 'hidden')
     response = render(request, 'student_web/ai_confirm.html', {
         'material': material, 'tool': tool, 'tool_name': TOOL_NAMES[tool], 'question': question,
         'amount': text_extraction.describe(extracted), 'send_form': send_form,
         'providers': ai_providers.send_buttons(providers),
         'usage': services.ai.usage(identity), 'notes_hidden': notes_hidden})
+    return _remember_notes(response, choice)
+
+
+def _remember_notes(response, choice):
+    """Store or clear the "Got it, don't show again" choice on this response."""
     if choice == 'hide':
         response.set_cookie(AI_NOTES_COOKIE, 'hidden', max_age=365 * 24 * 60 * 60, httponly=True, samesite='Lax',
                             secure=django_settings.SESSION_COOKIE_SECURE)

@@ -55,6 +55,16 @@ class AiNotesTests(AiCase):
         # Another student's file is still not found, whatever the notes choice.
         self.assertEqual(self.client_b.post(self.url('ai-confirm'), {'tool': 'summary', 'notes': 'hide'}).status_code, 404)
 
+    def test_got_it_is_remembered_even_when_the_file_is_busy(self):
+        from unittest.mock import patch
+        from student_web import text_extraction
+        with patch('student_web.ai_views.text_extraction.extract_text',
+                   side_effect=text_extraction.ExtractionFailed('busy')):
+            busy = self.post('hide')
+        self.assertEqual(busy.status_code, 503)
+        self.assertEqual(busy.cookies['ucc_ai_notes'].value, 'hidden')
+        self.assertContains(self.confirm(), SHORT)
+
     def test_a_cookie_alone_cannot_change_anything_but_the_notes(self):
         self.client_a.cookies['ucc_ai_notes'] = 'something-else'
         self.assertContains(self.confirm(), FULL)

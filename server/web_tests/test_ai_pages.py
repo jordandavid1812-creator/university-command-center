@@ -394,6 +394,9 @@ class DashboardAndExportTests(AiCase):
         self.assertNotContains(self.client_b.get(reverse("student_web:dashboard")), "Week 1 notes</span>")
         data = json.loads(self.client_a.get(reverse("student_web:data-export")).content)
         self.assertEqual([r["tool"] for r in data["ai_results"]], ["summary"])
-        self.assertEqual([(r["provider"], r["status"]) for r in data["ai_requests"]], [("gemini", "succeeded")])
+        self.assertEqual([r["status"] for r in data["ai_requests"]], ["succeeded"])
+        # The export never names the AI company or model (owner decision).
+        self.assertFalse({"provider", "model"} & set(data["ai_requests"][0]))
+        self.assertNotIn("gemini", json.dumps(data).lower())
         self.assertNotIn("consent_token_hash", json.dumps(data))
         self.assertEqual(json.loads(self.client_b.get(reverse("student_web:data-export")).content)["ai_results"], [])
