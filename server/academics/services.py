@@ -14,8 +14,8 @@ from django.utils import timezone
 import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, Course, MaterialFile, Semester,
-                     StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial)
+from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, Course, MaterialFile, MaterialText,
+                     Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial)
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -263,6 +263,62 @@ class ProfileRecords(StudentRecords):
 
     def delete(self, identity, identifier, *, version):
         raise InvalidRecord()
+
+
+MAX_SEARCH_RESULTS = 50
+
+
+class SearchTexts:
+    """The saved text of each stored study file, for search. Written once, never edited; it goes
+    when its material is deleted. Everything runs as the signed-in student under forced RLS."""
+
+    def missing(self, identity, limit):
+        """IDs of stored files with no saved text yet, oldest first, and how many there are."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            waiting = MaterialFile.objects.using(database_alias()).filter(
+                owner_id=owner, material__search_text__isnull=True)
+            return list(waiting.order_by("material__created_at", "material_id")
+                        .values_list("material_id", flat=True)[:limit]), waiting.count()
+
+    def save(self, identity, material_id, *, text="", truncated=False, problem=""):
+        """Save a file's text (or why it has none) once. A second save of the same file does nothing."""
+        try:
+            with student_transaction(identity):
+                owner = require_identity(identity)
+                alias = database_alias()
+                if MaterialText.objects.using(alias).filter(owner_id=owner, material_id=material_id).exists():
+                    return
+                row = MaterialText(owner_id=owner, material_id=material_id, text=text, truncated=truncated,
+                                   problem=problem)
+                row._state.db = alias
+                # As in StudentRecords._validate_record: the owner comes from the signed capability and
+                # the runtime role cannot read accounts; its FK and RLS check the owner in SQL.
+                row.full_clean(exclude=["owner"], validate_unique=False)
+                MaterialText.objects.using(alias).bulk_create([row])
+        except ValidationError:
+            raise InvalidRecord() from None
+        except IntegrityError:
+            # Two tabs saving the same file at once: the first one won, which is fine.
+            with student_transaction(identity):
+                if not MaterialText.objects.using(database_alias()).filter(
+                        owner_id=require_identity(identity), material_id=material_id).exists():
+                    raise InvalidRecord() from None
+
+    def search(self, identity, words):
+        """(material, text) for this student's files whose text contains `words` (any letter case,
+        taken literally), by title, at most MAX_SEARCH_RESULTS + 1; and counts of files without text."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            texts = MaterialText.objects.using(database_alias()).filter(owner_id=owner)
+            found = list(texts.filter(problem="", text__icontains=words)
+                         .select_related("material", "material__course")
+                         .order_by("material__title", "material_id")[:MAX_SEARCH_RESULTS + 1])
+            no_text = texts.exclude(problem="").count()
+            return [(row.material, row.text) for row in found], no_text
+
+
+search_texts = SearchTexts()
 
 
 PROFILE_FIELDS = {"display_name", "institution", "programme", "level", "matric_number"}

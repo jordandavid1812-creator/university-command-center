@@ -473,3 +473,28 @@ validation, deeper search/selector scaling and production operations remain defe
   - No menu, buttons or links.
 - Tests: `web_tests/test_results_pdf.py` and `tools/test_results_pdf_browser.py`. The browser
   test makes a real PDF with Chromium and reads it back with pypdf.
+
+## Search all study files
+
+- **Study materials → Search all your study files**, or `/materials/search/?q=…`. This finds
+  words in every stored file of the signed-in student. The words are taken literally (`%`, `_`
+  and `.` are plain characters) and matched in any letter case.
+- Each file shows its title, course, match count, up to 3 highlighted snippets, and Study tools
+  and Download buttons. At most 50 files are shown. Snippets are escaped text with only `<mark>`
+  added by the template.
+- **Text is saved once** in `academics_materialtext` (migrations 0016–0017):
+  - at upload, or on the first search for files stored earlier (3 per visit, with a "still being
+    prepared" note);
+  - it is the same text the study tools read (up to 60,000 characters);
+  - a file with no readable text gets one row with the reason (`problem`), so it is not read
+    again, and it is counted on the page.
+- Security, as for stored files:
+  - forced RLS `student_owner` and a same-owner foreign key to the material;
+  - the runtime role has SELECT, INSERT and DELETE, but no UPDATE;
+  - `require_runtime_role` now requires forced RLS on 9 tables and refuses UPDATE, TRUNCATE,
+    REFERENCES or TRIGGER on this table;
+  - the auth role may not read it;
+  - deleting a material deletes its text.
+  - Nothing is sent to an AI service.
+- Tests: `security_tests/test_material_text_rls.py`, `web_tests/test_material_search.py` and
+  `tools/test_search_browser.py`.

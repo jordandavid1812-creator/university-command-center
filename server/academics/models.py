@@ -176,6 +176,40 @@ class MaterialFile(ValidatedRecord):
         ]
 
 
+# Search: the text of each stored study file, read once (at upload, or the first time the
+# student searches). Never edited; deleting the material deletes it. When a file has no
+# readable text, one row records why (`problem`), so it is not read again on every search.
+MAX_SEARCH_CHARACTERS = 60000
+SEARCH_PROBLEMS = [("", "Text saved"), ("no_text", "No text"), ("encrypted", "Password protected"),
+                   ("unreadable", "Unreadable"), ("unsupported", "Not supported")]
+
+
+class MaterialText(ValidatedRecord):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                              related_name="material_texts")
+    material = models.OneToOneField(StudyMaterial, on_delete=models.CASCADE, related_name="search_text")
+    text = models.TextField(blank=True)
+    truncated = models.BooleanField(default=False)
+    problem = models.CharField(max_length=12, blank=True, choices=SEARCH_PROBLEMS)
+
+    def clean(self):
+        if self.material_id and self.owner_id and not StudyMaterial.objects.using(self._state.db).filter(
+                pk=self.material_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"material": "Material must belong to the text owner."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=LessThanOrEqual(Length("text"), MAX_SEARCH_CHARACTERS),
+                                   name="materialtext_size_limit"),
+            models.CheckConstraint(condition=models.Q(problem__in=[code for code, _ in SEARCH_PROBLEMS]),
+                                   name="materialtext_problem_valid"),
+            # Text, or a reason there is none: never both, never neither.
+            models.CheckConstraint(condition=(models.Q(problem="") & GreaterThanOrEqual(Length("text"), 1))
+                                   | (~models.Q(problem="") & models.Q(text="") & models.Q(truncated=False)),
+                                   name="materialtext_text_or_problem"),
+        ]
+
+
 LEVEL_CHOICES = [("100", "100 level"), ("200", "200 level"), ("300", "300 level"), ("400", "400 level"),
                  ("500", "500 level"), ("600", "600 level"), ("700", "700 level"), ("PG", "Postgraduate")]
 MATRIC_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9/._-]{0,31}$"

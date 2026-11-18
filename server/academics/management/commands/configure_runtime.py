@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("REVOKE ALL ({}) ON {}.{} FROM PUBLIC, {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)),
                     sql.Identifier(schema), sql.Identifier(table), sql.Identifier(role)))
-            cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile TO {}").format(sql.Identifier(role)))
+            cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile, public.academics_materialtext TO {}").format(sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
             # AI ledger: never deleted by the website; results: never edited.
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studyairequest TO {}").format(sql.Identifier(role)))
