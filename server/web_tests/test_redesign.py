@@ -39,3 +39,14 @@ class RedesignTests(WebsiteCase):
         self.assertIn('"typescript": "6.0.3"', (FRONTEND / 'package.json').read_text())
         self.assertIn('"integrity": "sha512-', (FRONTEND / 'package-lock.json').read_text())
         self.assertEqual(self.client_a.get('/static/student_web/app.js').status_code, 200)
+
+    def test_settings_page_has_its_layout_and_an_account_heading(self):
+        self.login()
+        page = self.client_a.get(reverse('student_web:settings'))
+        self.assertContains(page, '/static/student_web/settings.css')
+        self.assertContains(page, '<h2 id="account-heading">Account</h2>', html=False)
+        self.assertContains(page, '<fieldset class="display-choices">', html=False)
+        self.assertEqual(len(page.content.decode().split('type="radio"')) - 1, 3)  # the form still works without JavaScript
+        css = (STATIC / 'settings.css').read_text()
+        self.assertLessEqual(len(css.encode()), 3_000)
+        self.assertNotIn('url(', css)

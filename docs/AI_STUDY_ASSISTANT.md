@@ -361,8 +361,19 @@ interrupted.
   server still refuses a question with any other tool, whatever the browser sends.
 - A refused question keeps its text. Its error appears in the focusable summary as a link
   to the box, and inline above the box, which has `aria-invalid` and `aria-describedby`.
-- The confirm page shows a "What will be sent" summary, then the consent warnings in an
-  always-visible box (never collapsible), the usage bar and the Send buttons.
+- The confirm page shows a "What will be sent" summary, then the consent warnings, the
+  usage bar and the Send buttons. The warnings are shown in full, in an open box, until the
+  student presses **Got it, don't show again** (owner decision, November 2026; this replaces
+  the earlier "never collapsible" rule). That button re-posts the same tool and question to
+  the confirm page with `notes=hide`. The response sets the `ucc_ai_notes=hidden` cookie
+  (HttpOnly, SameSite=Lax, one year, this browser only) and shows the same page again.
+  - After that the page shows one short line ("Sent to the company you choose · AI answers
+    can be wrong.") with the full notes behind **Show details**, which works without
+    JavaScript.
+  - **Show these notes every time** posts `notes=show`, which deletes the cookie.
+  - The cookie changes only the notes. It never changes what is sent, never sends anything
+    and never counts. Any other cookie value shows the full notes.
+  - Tests: `web_tests/test_ai_notes.py` and `tools/test_redesign_browser.py`.
 - The answer page shows "You asked" above the answer.
 - Study materials is highlighted in the sidebar on AI request and result pages; their
   URL prefixes come from the routes (`context.ai_prefixes`).

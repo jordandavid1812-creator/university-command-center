@@ -237,6 +237,9 @@ class AiToolForm(StrictForm):
     question = forms.CharField(max_length=500, required=False, label='Your question',
                                widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 500}),
                                help_text='Only for "Ask a question". Up to 500 characters.')
+    # Sent only by the buttons on the confirm page that hide or show the "Before you send" notes.
+    notes = forms.ChoiceField(choices=[('', ''), ('hide', 'Hide'), ('show', 'Show')], required=False,
+                              widget=forms.HiddenInput())
 
     def clean(self):
         values = super().clean()

@@ -71,6 +71,43 @@ def with_extra():
     return standing_html().replace('</main>', EXTRA + '</main>')
 
 
+def settings_html():
+    """The real Account settings page with a synthetic profile."""
+    sys.path.insert(0, str(ROOT / 'server'))
+    from student_web.forms import DisplayForm
+    request = RequestFactory().get('/settings/')
+    request.resolver_match = resolve('/settings/')
+    request.student_identity = object()  # Static presentation marker, never a web capability.
+    request.user = NS(username='Synthetic preview', email='synthetic@example.invalid')
+    with override_settings(STUDENT_WEBSITE_ENABLED=True):
+        context = foundation.navigation(request)
+    profile = NS(display_name='Synthetic Student', institution='Synthetic University', programme='Synthetic Studies',
+                 level='100', get_level_display=lambda: '100 level')
+    context.update(request=request, csrf_token='synthetic-token', messages=[], profile=profile, masked_matric='••••••0000',
+                   display_form=DisplayForm(initial={'theme': 'system'}),
+                   storage={'files': 1, 'max_files': 50, 'bytes': 2_900_000, 'max_mib': 200})
+    return render_to_string('student_web/settings.html', context)
+
+
+def confirm_short_html():
+    """The AI confirm page after "Got it, don't show again": the short line with Show details."""
+    sys.path.insert(0, str(ROOT / 'server'))
+    from student_web.forms import AiSendForm
+    request = RequestFactory().get('/')
+    request.resolver_match = resolve('/')
+    request.student_identity = object()  # Static presentation marker, never a web capability.
+    request.user = NS(username='Synthetic preview')
+    with override_settings(STUDENT_WEBSITE_ENABLED=True):
+        context = foundation.navigation(request)
+    context.update(request=request, csrf_token='synthetic-csrf', messages=[], material=NS(pk=uuid.UUID(int=9), title='Synthetic notes'),
+                   tool='summary', tool_name='Summary', question='', amount='All 62 characters', notes_hidden=True,
+                   send_form=AiSendForm(initial={'tool': 'summary', 'question': '', 'token': 'synthetic-token-value'},
+                                        providers=['gemini'], auto_id=False),
+                   providers=[('gemini', 'Gemini (Google)')],
+                   usage={'used_today': 1, 'daily_limit': 50, 'results': 0, 'max_results': 500})
+    return render_to_string('student_web/ai_confirm.html', context)
+
+
 def auto_refreshing():
     """Like the AI 'still working' page, which reloads itself (600 s here, so the test never reloads)."""
     return standing_html().replace('</head>', '<meta http-equiv="refresh" content="600"></head>')
@@ -83,7 +120,8 @@ PAGES = {
     'cards-dark': lambda: served(ai.html_for('flashcards', ai.CARDS, theme='dark')),
     'login': lambda: served(foundation.fixture_html(public=True)),
 }
-EXTRA_PAGES = {'extra': with_extra, 'refresh': auto_refreshing}
+EXTRA_PAGES = {'extra': with_extra, 'refresh': auto_refreshing, 'settings': settings_html,
+               'confirm': lambda: served(ai.confirm_html()), 'confirm-short': confirm_short_html}
 
 
 def luminance(colour):
@@ -146,7 +184,10 @@ class RedesignBrowserTests(unittest.TestCase):
         for y in range(0, height + 400, 300):
             page.mouse.wheel(0, 300)
             page.wait_for_timeout(40)
+        page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')  # the very bottom
+        page.wait_for_timeout(100)
         page.wait_for_function('document.getAnimations().every(a => a.playState !== "running")', timeout=8000)
+        page.wait_for_function('!document.querySelector(".ucc-counting")', timeout=8000)  # count-ups use frames, not animations
 
     def test_motion_runs_and_every_section_ends_fully_visible(self):
         for name in PAGES:
@@ -216,6 +257,17 @@ class RedesignBrowserTests(unittest.TestCase):
         self.assertEqual(page.evaluate("""() => [...document.querySelectorAll('.ucc-counting')]
             .filter(e => getComputedStyle(e).color === 'rgba(0, 0, 0, 0)').length"""), 0)
 
+    def test_a_small_section_at_the_very_bottom_still_appears(self):
+        page = self.page('extra', height=500)
+        page.wait_for_function('document.documentElement.classList.contains("ucc-motion")')
+        page.evaluate("""() => { const s = document.createElement('p'); s.className = 'notice'; s.id = 'last';
+            s.textContent = 'Synthetic last line'; document.querySelector('main').append(s); }""")
+        # Added after load, so mark and watch it like the script does, then scroll to the end.
+        self.assertEqual(page.evaluate('document.querySelector("#last").getBoundingClientRect().height < 60'), True)
+        page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
+        last_panel = page.locator('main > .panel').last
+        page.wait_for_function('el => !el.hasAttribute("data-reveal")', arg=last_panel.element_handle())
+
     def test_a_very_tall_section_still_appears(self):
         page = self.page('extra', width=390, height=700)
         page.wait_for_function('document.querySelector("#tall")?.dataset.reveal === "waiting"')
@@ -242,6 +294,58 @@ class RedesignBrowserTests(unittest.TestCase):
                                          ('#achievable', tokens['success'])):
                     left = page.locator(selector).evaluate('e => [getComputedStyle(e).borderLeftWidth, getComputedStyle(e).borderLeftColor]')
                     self.assertEqual(left, ['4px', colour], selector)
+
+    def test_settings_display_choices_line_up(self):
+        for scheme in ('light', 'dark'):
+            with self.subTest(scheme=scheme):
+                page = self.page('settings', motion='reduce', scheme=scheme)
+                if OUTPUT:
+                    page.screenshot(path=str(OUTPUT / f'settings-{scheme}.png'), full_page=True)
+                labels = page.locator('.display-choices label')
+                self.assertEqual(labels.count(), 3)
+                for index in range(3):
+                    label = labels.nth(index)
+                    radio, box = label.locator('input').bounding_box(), label.bounding_box()
+                    # The round button sits inside its own pill, on the same line as the words.
+                    self.assertLessEqual(radio['width'], 24)
+                    self.assertTrue(box['x'] <= radio['x'] and radio['x'] + radio['width'] <= box['x'] + box['width'])
+                    self.assertAlmostEqual(radio['y'] + radio['height'] / 2, box['y'] + box['height'] / 2, delta=3)
+                    self.assertLessEqual(box['height'], 60)
+                    self.assertGreaterEqual(contrast(foundation.FoundationBrowserTests.painted_colors(self, label)), 4.5)
+                # Sections are separated: "Your data" starts well below the Save display button.
+                save = page.get_by_role('button', name='Save display').bounding_box()
+                heading = page.locator('#data-heading').bounding_box()
+                self.assertGreaterEqual(heading['y'] - (save['y'] + save['height']), 32)
+                self.assertEqual(page.locator('#account-heading').inner_text(), 'Account')
+
+    def test_before_you_send_is_a_clear_readable_card(self):
+        for scheme in ('light', 'dark'):
+            with self.subTest(scheme=scheme):
+                page = self.page('confirm', motion='reduce', scheme=scheme)
+                card = page.locator('.ai-warning')
+                self.assertEqual(card.evaluate('e => getComputedStyle(e).borderTopLeftRadius'), '20px')
+                for selector in ('h2', 'li'):
+                    pair = foundation.FoundationBrowserTests.painted_colors(self, card.locator(selector).first)
+                    self.assertGreaterEqual(contrast(pair), 4.5, (selector, pair))
+                if OUTPUT:
+                    page.screenshot(path=str(OUTPUT / f'confirm-{scheme}.png'), full_page=True)
+
+    def test_after_got_it_one_short_line_with_details(self):
+        for scheme in ('light', 'dark'):
+            with self.subTest(scheme=scheme):
+                page = self.page('confirm-short', motion='reduce', scheme=scheme)
+                self.assertEqual(page.locator('.ai-warning').count(), 0)
+                line = page.locator('.ai-notes-short > p')
+                self.assertIn('AI answers can be wrong', line.inner_text())
+                self.assertGreaterEqual(contrast(foundation.FoundationBrowserTests.painted_colors(self, line)), 4.5)
+                details = page.locator('.ai-notes-details li').first
+                self.assertFalse(details.is_visible())
+                page.get_by_text('Show details').click()
+                self.assertTrue(details.is_visible())
+                self.assertGreaterEqual(contrast(foundation.FoundationBrowserTests.painted_colors(self, details)), 4.5)
+                self.assertTrue(page.get_by_role('button', name='Show these notes every time').is_visible())
+                if OUTPUT:
+                    page.screenshot(path=str(OUTPUT / f'confirm-short-{scheme}.png'), full_page=True)
 
     def test_an_auto_refreshing_page_does_not_replay_entrances(self):
         page = self.page('refresh', height=500)
