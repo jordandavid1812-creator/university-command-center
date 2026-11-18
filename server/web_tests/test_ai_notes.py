@@ -65,6 +65,15 @@ class AiNotesTests(AiCase):
         self.assertEqual(busy.cookies['ucc_ai_notes'].value, 'hidden')
         self.assertContains(self.confirm(), SHORT)
 
+    def test_short_line_styles_load_on_the_confirm_page_only(self):
+        from pathlib import Path
+        self.assertContains(self.confirm(), '/static/student_web/ai_confirm.css')
+        self.assertNotContains(self.client_a.get(self.url('ai-tools')), 'ai_confirm.css')
+        css = (Path(__file__).resolve().parents[1] / 'student_web/static/student_web/ai_confirm.css').read_text()
+        self.assertIn('.ai-notes-short', css)
+        self.assertLessEqual(len(css.encode()), 2_000)
+        self.assertNotIn('url(', css)
+
     def test_a_cookie_alone_cannot_change_anything_but_the_notes(self):
         self.client_a.cookies['ucc_ai_notes'] = 'something-else'
         self.assertContains(self.confirm(), FULL)

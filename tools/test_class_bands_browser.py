@@ -22,11 +22,11 @@ OWN = dict(first_class_min=Decimal('4.0000'), second_upper_min=Decimal('3.0000')
            third_class_min=Decimal('1.0000'), pass_min=Decimal('0.5000'))
 
 
-def context_for(path, profile):
+def context_for(path, profile, grades=None):
     sys.path.insert(0, str(redesign.ROOT / 'server'))
     from student_web.data import workspace
     semesters = [NS(pk=uuid.UUID(int=i), label=label, display_order=i) for i, label in enumerate(['Synthetic one', 'Synthetic two'], 1)]
-    grades = [['A', 'B', 'C'], ['B', 'A', 'B']]
+    grades = grades or [['A', 'B', 'C'], ['B', 'A', 'B']]
     courses = [NS(pk=uuid.UUID(int=100 + n * 10 + m), semester_id=s.pk, semester=s, normalized_code=f'SYN{n}{m}',
                   name='Synthetic course', credit_units=Decimal(3), actual_grade=g)
                for n, (s, gs) in enumerate(zip(semesters, grades)) for m, g in enumerate(gs)]
@@ -41,9 +41,9 @@ def context_for(path, profile):
     return context
 
 
-def overview_html(profile=None):
+def overview_html(profile=None, grades=None):
     from student_web.views import standing_context
-    context = context_for('/performance/', profile)
+    context = context_for('/performance/', profile, grades)
     context.update(standing_context(context))
     return render_to_string('student_web/overview.html', context)
 
@@ -68,7 +68,8 @@ def bands_html():
 
 
 PAGES = {'overview': overview_html, 'overview-own': lambda: overview_html(NS(**OWN)), 'planner': planner_html,
-         'bands': bands_html}
+         'bands': bands_html, 'overview-top': lambda: overview_html(grades=[['A'] * 3, ['A'] * 3]),
+         'overview-zero': lambda: overview_html(grades=[['F'] * 3, ['F'] * 3])}
 
 
 class ClassBandBrowserTests(unittest.TestCase):
@@ -134,6 +135,17 @@ class ClassBandBrowserTests(unittest.TestCase):
                 self.assertEqual(page.locator('form.stacked-form input[name$=_min]').count(), 5)
                 if OUTPUT:
                     page.screenshot(path=str(OUTPUT / f'class-bands-{scheme}.png'), full_page=True)
+
+    def test_marker_label_stays_inside_the_card_at_both_ends(self):
+        for name, cgpa in (('overview-top', '5.00'), ('overview-zero', '0.00')):
+            for width in (320, 390, 1280):
+                with self.subTest(page=name, width=width):
+                    page = self.page(name, motion='reduce', width=width)
+                    label = page.locator('.class-marker span')
+                    self.assertEqual(label.inner_text(), cgpa)
+                    box, card = label.bounding_box(), page.locator('.class-standing').bounding_box()
+                    self.assertGreaterEqual(box['x'], card['x'])
+                    self.assertLessEqual(box['x'] + box['width'], card['x'] + card['width'])
 
     def test_phone_width_never_scrolls_sideways(self):
         for name in PAGES:
