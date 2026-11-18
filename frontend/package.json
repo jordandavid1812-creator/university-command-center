@@ -1,0 +1,13 @@
+{
+  "name": "ucc-frontend",
+  "private": true,
+  "description": "TypeScript sources for the student website's motion layer. Compiled output is committed.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

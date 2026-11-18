@@ -1,3 +1,10 @@
+// Load the motion layer (app.js, built from frontend/src/app.ts) from the same folder.
+// Without JavaScript, or if it fails to load, every page still shows everything.
+const siteScript = document.currentScript;
+if (siteScript instanceof HTMLScriptElement && siteScript.src) {
+  import(new URL('app.js', siteScript.src).href).catch(() => {});
+}
+
 // Progressive feedback only. Every form remains functional without JavaScript.
 // No grades, credentials or ownership data are copied into browser storage.
 document.addEventListener('submit', (event) => {

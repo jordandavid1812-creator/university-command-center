@@ -1,0 +1,130 @@
+/* Site-wide look: links as buttons, coloured cards and flashcards, and the motion styles used
+   by app.js. Loaded on every page after the page styles. Nothing here hides content unless
+   app.js has added .ucc-motion, so pages without JavaScript look complete. */
+:root {
+  --tint-1:#E6F4EF; --tint-1-edge:#9FD3C2; --tint-1-ink:#105646;
+  --tint-2:#E8F0FC; --tint-2-edge:#A9C3EC; --tint-2-ink:#254C87;
+  --tint-3:#FFF4DE; --tint-3-edge:#E3BE73; --tint-3-ink:#7A4B00;
+  --tint-4:#F1ECFB; --tint-4-edge:#C6B5EA; --tint-4-ink:#4F3A86;
+  --tint-5:#FDEDF0; --tint-5-edge:#EDB0BC; --tint-5-ink:#8E2337;
+  --deck-1:#CFEDE3; --deck-2:#D6E4FA; --deck-3:#FFE7B8; --deck-4:#E4DAF8; --deck-5:#FBD9E0;
+  --lift:0 14px 34px rgb(23 42 42 / 12%);
+  --glow:rgb(255 255 255 / 70%);
+  --ease:cubic-bezier(.2,.75,.2,1);
+}
+
+/* ---------- Links look and behave like buttons (no underlines) ---------- */
+.main-content a:not(.button, .skip-link, .dashboard-attention), .public-nav a, .auth-link-pair a, .auth-text-action {
+  display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:2.5rem;
+  padding:.45rem 1rem; border-radius:999px; border:1px solid var(--tint-1-edge);
+  background:var(--color-active-bg); color:var(--color-active-text); font-weight:650; line-height:1.3;
+  text-decoration:none; vertical-align:middle; margin:.125rem 0;
+  transition:transform .18s var(--ease), box-shadow .18s var(--ease), background-color .18s, color .18s;
+}
+.main-content a:not(.button, .skip-link, .dashboard-attention):hover, .public-nav a:hover,
+.auth-link-pair a:hover, .auth-text-action:hover {
+  background:var(--color-primary); color:var(--color-on-primary); border-color:var(--color-primary);
+  text-decoration:none; transform:translateY(-2px); box-shadow:var(--lift);
+}
+.main-content a.danger-link:not(:hover) { background:var(--color-error-bg); color:var(--color-error-text);
+  border-color:var(--tint-5-edge); }
+.main-content a.danger-link:hover { background:var(--color-error-text); border-color:var(--color-error-text);
+  color:var(--color-surface); }
+.public-nav a[aria-current=page] { background:var(--color-primary); color:var(--color-on-primary); }
+
+/* Real buttons: lift on hover, press down when clicked. */
+.button, .logout-button { transition:transform .18s var(--ease), box-shadow .18s var(--ease), background-color .18s; }
+.button { border-radius:999px; padding-inline:1.25rem; }
+.button:hover:not(:disabled) { transform:translateY(-2px); box-shadow:var(--lift); text-decoration:none; }
+.button:active:not(:disabled), .main-content a:active { transform:translateY(0) scale(.97); box-shadow:none; }
+.button.danger:hover { text-decoration:none; }
+
+/* ---------- Menu: no numbers, a gliding highlight ---------- */
+.nav-link { position:relative; z-index:1; transition:color .2s; }
+.nav-link.active::before { content:""; position:absolute; left:-4px; top:22%; bottom:22%; width:4px;
+  border-radius:4px; background:var(--color-primary); }
+.sidebar nav.has-glide { position:relative; }
+.has-glide .nav-link:not(.active):hover { background:transparent; }
+.ucc-glide { position:absolute; left:0; right:0; top:0; height:0; z-index:0; opacity:0; pointer-events:none;
+  border-radius:10px; background:var(--color-surface-raised); box-shadow:inset 0 0 0 1px var(--color-border-subtle);
+  transition:transform .38s var(--ease), height .38s var(--ease), opacity .2s; }
+
+/* ---------- Coloured cards, so every block stands apart from the page ---------- */
+.main-content .panel, .metric, .ai-tool-card {
+  --card:var(--tint-1); --edge:var(--tint-1-edge); --ink:var(--tint-1-ink);
+  background:var(--card); border:1px solid var(--edge); border-radius:20px;
+  box-shadow:0 1px 2px rgb(23 42 42 / 6%), 0 10px 26px rgb(23 42 42 / 7%);
+  transition:transform .25s var(--ease), box-shadow .25s var(--ease);
+}
+.main-content .panel:nth-of-type(4n+2), .metric:nth-child(4n+2), .ai-tool-card:nth-child(4n+2) {
+  --card:var(--tint-2); --edge:var(--tint-2-edge); --ink:var(--tint-2-ink); }
+.main-content .panel:nth-of-type(4n+3), .metric:nth-child(4n+3), .ai-tool-card:nth-child(4n+3) {
+  --card:var(--tint-4); --edge:var(--tint-4-edge); --ink:var(--tint-4-ink); }
+.main-content .panel:nth-of-type(4n+4), .metric:nth-child(4n+4), .ai-tool-card:nth-child(4n+4) {
+  --card:var(--tint-3); --edge:var(--tint-3-edge); --ink:var(--tint-3-ink); }
+.metric:hover, .ai-tool-card:hover { transform:translateY(-3px); box-shadow:var(--lift); border-color:var(--edge); }
+.metric span, .metric small { color:var(--color-text-muted); }
+.metric strong, .ai-tool-mark { color:var(--ink); }
+.ai-tool-mark { background:var(--color-surface); box-shadow:inset 0 0 0 1px var(--edge); }
+.main-content .panel h2 { color:var(--ink); }
+/* Tables and lists inside a coloured card keep a white reading surface. */
+.main-content .panel .table-scroll, .main-content .panel table, .ai-result-item, .ai-question {
+  background:var(--color-surface); border-radius:14px; }
+.main-content .panel .table-scroll { border:1px solid var(--edge); }
+.main-content .panel .table-scroll table { background:transparent; }
+.main-content .panel .table-scroll caption { padding:.75rem 1rem .25rem; text-align:left; font-weight:650; }
+
+/* ---------- Flashcards: bold coloured faces on a plain card, a new colour per card ---------- */
+.main-content .panel:has(.ai-deck) { --card:var(--color-surface); --edge:var(--color-border-subtle); }
+.ai-face { --face:var(--deck-1); --face-edge:var(--tint-1-edge); background:var(--face); border:2px solid var(--face-edge);
+  color:var(--color-text); box-shadow:0 18px 40px rgb(23 42 42 / 14%); }
+.ai-face-back { --face:var(--deck-3); --face-edge:var(--tint-3-edge); }
+.ai-flip[data-tone="1"] .ai-face-front { --face:var(--deck-2); --face-edge:var(--tint-2-edge); }
+.ai-flip[data-tone="1"] .ai-face-back { --face:var(--deck-5); --face-edge:var(--tint-5-edge); }
+.ai-flip[data-tone="2"] .ai-face-front { --face:var(--deck-4); --face-edge:var(--tint-4-edge); }
+.ai-flip[data-tone="2"] .ai-face-back { --face:var(--deck-1); --face-edge:var(--tint-1-edge); }
+.ai-flip[data-tone="3"] .ai-face-front { --face:var(--deck-3); --face-edge:var(--tint-3-edge); }
+.ai-flip[data-tone="3"] .ai-face-back { --face:var(--deck-2); --face-edge:var(--tint-2-edge); }
+.ai-flip[data-tone="4"] .ai-face-front { --face:var(--deck-5); --face-edge:var(--tint-5-edge); }
+.ai-flip[data-tone="4"] .ai-face-back { --face:var(--deck-4); --face-edge:var(--tint-4-edge); }
+.ai-face::before { position:absolute; top:.85rem; left:1rem; font-size:.75rem; font-weight:800;
+  letter-spacing:.08em; color:var(--color-text-muted); }
+.ai-face { position:relative; }
+.ai-face-front::before { content:"QUESTION"; }
+.ai-face-back::before { content:"ANSWER"; }
+.ai-flip:hover .ai-face { box-shadow:var(--lift); }
+
+/* ---------- Motion (only after app.js adds .ucc-motion; never with Reduce motion) ---------- */
+@media (prefers-reduced-motion:no-preference) {
+  @view-transition { navigation:auto; }
+  .ucc-motion [data-reveal=waiting] { opacity:0; transform:translateY(22px) scale(.985); }
+  .ucc-progress { position:fixed; inset:0 0 auto; height:3px; z-index:60; transform:scaleX(0);
+    transform-origin:0 50%; background:var(--color-primary); opacity:0; transition:opacity .3s; pointer-events:none; }
+  .ucc-progress.is-active { opacity:1; }
+  .has-ripple { position:relative; overflow:hidden; isolation:isolate; }
+  .ucc-ripple { position:absolute; border-radius:50%; background:currentColor; pointer-events:none; z-index:-1; }
+  .standing-bar path { transform-box:fill-box; transform-origin:50% 100%; }
+  .ucc-motion :is(.panel, .metric, .ai-tool-card) { position:relative; isolation:isolate; }
+  .ucc-motion :is(.panel, .metric, .ai-tool-card)::after { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit;
+    pointer-events:none; opacity:0; transition:opacity .3s;
+    background:radial-gradient(22rem circle at var(--ucc-x, 50%) var(--ucc-y, 0), var(--glow), transparent 60%); }
+  .ucc-motion :is(.panel, .metric, .ai-tool-card):hover::after { opacity:1; }
+}
+.ucc-counting { position:relative; color:transparent; font-variant-numeric:tabular-nums; }
+.ucc-counting::after { content:attr(data-count-now); position:absolute; inset:0; color:var(--ucc-ink);
+  text-align:inherit; white-space:nowrap; }
+
+@media (prefers-reduced-motion:reduce) {
+  .button, .metric, .ai-tool-card, .main-content a, .ucc-glide { transition:none; }
+  .button:hover:not(:disabled), .metric:hover, .ai-tool-card:hover, .main-content a:hover { transform:none; }
+}
+@media print {
+  [data-reveal] { opacity:1 !important; transform:none !important; }
+  .ucc-progress, .ucc-glide, .ucc-ripple { display:none; }
+  .main-content .panel, .metric, .ai-tool-card { box-shadow:none; background:#fff; }
+  .main-content a:not(.button) { border:0; padding:0; background:none; }
+}
+@media (forced-colors:active) {
+  .main-content a:not(.button, .skip-link), .public-nav a, .metric, .main-content .panel { border:1px solid LinkText; }
+  .ucc-glide, .ucc-progress { display:none; }
+}

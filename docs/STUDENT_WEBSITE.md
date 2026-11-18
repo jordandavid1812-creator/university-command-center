@@ -369,3 +369,26 @@ It creates/drops a synthetic test database and prints aggregate timing/query/ind
 measurements. Never run tests against personal or live application data. Timing is
 local diagnostic evidence, not a production guarantee. Screen-reader and real-device
 validation, deeper search/selector scaling and production operations remain deferred.
+
+## Site-wide look and motion
+
+- **Links look like buttons.** Links in the page content are rounded buttons with no underline.
+  They are still normal links underneath, so they work without JavaScript.
+- **Coloured cards.** Panels, metric tiles and AI tool cards have soft tinted backgrounds that
+  rotate between teal, blue, violet and amber. Flashcards have a coloured question side and a
+  different coloured answer side, and the colours change for each card. Light and dark colours
+  are contrast-checked (at least 4.5:1) in `tools/test_redesign_browser.py`.
+- **The menu has no numbers.** A soft highlight glides to the item under the pointer or keyboard.
+- **Motion** (`frontend/src/app.ts`, compiled to `static/student_web/app.js`): sections slide in
+  as you scroll, numbers count up, chart bars grow, a progress bar shows how far down the page
+  you are, and buttons ripple when pressed.
+  - Nothing is hidden by the HTML or CSS. Only the script hides a section, just before it
+    animates it in. Keyboard focus, links to a section, find-in-page and printing show
+    everything at once.
+  - The count-up is drawn on top of the real number. The page text always holds the true value.
+  - "Reduce motion" in the device settings turns all motion off.
+  - The script stores nothing and sends nothing.
+- **Building the script.** TypeScript 6.0.3 is locked in `frontend/package-lock.json`. To rebuild
+  after changing `app.ts`, run `npm ci --ignore-scripts` and `npm run build` in `frontend/`, and
+  commit the new `app.js`. CI rebuilds it and fails if the committed file is different.
+  `site.js` loads `app.js` from the same folder.

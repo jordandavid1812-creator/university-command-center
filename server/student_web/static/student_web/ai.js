@@ -216,6 +216,7 @@
     const show = (direction = 0) => {
       const card = deck[position];
       flip.setAttribute('aria-pressed', 'false');
+      flip.dataset.tone = String(position % 5); // a different card colour for each card
       front.textContent = card.front;
       back.textContent = card.back;
       // Long text gets a smaller font, so the card stays a reasonable height on phones.
