@@ -523,3 +523,34 @@ validation, deeper search/selector scaling and production operations remain defe
 - The data export includes a `timetable` list. At most 300 classes.
 - Tests: `security_tests/test_class_session_rls.py`, `web_tests/test_timetable.py` and
   `tools/test_timetable_browser.py`.
+
+## Study planner
+
+- **Study planner** (menu, `/study-planner/`): one plan per exam. Each plan has one of the
+  student's courses, an exam date (after today, within a year), 0–3 revision days and 1–60
+  topics (one per line).
+- **Spreading** (`student_web/study_plan.py`, pure functions):
+  - Topics are shared out evenly, in order, from today to the day before the exam, keeping the
+    last revision days free. If the exam is too close for them, every day is used.
+  - Example: 10 topics over 5 study days gives 2 a day.
+- **Plan page**: every day from the earliest topic (or today) to the exam, then the revision
+  days and the exam day, each shown once.
+  - Topics are ticked or unticked with small POST forms, which work without JavaScript and are
+    version-checked.
+  - Unfinished topics on past days are "Overdue".
+  - **Re-plan from today** shares only unfinished topics out again; it is version-checked on the
+    plan, so a second tab is refused.
+  - "Add a topic" puts a topic on the last study day. Topics can be removed, and the whole plan
+    can be deleted.
+- **Dashboard → Today's study**: unfinished topics planned for today or earlier, for exams still
+  ahead, with overdue ones marked (at most 20). They are read in the same verified dashboard visit.
+- Storage: `academics_studyplan` and `academics_studytopic` (migrations 0020–0021).
+  - Forced RLS on both, with same-owner foreign keys (plan to course, topic to plan).
+  - Database checks: at most 3 revision days, trimmed non-empty topic titles.
+  - The runtime role has SELECT, INSERT and DELETE, plus UPDATE on the editable columns only
+    (never course, plan or owner).
+  - `require_runtime_role` now requires forced RLS on 12 tables; the auth role may not read them.
+  - Deleting a course deletes its plans and topics.
+  - The data export includes `study_plans` with their topics.
+- Tests: `tests/test_study_plan.py`, `security_tests/test_study_plan_rls.py`,
+  `web_tests/test_study_planner.py` and `tools/test_study_planner_browser.py`.

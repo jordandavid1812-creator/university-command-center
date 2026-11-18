@@ -151,6 +151,53 @@ class ClassSession(ValidatedRecord):
         ]
 
 
+# Study planner: a plan for one course's exam, and its topics spread over the days before it.
+MAX_REVIEW_DAYS = 3
+
+
+class StudyPlan(ValidatedRecord):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="study_plans")
+    # Deleting a course removes its study plans (and their topics).
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="study_plans")
+    exam_date = models.DateField()
+    review_days = models.PositiveSmallIntegerField(default=1)
+    record_version = models.PositiveBigIntegerField(default=1)
+
+    def clean(self):
+        if self.course_id and self.owner_id and not Course.objects.using(self._state.db).filter(
+                pk=self.course_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"course": "Course must belong to the plan owner."})
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["id", "owner"], name="studyplan_id_owner_unique"),
+            models.CheckConstraint(condition=models.Q(review_days__lte=MAX_REVIEW_DAYS), name="studyplan_review_days_valid"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1), name="studyplan_version_positive"),
+        ]
+
+
+class StudyTopic(ValidatedRecord):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="study_topics")
+    plan = models.ForeignKey(StudyPlan, on_delete=models.CASCADE, related_name="topics")
+    title = models.CharField(max_length=200)
+    position = models.PositiveIntegerField(default=0)
+    planned_date = models.DateField()
+    done = models.BooleanField(default=False)
+    record_version = models.PositiveBigIntegerField(default=1)
+
+    def clean(self):
+        if self.plan_id and self.owner_id and not StudyPlan.objects.using(self._state.db).filter(
+                pk=self.plan_id, owner_id=self.owner_id).exists():
+            raise ValidationError({"plan": "Plan must belong to the topic owner."})
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=~models.Q(title__regex=r"^\s*$") & ~models.Q(title__regex=r"^\s|\s$"),
+                                   name="studytopic_title_trimmed"),
+            models.CheckConstraint(condition=models.Q(record_version__gte=1), name="studytopic_version_positive"),
+        ]
+
+
 MAX_MATERIAL_BYTES = 10 * 1024 * 1024  # Keep in step with student_web/upload_validation.py.
 
 
