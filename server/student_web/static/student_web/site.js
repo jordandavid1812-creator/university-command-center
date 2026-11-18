@@ -1,8 +1,8 @@
-// Load the motion layer (app.js, built from frontend/src/app.ts) from the same folder.
-// Without JavaScript, or if it fails to load, every page still shows everything.
+// Load the motion layer and deadline pop-ups (built from frontend/src/*.ts) from the same folder.
+// Without JavaScript, or if they fail to load, every page still shows everything.
 const siteScript = document.currentScript;
 if (siteScript instanceof HTMLScriptElement && siteScript.src) {
-  import(new URL('app.js', siteScript.src).href).catch(() => {});
+  for (const name of ['app.js', 'reminders.js']) import(new URL(name, siteScript.src).href).catch(() => {});
 }
 
 // Progressive feedback only. Every form remains functional without JavaScript.

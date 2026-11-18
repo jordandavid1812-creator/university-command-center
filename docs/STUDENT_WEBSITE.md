@@ -434,6 +434,27 @@ validation, deeper search/selector scaling and production operations remain defe
 - Tests: `tests/test_class_bands.py`, `security_tests/test_class_bands.py`,
   `web_tests/test_class_bands.py`, `tools/test_class_bands_browser.py`.
 
+## Deadline reminders
+
+- **Dashboard → Due this week.** Seven day cards from today (Africa/Lagos dates). Each shows how
+  many pending assignments are due and which courses, or "Nothing due". Titles stay in
+  "Upcoming deadlines", which still shows at most five.
+  - Completed, overdue and later work is not counted.
+  - It is read in the same verified dashboard visit (`queries._due_this_week`, at most 50, with
+    a "more" note).
+  - On phones only today and days with work are shown.
+- **Deadline pop-ups (optional, Settings).** `frontend/src/reminders.ts` (compiled to
+  `reminders.js`, loaded by `site.js`) is off until the student presses **Turn on pop-ups** and
+  the browser allows notifications.
+  - At most once a day, when the dashboard opens, if something is due today or tomorrow, it
+    shows a pop-up with counts only, for example "1 assignment due today · 2 assignments due
+    tomorrow". It never shows titles, so nothing private appears on a lock screen.
+  - Browser storage holds only `ucc-reminders` = on and `ucc-reminded-on` = the date of the
+    last pop-up.
+  - It works only while a tab with the site is open; there is no server push.
+  - Without JavaScript, Settings explains this and the dashboard section still works.
+- Tests: `web_tests/test_reminders.py` and `tools/test_reminders_browser.py`.
+
 ## Results PDF
 
 - **GPA & CGPA → Download PDF** opens the printable summary with `?save=pdf`. `site.js` then
