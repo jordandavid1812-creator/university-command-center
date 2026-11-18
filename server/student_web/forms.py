@@ -2,7 +2,7 @@ import re
 import uuid
 from decimal import Decimal
 from django import forms
-from academic_logic import checked_credits, checked_target, checked_grade, GRADE_POINTS
+from academic_logic import CLASS_NAMES, checked_bands, checked_credits, checked_target, checked_grade, GRADE_POINTS
 from academics.models import LEVEL_CHOICES, MATRIC_PATTERN, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 from .upload_validation import MAX_UPLOAD_BYTES, validate_pdf_content, validate_text_content, validate_upload_metadata
@@ -199,6 +199,33 @@ class PlannerForm(StrictForm):
             return checked_credits(self.cleaned_data['remaining'])
         except ValueError as error:
             raise forms.ValidationError(str(error)) from error
+
+
+class ClassBandsForm(StrictForm):
+    """The student's own class-of-degree bands: the lowest CGPA for each class."""
+    FIELDS = ("first_class_min", "second_upper_min", "second_lower_min", "third_class_min", "pass_min")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, label in zip(self.FIELDS, CLASS_NAMES):
+            self.fields[name] = forms.DecimalField(label=f'{label}: lowest CGPA', min_value=0, max_value=5,
+                                                   max_digits=5, decimal_places=4,
+                                                   help_text='0–5, at most four decimal places.')
+
+    def clean(self):
+        values = super().clean()
+        if not self.errors:
+            try:
+                bands = checked_bands([values[name] for name in self.FIELDS])
+            except ValueError as error:
+                raise forms.ValidationError(str(error)) from error
+            values.update(zip(self.FIELDS, bands))
+        return values
+
+
+class AimForm(StrictForm):
+    """Planner shortcut: ?aim=0..4 fills the target with that class's lowest CGPA."""
+    aim = forms.TypedChoiceField(choices=[(str(i), name) for i, name in enumerate(CLASS_NAMES)], coerce=int)
 
 
 class ProjectionForm(StrictForm):

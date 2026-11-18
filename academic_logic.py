@@ -217,6 +217,47 @@ def projected_cgpa(courses, expected, remaining):
             "projected": projected}
 
 
+# Class of degree: the lowest CGPA for each class, highest class first. These defaults are a
+# common Nigerian 5-point guide only. Each student can edit theirs, and their own university's
+# handbook decides their actual class; nothing here decides graduation or classification rules.
+CLASS_NAMES = ("First Class", "Second Class Upper", "Second Class Lower", "Third Class", "Pass")
+DEFAULT_CLASS_BANDS = (Decimal("4.50"), Decimal("3.50"), Decimal("2.40"), Decimal("1.50"), Decimal("1.00"))
+
+
+def checked_bands(values):
+    """Five class minimums, highest class first: each 0-5 with at most four decimal places,
+    and each strictly lower than the class above it."""
+    if not isinstance(values, (list, tuple)) or len(values) != len(CLASS_NAMES):
+        raise ValueError("Enter a lowest CGPA for each of the five classes.")
+    bands = tuple(checked_target(value) for value in values)
+    if any(higher <= lower for higher, lower in zip(bands, bands[1:])):
+        raise ValueError("Each class needs a lower minimum than the class above it.")
+    return bands
+
+
+def class_standing(cgpa, bands=DEFAULT_CLASS_BANDS):
+    """Which band the actual CGPA falls in, and how far it is below the next band up.
+
+    Uses the unrounded CGPA. Read-only: it describes the student's own bands and never
+    decides a classification. `cgpa` is None when nothing is graded yet."""
+    bands = checked_bands(bands)
+    rows = [{"name": name, "low": low, "high": None if index == 0 else bands[index - 1]}
+            for index, (name, low) in enumerate(zip(CLASS_NAMES, bands))]
+    if cgpa is None:
+        return {"bands": rows, "cgpa": None, "current": None, "next": None, "gap": None}
+    cgpa = Decimal(cgpa)
+    current = next((row for row in rows if cgpa >= row["low"]), None)
+    if current is None:
+        upward = rows[-1]
+    else:
+        index = rows.index(current)
+        upward = rows[index - 1] if index else None
+    with localcontext() as context:
+        context.prec = 50
+        gap = None if upward is None else upward["low"] - cgpa
+    return {"bands": rows, "cgpa": cgpa, "current": current, "next": upward, "gap": gap}
+
+
 def validate_assignments(assignments, courses=None):
     """Return (original index, record) pairs; never repair or rewrite records."""
     if not isinstance(assignments, list):

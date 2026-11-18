@@ -115,6 +115,14 @@ def academic_snapshot(identity):
         return _academic_snapshot(identity.student_id)
 
 
+def standing_snapshot(identity):
+    """The academic snapshot plus the student's own profile (for class bands), in one verified read."""
+    with student_transaction(identity):
+        owner = identity.student_id
+        semesters, records = _academic_snapshot(owner)
+        return semesters, records, _records(StudentProfile, owner).first()
+
+
 def _academic_snapshot(owner):
     records = list(_records(Course, owner).select_related('semester').order_by(
         'semester__display_order', 'semester__created_at', 'semester_id', 'created_at', 'id')[:MAX_COURSES + 1])

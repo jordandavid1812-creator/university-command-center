@@ -188,3 +188,4 @@ jobs:
         working-directory: frontend
       - run: git diff --exit-code -- server/student_web/static/student_web/app.js
       - run: python tools/test_redesign_browser.py -v
+      - run: python tools/test_class_bands_browser.py -v

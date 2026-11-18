@@ -10,8 +10,9 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
-from academic_logic import (GRADE_POINTS, academic_summary, course_breakdown, predicted_summary, projected_cgpa,
-                            target_plan)
+from decimal import ROUND_CEILING, Decimal
+from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, academic_summary, class_standing, course_breakdown,
+                            predicted_summary, projected_cgpa, target_plan)
 from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
@@ -277,15 +278,48 @@ def assignment_status(request, identity, identifier):
 
 @protected()
 def overview(request, identity):
-    workspace = data.snapshot(identity)
+    workspace = data.standing(identity)
     return render(request, 'student_web/overview.html', {**workspace, **standing_context(workspace)})
 
 
+def class_bands(identity):
+    """(bands, profile, custom): the student's own class bands, or the common guide if none are saved."""
+    profile = services.profiles.current(identity)
+    bands, custom = _bands_of(profile)
+    return bands, profile, custom
+
+
+def _bands_of(profile):
+    """(bands, custom) for a profile (or None): its own five values, or the common guide."""
+    values = [getattr(profile, name) for name in services.CLASS_BAND_FIELDS] if profile else []
+    if values and all(value is not None for value in values):
+        return tuple(values), True
+    return DEFAULT_CLASS_BANDS, False
+
+
+def class_standing_view(cgpa, bands, custom):
+    """Where the actual CGPA sits among the bands, with bar geometry (percent of 0-5) for display."""
+    standing = class_standing(cgpa, bands)
+    rows = list(reversed(standing['bands']))  # lowest class first, left to right on the bar
+    segments = [{'name': 'Below Pass', 'left': 0, 'width': float(rows[0]['low']) * 20, 'tone': 0}]
+    for index, row in enumerate(rows, 1):
+        top = row['high'] if row['high'] is not None else Decimal(5)
+        segments.append({'name': row['name'], 'left': float(row['low']) * 20, 'width': float(top - row['low']) * 20,
+                         'tone': index})
+    gap = standing['gap']
+    # Round the distance up, so "0.01 more" is never shown when a little more is really needed.
+    gap = None if gap is None else gap.quantize(Decimal('0.01'), rounding=ROUND_CEILING)
+    return {**standing, 'segments': [s for s in segments if s['width'] > 0], 'gap': gap, 'custom': custom,
+            'marker': None if cgpa is None else float(cgpa) * 20}
+
+
 def standing_context(workspace):
-    """Chart, step-by-step breakdown and grade scale for the saved grades (read-only)."""
+    """Chart, step-by-step breakdown, grade scale and class standing for the saved grades (read-only)."""
     breakdown = present(course_breakdown(workspace['records']), workspace['labels'])
+    bands, custom = _bands_of(workspace.get('profile'))  # no profile read: the common guide
     return {'chart': charts.semester_chart(workspace['summary']), 'breakdown': breakdown,
-            'grade_scale': sorted(GRADE_POINTS.items(), key=lambda item: -item[1])}
+            'grade_scale': sorted(GRADE_POINTS.items(), key=lambda item: -item[1]),
+            'standing': class_standing_view(workspace['summary']['gpa'], bands, custom)}
 
 
 @protected(('GET', 'POST'))
@@ -319,8 +353,17 @@ def predictor(request, identity):
 
 @protected(('GET', 'POST'))
 def planner(request, identity):
-    workspace = data.snapshot(identity)
-    form = forms.PlannerForm(request.POST if request.method == 'POST' else None)
+    workspace = data.standing(identity)
+    bands, custom = _bands_of(workspace['profile'])
+    initial = {}
+    if request.method == 'GET' and request.GET:
+        # "Aim for a class" buttons: fill the target with that class's lowest CGPA. Nothing is saved.
+        aim = forms.AimForm(request.GET)
+        if not aim.is_valid():
+            return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(), 'result': None,
+                          'projection_form': forms.ProjectionForm(), 'aims': _aims(bands), 'aim_error': True}, status=400)
+        initial['target'] = bands[aim.cleaned_data['aim']]
+    form = forms.PlannerForm(request.POST if request.method == 'POST' else None, initial=initial)
     result = None
     status = 200
     if request.method == 'POST':
@@ -329,13 +372,17 @@ def planner(request, identity):
         else:
             status = 400
     return render(request, 'student_web/planner.html', {**workspace, 'form': form, 'result': result,
-                  'projection_form': forms.ProjectionForm()}, status=status)
+                  'projection_form': forms.ProjectionForm(), 'aims': _aims(bands), 'aims_custom': custom}, status=status)
+
+
+def _aims(bands):
+    return [{'index': index, 'name': name, 'low': low} for index, (name, low) in enumerate(zip(CLASS_NAMES, bands))]
 
 
 @protected(('POST',))
 def planner_projection(request, identity):
     """Graduation predictor: read-only, nothing hypothetical is saved."""
-    workspace = data.snapshot(identity)
+    workspace = data.standing(identity)
     form = forms.ProjectionForm(request.POST)
     projection = None
     status = 200
@@ -343,14 +390,16 @@ def planner_projection(request, identity):
         projection = projected_cgpa(workspace['records'], form.cleaned_data['expected'], form.cleaned_data['remaining'])
     else:
         status = 400
+    bands, custom = _bands_of(workspace['profile'])
     return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(), 'result': None,
-                  'projection_form': form, 'projection': projection}, status=status)
+                  'projection_form': form, 'projection': projection, 'aims': _aims(bands), 'aims_custom': custom},
+                  status=status)
 
 
 @protected()
 def standing_print(request, identity):
     """One-page printable summary of the saved grades (read-only)."""
-    workspace = data.snapshot(identity)
+    workspace = data.standing(identity)
     return render(request, 'student_web/standing_print.html',
                   {**workspace, **standing_context(workspace), 'printed_on': timezone.localdate()})
 
@@ -362,8 +411,10 @@ def settings(request, identity):
     matric = profile.matric_number if profile else ''
     # Show the last four characters only when at least half of the value stays hidden.
     masked = ('\u2022' * 6 + matric[-4:]) if len(matric) >= 8 else ('\u2022' * 6 if matric else '')
+    bands, custom = _bands_of(profile)
     return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
-                  'masked_matric': masked, 'storage': services.materials.storage(identity)})
+                  'masked_matric': masked, 'storage': services.materials.storage(identity),
+                  'class_bands': list(zip(CLASS_NAMES, bands)), 'class_bands_custom': custom})
 
 
 @protected()
@@ -381,7 +432,7 @@ def data_export(request, identity):
 @protected(('GET', 'POST'))
 def profile_edit(request, identity):
     profile = services.profiles.current(identity)
-    initial = {name: getattr(profile, name) for name in services.profiles.fields} if profile else {}
+    initial = {name: getattr(profile, name) for name in services.PROFILE_FIELDS} if profile else {}
     if profile:
         initial['version'] = profile.record_version
     form = forms.ProfileForm(request.POST if request.method == 'POST' else None, initial=initial)
@@ -409,6 +460,61 @@ def profile_edit(request, identity):
         else:
             status = 400
     return render(request, 'student_web/profile.html', {'form': form}, status=status)
+
+
+@protected(('GET', 'POST'))
+def class_bands_edit(request, identity):
+    """Edit the student's own class-of-degree bands (a guide; their handbook decides)."""
+    bands, profile, custom = class_bands(identity)
+    initial = dict(zip(forms.ClassBandsForm.FIELDS, bands))
+    if profile:
+        initial['version'] = profile.record_version
+    form = forms.ClassBandsForm(request.POST if request.method == 'POST' else None, initial=initial)
+    if profile:
+        forms.versioned(form)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            values = dict(form.cleaned_data)
+            version = values.pop('version', None)
+            try:
+                if profile:
+                    services.profiles.update(identity, profile.pk, version=version, **values)
+                else:
+                    services.profiles.create(identity, **values)
+            except services.RecordConflict:
+                form.add_error(None, 'Your profile changed in another tab. Reload this page before saving again.')
+                status = 409
+            except services.InvalidRecord:
+                form.add_error(None, 'These bands could not be saved. Check the numbers and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Class bands saved.')
+                return redirect('student_web:settings')
+        else:
+            status = 400
+    return render(request, 'student_web/class_bands.html', {'form': form, 'custom': custom,
+                  'defaults': list(zip(CLASS_NAMES, DEFAULT_CLASS_BANDS)),
+                  'reset_form': forms.versioned(forms.StrictForm(initial={'version': profile.record_version}))
+                  if profile and custom else None}, status=status)
+
+
+@protected(('POST',))
+def class_bands_reset(request, identity):
+    """Go back to the common guide: clear the student's own bands."""
+    _, profile, custom = class_bands(identity)
+    form = forms.versioned(forms.StrictForm(request.POST))
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Reload the class bands page and try again.', 400)
+    if profile and custom:
+        try:
+            services.profiles.update(identity, profile.pk, version=form.cleaned_data['version'],
+                                     **dict.fromkeys(services.CLASS_BAND_FIELDS))
+        except services.RecordConflict:
+            return error_page(request, 'Please reload', 'Your profile changed in another tab. Reload the class bands '
+                              'page and try again.', 409)
+    messages.success(request, 'Class bands reset to the common guide.')
+    return redirect('student_web:settings')
 
 
 @protected(('POST',))
