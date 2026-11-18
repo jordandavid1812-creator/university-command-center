@@ -16,6 +16,7 @@ def configure(namespace):
     namespace["ROOT_URLCONF"] = "config.auth_urls"
     namespace["MIDDLEWARE"] = [
         "django.middleware.security.SecurityMiddleware",
+        "accounts.middleware.ContentSecurityPolicyMiddleware",
         "django.contrib.sessions.middleware.SessionMiddleware",
         "accounts.middleware.DatabaseRoleBoundaryMiddleware",
         "django.middleware.common.CommonMiddleware",

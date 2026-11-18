@@ -48,3 +48,37 @@ class AuthFailureMiddleware:
             'failure', extra={'request': request,
                               'ucc_event': FailureEvent(EventKind.FAILURE, category, code)})
         return failure_response(category)
+
+
+# The browser rule for every page: scripts, styles, pictures and form posts may come only from
+# this site; plugins, <base> changes and framing by other sites are refused. Style *attributes*
+# stay allowed because the class-band bar places its parts with them (pages must work without
+# JavaScript), but <style> blocks and style sheets must still come from this site.
+CONTENT_SECURITY_POLICY = '; '.join((
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "style-src-elem 'self'",
+    "img-src 'self'",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+))
+
+
+class ContentSecurityPolicyMiddleware:
+    """Adds CONTENT_SECURITY_POLICY to responses that do not already set their own.
+
+    Downloads and the data export keep their stricter "default-src 'none'; sandbox" rule.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if 'Content-Security-Policy' not in response:
+            response['Content-Security-Policy'] = CONTENT_SECURITY_POLICY
+        return response
