@@ -5,6 +5,15 @@ This page records the plan and what each step added. It is built one small PR at
 
 ## Decisions
 
+**Update (owner's choice):** the database moves to **Supabase** (set up with numbered SQL files in
+its SQL editor, RLS on every table) and hosting to **Vercel**; big study files will go to
+**Supabase Storage** with storage-only keys. The step 2 server package stays as a tested backup
+option. See [SUPABASE_GUIDE.md](SUPABASE_GUIDE.md). Remaining steps: Supabase database (done in
+this step), Vercel hosting, real email, big uploads to Supabase Storage, AI limits, account
+deletion and email change, privacy page and terms, backups.
+
+Original decisions:
+
 - **Audience:** invited classmates first (about 5–20), then wider only after a review.
 - **Budget:** about $5–15 a month: one small cloud server (DigitalOcean recommended) running
   the website, its own PostgreSQL 17 and Caddy (automatic HTTPS), plus off-server backups.

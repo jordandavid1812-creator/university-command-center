@@ -73,6 +73,26 @@ def runtime_support_violation_sql(connection):
     return '(' + ' OR '.join(parts) + ')'
 
 
+# Supabase's Data API logins. They must never reach any table or private function here (the
+# Supabase security file revokes everything); on plain PostgreSQL they do not exist.
+PUBLIC_API_ROLES = ('anon', 'authenticated', 'service_role')
+
+
+def public_api_violation_sql():
+    """True if a Supabase Data API login can reach any table/view in public or ucc_security, or use
+    a function in the private schemas. Only module constants are interpolated."""
+    roles = ', '.join(f"'{role}'" for role in PUBLIC_API_ROLES)
+    return f"""(EXISTS (SELECT 1 FROM pg_roles api CROSS JOIN pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE api.rolname IN ({roles}) AND n.nspname IN ('public', 'ucc_security')
+                  AND c.relkind IN ('r', 'p', 'v', 'm')
+                  AND (has_table_privilege(api.oid, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                       OR has_any_column_privilege(api.oid, c.oid, 'SELECT, INSERT, UPDATE, REFERENCES')))
+            OR EXISTS (SELECT 1 FROM pg_roles api CROSS JOIN pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE api.rolname IN ({roles}) AND n.nspname IN ('ucc_security', 'ucc_crypto')
+                  AND has_schema_privilege(api.oid, n.oid, 'USAGE')
+                  AND has_function_privilege(api.oid, p.oid, 'EXECUTE')))"""  # nosec B608
+
+
 def require_auth_role():
     connection = connections['auth']
     with connection.cursor() as cursor:
@@ -102,9 +122,11 @@ def require_auth_role():
             OR has_any_column_privilege(current_user, 'academics_studytopic', 'SELECT')
             OR {support}
             OR {maintain}
+            OR {public_api}
             FROM pg_roles r WHERE rolname=current_user'''
         # Only module constants are interpolated (table/column/privilege names), never input.
         cursor.execute(sql.format(support=auth_support_violation_sql(connection),  # nosec B608
-                                  maintain=maintain_anywhere_sql(connection)))
+                                  maintain=maintain_anywhere_sql(connection),
+                                  public_api=public_api_violation_sql()))
         if cursor.fetchone() != (False,):
             raise ImproperlyConfigured('Authentication requires a separate restricted database role.')
