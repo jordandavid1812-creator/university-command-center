@@ -61,7 +61,7 @@ def _material_with_text(identity, identifier, tool='', question=''):
     """The student's stored material and the text that would be sent. For "Ask a question" only
     the parts that best match the question are sent (the same on the confirm page and at send)."""
     material, content = services.materials.read_file(identity, identifier)
-    extracted = text_extraction.extract_text(material.file_type, content)
+    extracted = text_extraction.extract_text_remembered(material.file_type, content)
     if tool == 'answer':
         extracted = text_extraction.focus_on_question(extracted, question)
     return material, extracted
