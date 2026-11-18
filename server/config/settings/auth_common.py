@@ -58,6 +58,9 @@ def configure(namespace):
         # S0-01: forwarded headers are never trusted until a reviewed deployment
         # topology lists its proxy networks here. Keep empty in every profile.
         UCC_TRUSTED_PROXIES=(),
+        # Launch step 3: invite-only sign-up. Off for the local website; web_production turns it
+        # on and its system check (accounts.E106) refuses to start the public site without it.
+        UCC_REQUIRE_INVITE=False,
     )
     # B1a only: application aliases; test/offline migrator defaults stay untouched.
     from accounts.dbsafety import apply_db_safety

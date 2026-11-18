@@ -10,6 +10,11 @@ SUPPORT_TABLES = {
     'accounts_loginlimit': (('SELECT', 'INSERT', 'DELETE'), ('attempts', 'expires_at')),
     'accounts_devicegeneration': (('SELECT', 'INSERT'), ('generation',)),
 }
+# Launch step 3: checked exactly like the support tables, but on its own (it arrives in a later
+# migration, so it is not part of the all-or-none support-table count).
+INVITE_TABLES = {
+    'accounts_invitecode': (('SELECT',), ('used_at',)),
+}
 BASE_TABLE_PRIVILEGES = ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')
 
 
@@ -33,7 +38,7 @@ def auth_support_violation_sql(connection):
     privileges = table_privileges(connection)
     grant_options = ', '.join(f'{privilege} WITH GRANT OPTION' for privilege in privileges)
     parts = []
-    for table, (required, updatable) in SUPPORT_TABLES.items():
+    for table, (required, updatable) in {**SUPPORT_TABLES, **INVITE_TABLES}.items():
         name = f'public.{table}'
         forbidden = ', '.join(p for p in privileges if p not in required and p != 'UPDATE')
         expected = ', '.join(f"'{column}'" for column in sorted(updatable))
@@ -59,12 +64,12 @@ def auth_support_violation_sql(connection):
 
 
 def runtime_support_violation_sql(connection):
-    """True if the runtime role holds ANY privilege on a support table (incl. MAINTAIN)."""
+    """True if the runtime role holds ANY privilege on a support or invite table (incl. MAINTAIN)."""
     privileges = ', '.join(table_privileges(connection))
     parts = [f"""CASE WHEN to_regclass('public.{table}') IS NULL THEN false ELSE
                  has_table_privilege(current_user, 'public.{table}', '{privileges}')
                  OR has_any_column_privilege(current_user, 'public.{table}', 'SELECT, INSERT, UPDATE, REFERENCES') END"""
-             for table in SUPPORT_TABLES]
+             for table in {**SUPPORT_TABLES, **INVITE_TABLES}]
     return '(' + ' OR '.join(parts) + ')'
 
 

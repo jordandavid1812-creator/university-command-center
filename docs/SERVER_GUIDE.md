@@ -101,6 +101,22 @@ docker compose -f deploy/compose.yml up -d
 
 Open `https://YOUR-DOMAIN`. The first visit can take a minute while Caddy gets the certificate.
 
+## I. Invite classmates
+
+Sign-up needs an invite code. Make three (each works once, for 14 days):
+
+```bash
+docker compose -f deploy/compose.yml run --rm migrate python manage.py invites create --count 3
+```
+
+The codes are shown only then: send each one privately to one person. To see which are used,
+or cancel an unused one by its number:
+
+```bash
+docker compose -f deploy/compose.yml run --rm migrate python manage.py invites list
+docker compose -f deploy/compose.yml run --rm migrate python manage.py invites cancel 4
+```
+
 ## Everyday commands (run in `university-command-center` on the server)
 
 | Task | Command |

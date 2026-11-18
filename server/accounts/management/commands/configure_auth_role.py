@@ -68,4 +68,10 @@ class Command(BaseCommand):
                         sql.SQL(privileges), sql.Identifier(table), sql.Identifier(role)))
                     cursor.execute(sql.SQL('GRANT UPDATE ({}) ON {} TO {}').format(
                         sql.SQL(', ').join(map(sql.Identifier, fields)), sql.Identifier(table), sql.Identifier(role)))
+            # Launch step 3 invites (accounts.0004): read a code by digest and mark it used. No
+            # INSERT or DELETE; codes are created by the owner with the migrator login.
+            cursor.execute('SELECT to_regclass(%s) IS NOT NULL', ['public.accounts_invitecode'])
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL('GRANT SELECT ON accounts_invitecode TO {}').format(sql.Identifier(role)))
+                cursor.execute(sql.SQL('GRANT UPDATE (used_at) ON accounts_invitecode TO {}').format(sql.Identifier(role)))
         self.stdout.write('Separate authentication role configured; academic runtime privileges unchanged.')

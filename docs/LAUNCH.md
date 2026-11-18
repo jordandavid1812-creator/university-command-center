@@ -15,8 +15,8 @@ This page records the plan and what each step added. It is built one small PR at
 ## Steps
 
 1. **Production settings** (done): `config.settings.web_production`, gunicorn, whitenoise.
-2. **Server package** (this step): Docker Compose for website + PostgreSQL + Caddy, and a step-by-step guide.
-3. Invite-only sign-up.
+2. **Server package** (done): Docker Compose for website + PostgreSQL + Caddy, and a step-by-step guide.
+3. **Invite-only sign-up** (this step).
 4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
 5. AI limits for the shared key.
 6. Account deletion and email change.
@@ -88,3 +88,46 @@ Tests:
   `nosniff` headers, no `Server` header and `__Host-` cookies; compressed static files; other
   host names get nothing; 12 MiB uploads get 413; and forged `X-Forwarded-For` values cannot
   dodge the sign-in limit.
+
+
+## Step 3: invite-only sign-up
+
+On the public site (`UCC_REQUIRE_INVITE = True` in `web_production`; system check
+**`accounts.E106`** refuses a public profile without it) the Register page asks for an
+**invite code**. The local website is unchanged (no code needed).
+
+- **Codes:** `ABCD-EFGH-JKMN-PQRS-TVWX` — 20 characters from 30 easy-to-read letters and
+  digits (no 0/O, 1/I/L, U), about 98 bits of randomness. Typing is forgiving about case, spaces
+  and dashes. Only a SHA-256 digest is stored (`accounts_invitecode`, migration
+  `accounts.0004`), so codes cannot be read back from the database. Each expires (default 14
+  days, at most 60) and works once.
+- **Using a code:** checked only when the rest of the form is valid, then used up in the same
+  `auth` transaction as the new account, under a row lock, so a failure leaves it unused and two
+  people cannot use one code. A duplicate username or email still uses the code and gets the
+  same generic reply, so a code cannot be replayed to discover accounts. The existing sign-up
+  limit (5 per hour per address) applies before any code is checked.
+- **Database rights:** the auth role may only `SELECT` codes and `UPDATE (used_at)` — no insert,
+  delete or other columns. The academic runtime role has no access. Both are enforced by the
+  existing exact-allowlist checks (`accounts.boundary.INVITE_TABLES`): any extra or missing
+  grant stops the website (503) before it serves a request.
+- **Owner command** (migrator login only, in the one-off `migrate` container):
+
+  ```bash
+  docker compose -f deploy/compose.yml run --rm migrate python manage.py invites create --count 3 --note "Class rep"
+  docker compose -f deploy/compose.yml run --rm migrate python manage.py invites list
+  docker compose -f deploy/compose.yml run --rm migrate python manage.py invites cancel 4
+  ```
+
+  `create` shows the codes once (1–50 at a time, optional note of up to 60 characters); `list`
+  shows number, status (unused until / used / expired) and note, never codes; `cancel` ends an
+  unused code. No personal details are stored with a code beyond the owner's optional note.
+
+Tests: `auth_tests/test_invites.py` (18, real PostgreSQL with the separate roles): code shape,
+randomness and digest-only storage; the form field; missing, wrong, malformed, expired and
+cancelled codes create nothing; a code works exactly once; forgiving input; other form errors
+and a failed account creation leave the code unused; a duplicate username uses the code with
+the generic reply; the sign-up limit still applies; the local site asks for no code; E106;
+the auth role can only read and mark used; the runtime role cannot read; six kinds of grant
+drift stop the website; and the owner command creates, lists (never showing codes), cancels and
+refuses bad values. `tools/test_server_package.py` now signs up on the real server with a code
+made by the owner command, after a missing and a wrong code are refused.
