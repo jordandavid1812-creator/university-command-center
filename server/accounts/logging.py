@@ -56,6 +56,7 @@ ROUTES = (
     'student_web:material-upload', 'student_web:material-list', 'student_web:material-delete',
     'student_web:material-download', 'student_web:display-preference',
     'student_web:profile-edit', 'student_web:data-export',
+    'student_web:planner-projection', 'student_web:standing-print',
     'student_web:ai-tools', 'student_web:ai-confirm', 'student_web:ai-send', 'student_web:ai-request',
     'student_web:ai-result', 'student_web:ai-result-download', 'student_web:ai-result-delete',
 )

@@ -1,0 +1,32 @@
+/* GPA & CGPA page, planner projection and printable summary. Chart colours are a validated
+   pair (light here, dark in theme-dark.css); text always uses the text tokens. */
+:root { --chart-1:#2a78d6; --chart-2:#eb6834; }
+.standing-chart { margin:0 0 var(--space-5); }
+.standing-chart figcaption { margin-bottom:var(--space-2); }
+.standing-chart svg { display:block; width:100%; height:auto; max-height:22rem; }
+.standing-legend { display:flex; flex-wrap:wrap; gap:var(--space-4); list-style:none; margin:0 0 var(--space-2); padding:0;
+  color:var(--color-text-muted); font-size:var(--type-meta); }
+.standing-legend li { display:flex; align-items:center; gap:var(--space-2); }
+.standing-swatch { display:inline-block; width:1rem; }
+.standing-swatch.bar { height:.75rem; border-radius:3px; background:var(--chart-1); }
+.standing-swatch.line { height:0; border-top:2px dashed var(--chart-2); }
+.standing-grid { stroke:var(--color-border-subtle); stroke-width:1; }
+.standing-axis { fill:var(--color-text-muted); font-size:12px; }
+.standing-bar path { fill:var(--chart-1); }
+.standing-hit { fill:transparent; }
+.standing-bar:hover path { opacity:.85; }
+.standing-cgpa { stroke:var(--chart-2); stroke-width:2; stroke-dasharray:6 4; }
+.standing-cgpa-label { fill:var(--color-text); font-size:12px; font-weight:700; }
+.standing-steps { padding-left:var(--space-6); display:grid; gap:var(--space-1); }
+.standing-table { margin-bottom:var(--space-4); }
+.standing-table tfoot th, .standing-table tfoot td { font-weight:600; }
+.standing-total { font-size:1.125rem; }
+.standing-panel .planner-result { margin-top:var(--space-5); }
+.standing-result { font-size:2.25rem; font-weight:800; margin:var(--space-2) 0; }
+@media print {
+  .sidebar, .topbar, .mobile-nav, .page-footer, .skip-link, .action-row, .standing-noprint { display:none !important; }
+  .main-content, .workspace { margin:0; padding:0; }
+  .panel, .standing-table { break-inside:avoid; box-shadow:none; }
+  .standing-bar path { fill:#2a78d6; }
+  .standing-cgpa { stroke:#eb6834; }
+}

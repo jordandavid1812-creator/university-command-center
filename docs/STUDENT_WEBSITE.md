@@ -231,6 +231,44 @@ Account settings has three more items:
 Tests: `web_tests.test_settings_data` (owner-only content, no file contents or fingerprints, headers, exact credits, local-date file name,
 sign-in and GET only, forged identities refused, too-large workspace, storage text).
 
+## Know where you stand (part A)
+
+Ideas from popular CGPA calculators, built on the app's existing rules. No calculation
+formula changed: two new pure helpers in `academic_logic.py` reuse `validate_courses`,
+`GRADE_POINTS`, `checked_target` and `checked_credits`, so duplicates, ungraded courses and
+input limits behave exactly as before.
+
+- **GPA & CGPA page** (`/performance/`):
+  - **Semester GPA chart**, drawn as SVG on the server (no JavaScript or chart library):
+    one bar per graded semester, in the order of the Semesters page (the caption says
+    so, since order does not imply chronology), with the overall CGPA as a dashed,
+    directly labelled reference line. Each bar has a hover title; the semester table
+    below is the table view. Colours are a validated pair (blue `#2a78d6` bars, orange
+    `#eb6834` line; dark mode `#3987e5`/`#d95926` in `theme-dark.css`), checked with the
+    dataviz palette validator against the site's light and dark surfaces.
+  - **How your CGPA is calculated**: `course_breakdown` shows every course's grade
+    points and quality points (units × points), each semester's GPA as points ÷ units,
+    and the overall CGPA as all points ÷ all graded units. Ungraded courses are listed
+    as "not counted". Its totals equal `academic_summary` exactly.
+  - **Grade scale**: the A–F points the app uses, with a note that score ranges and
+    degree-class boundaries come from the student's handbook.
+- **Graduation predictor** on the Target CGPA Planner (`POST /planner/projection/`):
+  `projected_cgpa` gives the final CGPA if the student averages a GPA they enter over
+  remaining credits they enter. It is read-only: actual grades stay fixed and nothing
+  is saved. It has its own field IDs beside the target form.
+- **Printable summary** (`/performance/print/`): metrics, chart, semester table and the
+  full working, with a "Print or save as PDF" button (shown by `site.js`; without
+  JavaScript the page explains Ctrl+P). Print styles hide navigation and buttons. It
+  says it is not an official transcript.
+- Styles live in `static/student_web/standing.css`, loaded only on these pages, so the
+  `site.css` budgets are unchanged.
+- Tests: `tests.test_standing` (calculations; totals match `academic_summary`) and
+  `web_tests.test_standing` (chart, working, scale, predictor, print page, owner-only,
+  signed-out).
+
+Part B (degree-class guide with editable bands, class targets and a "where you stand"
+bar) needs a small database change and comes in its own PR.
+
 ## Local startup
 
 Use the Python 3.12 hashed dependency setup and TWO application roles described in
