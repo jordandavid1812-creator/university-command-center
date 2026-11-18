@@ -37,6 +37,12 @@ def send_buttons(providers):
             for index, code in enumerate(providers)]
 
 DEADLINE_SECONDS = 60
+# Gemini 3 models "think" before answering by default, which can take most of a minute.
+# A low thinking level answers in seconds (Google's advice when speed matters). Owners may set
+# UCC_GEMINI_THINKING to minimal, low, medium or high, or "default" to send no setting.
+THINKING_VARIABLE = "UCC_GEMINI_THINKING"
+THINKING_LEVELS = ("minimal", "low", "medium", "high")
+DEFAULT_THINKING = "low"
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_OUTPUT_TOKENS = {"summary": 2048, "answer": 2048, "quiz": 4096, "flashcards": 4096}
 SHAPE_VERSION = 1
@@ -190,13 +196,26 @@ def parse_result(tool, raw):
 
 # --- provider formats ----------------------------------------------------------------------
 
+def gemini_thinking(model):
+    """The thinking setting to send, or None. Only Gemini 3 models take a thinking level; for any
+    other model nothing is sent, so an older model never gets a setting it would refuse."""
+    # Unset means the low default; "default" (or anything else) sends no setting.
+    choice = DEFAULT_THINKING if _setting(THINKING_VARIABLE, "") == "" else _setting(THINKING_VARIABLE, "[a-z]{1,10}")
+    if choice not in THINKING_LEVELS or not model.startswith("gemini-3"):
+        return None
+    return {"thinkingLevel": choice}
+
+
 def gemini_request(model, key, system, user, tool):
     path = f"/v1beta/models/{model}:generateContent"
     headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+    config = {"responseMimeType": "application/json", "maxOutputTokens": MAX_OUTPUT_TOKENS[tool], "temperature": 0.2}
+    thinking = gemini_thinking(model)
+    if thinking:
+        config["thinkingConfig"] = thinking
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {"responseMimeType": "application/json",
-                                 "maxOutputTokens": MAX_OUTPUT_TOKENS[tool], "temperature": 0.2}}
+            "generationConfig": config}
     return path, headers, body
 
 
