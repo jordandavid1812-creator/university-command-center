@@ -14,7 +14,7 @@ from django.utils import timezone
 import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, Course, MaterialFile, MaterialText,
+from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
                      Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial)
 from .ownership import database_alias, require_identity, student_transaction
 
@@ -178,6 +178,8 @@ courses = StudentRecords(Course, {"semester_id", "original_code", "name", "credi
                          ("semester_id", Semester))
 assignments = StudentRecords(Assignment, {"course_id", "title", "due_date", "completed"},
                              ("course_id", Course))
+class_sessions = StudentRecords(ClassSession, {"course_id", "weekday", "start_time", "end_time", "kind", "venue"},
+                                ("course_id", Course))
 
 
 class MaterialRecords(StudentRecords):

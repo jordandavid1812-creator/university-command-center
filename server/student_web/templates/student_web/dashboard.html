@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Dashboard · University Command Center{% endblock %}
 {% block body_class %}dashboard-page{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}"><link rel="stylesheet" href="{% static 'student_web/week.css' %}">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}"><link rel="stylesheet" href="{% static 'student_web/week.css' %}"><link rel="stylesheet" href="{% static 'student_web/timetable.css' %}">{% endblock %}
 {% block content %}
 <div class="dashboard">
   <header class="page-heading dashboard-heading dashboard-welcome">
@@ -53,6 +53,12 @@
       <a class="dashboard-link" href="{% url 'student_web:assignment-list' %}">Manage assignments <span aria-hidden="true">→</span></a>
     </section>
   </div>
+
+  {% if show_today_classes %}<section class="panel dashboard-today" aria-labelledby="today-title">
+    <div class="section-heading"><h2 id="today-title">Today's classes</h2><a href="{% url 'student_web:timetable' %}">Full timetable</a></div>
+    {% if today_classes %}<ul class="today-classes">{% for item in today_classes %}<li class="{% if item.pk == next_class %}is-next{% elif item.end_time <= now %}is-over{% endif %}"><p class="timetable-time"><time>{{ item.start_time|time:"H:i" }}</time>–<time>{{ item.end_time|time:"H:i" }}</time>{% if item.pk == next_class %} · {% if item.start_time <= now %}Now{% else %}Next{% endif %}{% elif item.end_time <= now %} · Done{% endif %}</p><p><strong>{{ item.course.normalized_code }}</strong> {{ item.course.name }}</p><p class="timetable-meta">{{ item.get_kind_display }}{% if item.venue %} · {{ item.venue }}{% endif %}</p></li>{% endfor %}</ul>
+    {% else %}<p class="dashboard-note">No classes today. <a href="{% url 'student_web:session-create' %}">Add a class</a> to see it here on its day.</p>{% endif %}
+  </section>{% endif %}
 
   {% if week %}<section class="panel dashboard-week" aria-labelledby="week-title">
     <div class="section-heading"><h2 id="week-title">Due this week</h2><a href="{% url 'student_web:assignment-list' %}?status=upcoming">All upcoming work</a></div>

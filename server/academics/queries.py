@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
-from .models import (Assignment, Course, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
+from .models import (Assignment, ClassSession, Course, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
                      StudyMaterial)
 from .ownership import database_alias, student_transaction
 from .services import (AI_REQUESTS_PER_DAY, MAX_AI_RESULTS_PER_STUDENT, InvalidRecord, RecordNotFound, ai_day_range,
@@ -155,6 +155,25 @@ def _due_this_week(owner, today):
         .select_related('course').order_by('due_date', 'id')[:WEEK_LIMIT + 1])
 
 
+MAX_CLASSES = 300
+
+
+def _classes(owner, weekday=None):
+    records = _records(ClassSession, owner).select_related('course')
+    if weekday is not None:
+        records = records.filter(weekday=weekday)
+    rows = list(records.order_by('weekday', 'start_time', 'end_time', 'id')[:MAX_CLASSES + 1])
+    if len(rows) > MAX_CLASSES:
+        raise WorkspaceLimit(f'The timetable supports up to {MAX_CLASSES} classes. No records were changed.')
+    return rows
+
+
+def timetable(identity):
+    """All of the student's weekly classes with their courses, Monday first, in time order."""
+    with student_transaction(identity):
+        return _classes(identity.student_id)
+
+
 def assignment_metrics(identity, today):
     with student_transaction(identity):
         return _assignment_metrics(identity.student_id, today)
@@ -167,7 +186,8 @@ def dashboard_reads(identity, today):
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
         name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
-        return semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today)
+        return (semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today),
+                _classes(owner, today.weekday()))
 
 
 def _ai_panel(owner):
@@ -199,10 +219,11 @@ def export_records(identity):
         profile = _records(StudentProfile, owner).first()
         ai_requests = list(_records(StudyAiRequest, owner).order_by("created_at", "id")[:MAX_EXPORT_AI_REQUESTS + 1])
         ai_results = list(_records(StudyAiResult, owner).order_by("created_at", "id")[:MAX_AI_RESULTS_PER_STUDENT + 1])
-    if (len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
+        classes = list(_records(ClassSession, owner).order_by("weekday", "start_time", "id")[:MAX_CLASSES + 1])
+    if (len(classes) > MAX_CLASSES or len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
             or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS
             or len(ai_requests) > MAX_EXPORT_AI_REQUESTS or len(ai_results) > MAX_AI_RESULTS_PER_STUDENT):
         raise WorkspaceLimit("Your workspace is too large to export in one file. No file was created.")
     return {"semesters": semesters, "courses": courses, "assignments": assignments,
             "materials": materials, "stored": stored, "profile": profile,
-            "ai_requests": ai_requests, "ai_results": ai_results}
+            "ai_requests": ai_requests, "ai_results": ai_results, "classes": classes}

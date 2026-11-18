@@ -3,7 +3,7 @@ import uuid
 from decimal import Decimal
 from django import forms
 from academic_logic import CLASS_NAMES, checked_bands, checked_credits, checked_target, checked_grade, GRADE_POINTS
-from academics.models import LEVEL_CHOICES, MATRIC_PATTERN, Course
+from academics.models import CLASS_KINDS, LEVEL_CHOICES, MATRIC_PATTERN, WEEKDAYS, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 from .upload_validation import MAX_UPLOAD_BYTES, validate_pdf_content, validate_text_content, validate_upload_metadata
 
@@ -63,6 +63,29 @@ class AssignmentForm(StrictForm):
     def __init__(self, *args, courses, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+
+class ClassSessionForm(StrictForm):
+    """One weekly class on the timetable."""
+    course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available.')
+    weekday = forms.TypedChoiceField(coerce=int, label='Day', choices=[(str(n), name) for n, name in WEEKDAYS])
+    start_time = forms.TimeField(label='Starts', widget=forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+                                 input_formats=['%H:%M'], help_text='24-hour time, for example 08:00.')
+    end_time = forms.TimeField(label='Ends', widget=forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+                               input_formats=['%H:%M'], help_text='Must be after the start, on the same day.')
+    kind = forms.ChoiceField(label='Type', choices=CLASS_KINDS, initial='lecture')
+    venue = forms.CharField(max_length=100, required=False, label='Venue', help_text='For example, LT2 or Online.')
+
+    def __init__(self, *args, courses, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+
+    def clean(self):
+        values = super().clean()
+        start, end = values.get('start_time'), values.get('end_time')
+        if start and end and end <= start:
+            self.add_error('end_time', 'The class must end after it starts (on the same day).')
+        return values
+
 
 class MaterialUploadForm(StrictForm):
     title = forms.CharField(max_length=200, label='Material title', help_text='For example, Week 3 lecture notes.')

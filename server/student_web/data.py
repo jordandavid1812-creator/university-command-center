@@ -1,6 +1,7 @@
 """Adapt PostgreSQL records to the established pure academic engine."""
 from datetime import timedelta
 from academic_logic import academic_summary
+from academics.models import WEEKDAYS
 from academics.queries import WEEK_DAYS, WEEK_LIMIT, academic_snapshot, dashboard_reads, standing_snapshot
 
 
@@ -9,9 +10,26 @@ def snapshot(identity, today=None):
     returns assignment totals, upcoming work and the greeting name, in one transaction."""
     if today is None:
         return workspace(*academic_snapshot(identity))
-    semesters, courses, totals, upcoming, greeting_name, ai_panel, due = dashboard_reads(identity, today)
+    semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes = dashboard_reads(identity, today)
     return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
-            'ai_panel': ai_panel, 'week': due_this_week(due, today)}
+            'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True}
+
+
+def timetable_days(classes):
+    """Monday to Sunday, each with its classes in time order. A class that starts before the
+    previous one on the same day has ended is marked as a clash (shown as a warning only)."""
+    days = [{'weekday': number, 'name': name, 'classes': []} for number, name in WEEKDAYS]
+    for item in classes:
+        days[item.weekday]['classes'].append({'item': item, 'clash': False})
+    clashes = 0
+    for day in days:
+        latest_end = None
+        for row in day['classes']:
+            if latest_end is not None and row['item'].start_time < latest_end:
+                row['clash'] = True
+                clashes += 1
+            latest_end = max(latest_end, row['item'].end_time) if latest_end else row['item'].end_time
+    return days, clashes
 
 
 def due_this_week(assignments, today):
