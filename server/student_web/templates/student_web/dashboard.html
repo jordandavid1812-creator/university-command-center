@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Dashboard · University Command Center{% endblock %}
 {% block body_class %}dashboard-page{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}"><link rel="stylesheet" href="{% static 'student_web/week.css' %}">{% endblock %}
 {% block content %}
 <div class="dashboard">
   <header class="page-heading dashboard-heading dashboard-welcome">
@@ -53,6 +53,15 @@
       <a class="dashboard-link" href="{% url 'student_web:assignment-list' %}">Manage assignments <span aria-hidden="true">→</span></a>
     </section>
   </div>
+
+  {% if week %}<section class="panel dashboard-week" aria-labelledby="week-title">
+    <div class="section-heading"><h2 id="week-title">Due this week</h2><a href="{% url 'student_web:assignment-list' %}?status=upcoming">All upcoming work</a></div>
+    <p class="dashboard-note">{% if week.total %}{{ week.total }}{% if week.more %}+{% endif %} pending assignment{{ week.total|pluralize }} due in the next 7 days · Africa/Lagos dates{% else %}Nothing due in the next 7 days.{% endif %}</p>
+    {% if week.total %}<ol class="week-days">{% for day in week.days %}<li class="week-day{% if day.items %} has-work{% endif %}{% if forloop.first %} is-today{% endif %}"><h3><time datetime="{{ day.date|date:'Y-m-d' }}">{{ day.label }}</time>{% if day.items %}<span class="week-count">{{ day.items|length }}<span class="sr-only"> due</span></span>{% endif %}</h3>{% if day.items %}<p class="week-what">{{ day.items|length }} due<span>{{ day.codes|join:", " }}</span></p>{% else %}<p class="week-free">Nothing due</p>{% endif %}</li>{% endfor %}</ol>{% endif %}
+    {% if week.more %}<p class="dashboard-note">Showing the first 50. <a href="{% url 'student_web:assignment-list' %}?status=upcoming">See all upcoming work</a></p>{% endif %}
+    <p class="dashboard-note week-popups"><a href="{% url 'student_web:settings' %}#reminders-heading">Deadline pop-ups</a> can remind you while this site is open.</p>
+    {{ week.counts|json_script:"ucc-due-soon" }}
+  </section>{% endif %}
 
   <section class="panel dashboard-ai" aria-labelledby="ai-title">
     <div class="section-heading"><h2 id="ai-title">AI study tools</h2><a href="{% url 'student_web:material-list' %}">Open study materials</a></div>

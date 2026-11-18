@@ -17,3 +17,5 @@
 .display-form .action-row { margin-top:var(--space-4); }
 .form-panel > section { margin-top:var(--space-8); padding-top:var(--space-6); border-top:1px solid var(--edge); }
 .form-panel > section ~ p:last-child { margin-top:var(--space-6); }
+/* Deadline pop-ups: the script shows one button at a time (the button style would otherwise win over hidden). */
+.action-row[hidden], .action-row > .button[hidden] { display:none; }
