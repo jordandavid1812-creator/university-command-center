@@ -1,0 +1,19 @@
+# Caddy gets and renews the HTTPS certificate for the one site name, redirects http:// to
+# https://, and passes requests to the website. It answers for no other name.
+{
+	admin off
+}
+
+{$UCC_SITE_HOST} {
+	# An email address for certificate notices (or "internal" for local tests only).
+	tls {$UCC_CADDY_TLS}
+	encode zstd gzip
+	# Study files are limited to 10 MiB by the website; refuse anything bigger here first.
+	request_body {
+		max_size 11MB
+	}
+	# Caddy replaces any X-Forwarded-For a visitor sends with their real address, and sets
+	# X-Forwarded-Proto: https, which the website trusts from this network only.
+	reverse_proxy web:8000
+	header -Server
+}
