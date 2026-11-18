@@ -433,3 +433,22 @@ validation, deeper search/selector scaling and production operations remain defe
 - The data export includes the student's own bands (exact strings) or `null`.
 - Tests: `tests/test_class_bands.py`, `security_tests/test_class_bands.py`,
   `web_tests/test_class_bands.py`, `tools/test_class_bands_browser.py`.
+
+## Results PDF
+
+- **GPA & CGPA → Download PDF** opens the printable summary with `?save=pdf`. `site.js` then
+  opens the browser's print window once, after the page loads; the student chooses **Save as
+  PDF**. Without JavaScript the page explains Ctrl+P. No PDF library is used (owner decision);
+  the browser's own PDF writer makes the file.
+- The page title, which browsers use as the PDF file name, is
+  "Academic summary YYYY-MM-DD - University Command Center".
+- The summary shows the student's own display name, programme, level and institution when
+  set, never the matric number.
+- Print styles (`standing.css`):
+  - A4 pages with a "University Command Center · Academic summary" header and
+    "Page N of M" footer (CSS page margin boxes).
+  - Colours are kept, and pages are always light.
+  - Long sections continue over pages, but a table row, the chart or the class bar is never cut.
+  - No menu, buttons or links.
+- Tests: `web_tests/test_results_pdf.py` and `tools/test_results_pdf_browser.py`. The browser
+  test makes a real PDF with Chromium and reads it back with pypdf.
