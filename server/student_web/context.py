@@ -26,7 +26,8 @@ def navigation(request):
     if authenticated:
         for name, label in (
             ('dashboard', 'Dashboard'), ('course-list', 'Courses'), ('semester-list', 'Semesters'),
-            ('assignment-list', 'Assignments'), ('timetable', 'Timetable'), ('overview', 'GPA & CGPA'),
+            ('assignment-list', 'Assignments'), ('timetable', 'Timetable'), ('study-plans', 'Study planner'),
+            ('overview', 'GPA & CGPA'),
             ('predictor', 'GPA Predictor'),
             ('planner', 'Target CGPA Planner'), ('material-list', 'Study materials'),
             ('settings', 'Account settings'),

@@ -34,6 +34,11 @@ def document(records, account, exported_at):
         "timetable": [{"id": str(c.pk), "course_id": str(c.course_id), "day": c.get_weekday_display(),
                        "start": c.start_time.strftime("%H:%M"), "end": c.end_time.strftime("%H:%M"),
                        "type": c.kind, "venue": c.venue} for c in records.get("classes", [])],
+        "study_plans": [{"id": str(p.pk), "course_id": str(p.course_id), "exam_date": p.exam_date.isoformat(),
+                         "review_days": p.review_days,
+                         "topics": [{"title": t.title, "planned_date": t.planned_date.isoformat(), "done": t.done}
+                                    for t in records.get("topics", []) if t.plan_id == p.pk]}
+                        for p in records.get("plans", [])],
         "study_materials": [{"id": str(m.pk), "course_id": str(m.course_id), "title": m.title,
                              "original_filename": m.original_filename, "file_type": m.file_type,
                              "size_bytes": m.size_bytes, "file_stored": m.pk in records["stored"],

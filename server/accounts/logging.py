@@ -59,6 +59,8 @@ ROUTES = (
     'student_web:planner-projection', 'student_web:standing-print', 'student_web:class-bands',
     'student_web:class-bands-reset', 'student_web:material-search', 'student_web:timetable',
     'student_web:session-create', 'student_web:session-edit', 'student_web:session-delete',
+    'student_web:study-plans', 'student_web:study-plan-create', 'student_web:study-plan', 'student_web:study-plan-replan',
+    'student_web:study-topic-add', 'student_web:plan-delete', 'student_web:study-topic-done', 'student_web:study-topic-delete',
     'student_web:ai-tools', 'student_web:ai-confirm', 'student_web:ai-send', 'student_web:ai-request',
     'student_web:ai-result', 'student_web:ai-result-download', 'student_web:ai-result-delete',
 )

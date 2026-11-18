@@ -87,6 +87,67 @@ class ClassSessionForm(StrictForm):
         return values
 
 
+class StudyPlanForm(StrictForm):
+    """A new study plan: a course's exam date, revision days and the topics, one per line."""
+    course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available.')
+    exam_date = forms.DateField(label='Exam date', widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+                                input_formats=['%Y-%m-%d'], help_text='Must be after today (Africa/Lagos date).')
+    review_days = forms.TypedChoiceField(coerce=int, label='Revision days before the exam', initial='1',
+                                         choices=[('0', 'None'), ('1', '1 day'), ('2', '2 days'), ('3', '3 days')],
+                                         help_text='These last days are kept free for revising everything.')
+    topics = forms.CharField(label='Topics', widget=forms.Textarea(attrs={'rows': 8}), max_length=20000,
+                             help_text='One topic per line, in the order you want to study them. Up to 60.')
+
+    def __init__(self, *args, courses, today, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.today = today
+        self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+
+    def clean_exam_date(self):
+        exam = self.cleaned_data['exam_date']
+        if exam <= self.today:
+            raise forms.ValidationError('Choose an exam date after today.')
+        if (exam - self.today).days > 366:
+            raise forms.ValidationError('Choose an exam date within the next year.')
+        return exam
+
+    def clean_topics(self):
+        from .study_plan import MAX_TOPICS, topic_lines
+        text = self.cleaned_data['topics']
+        if re.search('[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff]', text):
+            raise forms.ValidationError('Remove the hidden control characters from your topics.')
+        lines = topic_lines(text)
+        if not lines:
+            raise forms.ValidationError('Type at least one topic.')
+        if len(lines) > MAX_TOPICS:
+            raise forms.ValidationError(f'Use at most {MAX_TOPICS} topics ({len(lines)} were typed).')
+        if any(len(line) > 200 for line in lines):
+            raise forms.ValidationError('Keep each topic to 200 characters or fewer.')
+        return lines
+
+
+class TopicForm(StrictForm):
+    title = forms.CharField(max_length=200, label='Add a topic', help_text='It goes on the last study day; use '
+                            '"Re-plan from today" to share topics out again.')
+
+    def clean_title(self):
+        title = ' '.join(self.cleaned_data['title'].split())
+        if not title:
+            raise forms.ValidationError('Type a topic.')
+        if re.search('[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff]', title):
+            raise forms.ValidationError('Remove the hidden control characters from the topic.')
+        return title
+
+
+class VersionForm(StrictForm):
+    version = forms.IntegerField(min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
+
+
+class TopicDoneForm(VersionForm):
+    done = forms.TypedChoiceField(coerce=lambda value: value == 'true', choices=[('true', 'Done'), ('false', 'Not done')],
+                                  widget=forms.HiddenInput())
+
+
 class MaterialUploadForm(StrictForm):
     title = forms.CharField(max_length=200, label='Material title', help_text='For example, Week 3 lecture notes.')
     course_id = forms.TypedChoiceField(coerce=uuid.UUID, label='Course', help_text='Only your courses are available.')

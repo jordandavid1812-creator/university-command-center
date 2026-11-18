@@ -16,7 +16,7 @@ from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, acad
 from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
-from . import charts, data, export, forms, search
+from . import charts, data, export, forms, search, study_plan
 from .data import present
 from .context import DISPLAY_COOKIE, display_theme
 
@@ -115,9 +115,10 @@ KINDS = {
     'assignment': (services.assignments, forms.AssignmentForm, 'assignment-list'),
     'material': (services.materials, None, 'material-list'),
     'session': (services.class_sessions, forms.ClassSessionForm, 'timetable'),
+    'plan': (services.study_plans, None, 'study-plans'),
 }
 # What the pages call each kind ("session" is a "class" to the student).
-KIND_LABELS = {'session': 'class'}
+KIND_LABELS = {'session': 'class', 'plan': 'study plan'}
 
 
 def edit_form(kind, request, identity, record):
@@ -195,7 +196,8 @@ def delete(request, identity, kind, identifier):
                           'course': 'This course still has assignments or study materials. Remove them before deleting the course.',
                           'assignment': 'This assignment could not be deleted. Reload and try again.',
                           'material': 'This material could not be deleted. Reload and try again.',
-                          'session': 'This class could not be deleted. Reload and try again.'}
+                          'session': 'This class could not be deleted. Reload and try again.',
+                          'plan': 'This study plan could not be deleted. Reload and try again.'}
                 form.add_error(None, detail[kind])
                 status = 400
             else:
@@ -206,6 +208,9 @@ def delete(request, identity, kind, identifier):
     if kind == 'session':
         course = services.courses.retrieve(identity, record.course_id)
         label = f'{course.normalized_code} on {record.get_weekday_display()} at {record.start_time:%H:%M}'
+    elif kind == 'plan':
+        course = services.courses.retrieve(identity, record.course_id)
+        label = f'the {course.normalized_code} study plan (exam {record.exam_date:%d %b %Y}) and all its topics'
     else:
         label = record.label if kind == 'semester' else record.name if kind == 'course' else record.title
     return render(request, 'student_web/delete.html', {'form': form, 'kind': kind, 'record_label': label,
@@ -220,6 +225,115 @@ def material_list(request, identity):
     rows = [{'material': item, 'course': courses.get(item.course_id), 'stored': item.pk in storage['ids']}
             for item in services.materials.list(identity)]
     return render(request, 'student_web/materials.html', {'rows': rows, 'storage': storage})
+
+
+@protected()
+def study_plans(request, identity):
+    """All study plans, soonest exam first, with progress."""
+    return render(request, 'student_web/study_plans.html', {'plans': queries.study_plans(identity),
+                  'today': timezone.localdate()})
+
+
+@protected(('GET', 'POST'))
+def study_plan_create(request, identity):
+    today = timezone.localdate()
+    courses = queries.options(identity, 'course')
+    form = forms.StudyPlanForm(request.POST if request.method == 'POST' else None, courses=courses, today=today)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            values = form.cleaned_data
+            dates = study_plan.spread(len(values['topics']), today, values['exam_date'], values['review_days'])
+            try:
+                plan = services.study_plans.create_with_topics(
+                    identity, course_id=values['course_id'], exam_date=values['exam_date'],
+                    review_days=values['review_days'], topics=list(zip(values['topics'], dates)))
+            except (services.InvalidRecord, services.RecordNotFound):
+                form.add_error(None, 'This plan could not be saved. Check the fields and try again.')
+                status = 400
+            else:
+                messages.success(request, 'Study plan saved.')
+                return redirect('student_web:study-plan', plan.pk)
+        else:
+            status = 400
+    return render(request, 'student_web/study_plan_form.html', {'form': form, 'courses_empty': not courses},
+                  status=status)
+
+
+@protected()
+def study_plan_detail(request, identity, identifier):
+    plan, topics = queries.study_plan(identity, identifier)
+    today = timezone.localdate()
+    return render(request, 'student_web/study_plan.html', {
+        **data.plan_days(plan, topics, today), 'plan': plan, 'today': today, 'topic_form': forms.TopicForm()})
+
+
+@protected(('POST',))
+def study_plan_replan(request, identity, identifier):
+    """Share unfinished topics out again over the days left (nothing done is moved)."""
+    plan, topics = queries.study_plan(identity, identifier)
+    form = forms.VersionForm(request.POST)
+    today = timezone.localdate()
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Reload the study plan and try again.', 400)
+    if plan.exam_date <= today:
+        return error_page(request, 'Exam day has come', 'This exam is today or over, so there are no days left to plan.', 400)
+    unfinished = [topic for topic in topics if not topic.done]
+    unfinished.sort(key=lambda topic: (topic.position, topic.pk))
+    dates = study_plan.spread(len(unfinished), today, plan.exam_date, plan.review_days)
+    try:
+        services.study_plans.replan(identity, plan.pk, version=form.cleaned_data['version'],
+                                    dates={topic.pk: day for topic, day in zip(unfinished, dates)})
+    except services.RecordConflict:
+        return error_page(request, 'Please reload', 'This plan changed in another tab. Reload it and try again.', 409)
+    messages.success(request, f'Re-planned {len(unfinished)} unfinished topic{"s" if len(unfinished) != 1 else ""} from today.')
+    return redirect('student_web:study-plan', plan.pk)
+
+
+@protected(('POST',))
+def study_topic_add(request, identity, identifier):
+    plan, topics = queries.study_plan(identity, identifier)
+    form = forms.TopicForm(request.POST)
+    today = timezone.localdate()
+    if not form.is_valid():
+        return error_page(request, 'Check your topic', form.errors['title'][0] if 'title' in form.errors
+                          else 'Reload the study plan and try again.', 400)
+    if len(topics) >= study_plan.MAX_TOPICS:
+        return error_page(request, 'Plan is full', f'A plan holds at most {study_plan.MAX_TOPICS} topics.', 400)
+    days = study_plan.study_days(today, plan.exam_date, plan.review_days)
+    services.study_topics.create(identity, plan_id=plan.pk, title=form.cleaned_data['title'],
+                                 position=max((topic.position for topic in topics), default=-1) + 1,
+                                 planned_date=days[-1] if days else today)
+    messages.success(request, 'Topic added.')
+    return redirect('student_web:study-plan', plan.pk)
+
+
+@protected(('POST',))
+def study_topic_done(request, identity, identifier):
+    topic = services.study_topics.retrieve(identity, identifier)
+    form = forms.TopicDoneForm(request.POST)
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Reload the study plan and try again.', 400)
+    try:
+        services.study_topics.update(identity, topic.pk, version=form.cleaned_data['version'],
+                                     done=form.cleaned_data['done'])
+    except services.RecordConflict:
+        return error_page(request, 'Please reload', 'This topic changed in another tab. Reload the plan and try again.', 409)
+    return redirect(reverse('student_web:study-plan', args=[topic.plan_id]) + f'#topic-{topic.pk}')
+
+
+@protected(('POST',))
+def study_topic_delete(request, identity, identifier):
+    topic = services.study_topics.retrieve(identity, identifier)
+    form = forms.VersionForm(request.POST)
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Reload the study plan and try again.', 400)
+    try:
+        services.study_topics.delete(identity, topic.pk, version=form.cleaned_data['version'])
+    except services.RecordConflict:
+        return error_page(request, 'Please reload', 'This topic changed in another tab. Reload the plan and try again.', 409)
+    messages.success(request, 'Topic removed.')
+    return redirect('student_web:study-plan', topic.plan_id)
 
 
 @protected()

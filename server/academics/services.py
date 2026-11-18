@@ -15,7 +15,7 @@ import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
-                     Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial)
+                     Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial, StudyPlan, StudyTopic)
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -178,8 +178,43 @@ courses = StudentRecords(Course, {"semester_id", "original_code", "name", "credi
                          ("semester_id", Semester))
 assignments = StudentRecords(Assignment, {"course_id", "title", "due_date", "completed"},
                              ("course_id", Course))
+class PlanRecords(StudentRecords):
+    """Study plans. A plan and its first topics are saved together, or not at all."""
+
+    def create_with_topics(self, identity, *, course_id, exam_date, review_days, topics):
+        """`topics` is a list of (title, planned_date) in order."""
+        try:
+            with student_transaction(identity):
+                plan = self.create(identity, course_id=course_id, exam_date=exam_date, review_days=review_days)
+                for position, (title, planned) in enumerate(topics):
+                    study_topics.create(identity, plan_id=plan.pk, title=title, position=position,
+                                        planned_date=planned)
+                return plan
+        except IntegrityError:
+            raise InvalidRecord() from None
+
+    def replan(self, identity, identifier, *, version, dates):
+        """Give unfinished topics new dates ({topic id: date}) and bump the plan's version, in one
+        transaction. Refused if the plan changed meanwhile (another tab)."""
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            alias = database_alias()
+            plan = self._get(owner, identifier, lock=True)
+            if plan.record_version != expected_version(version):
+                raise RecordConflict()
+            topics = StudyTopic.objects.using(alias).filter(owner_id=owner, plan_id=plan.pk, done=False)
+            for topic in topics.filter(pk__in=list(dates)):
+                StudyTopic.objects.using(alias).filter(pk=topic.pk, owner_id=owner).update(
+                    planned_date=dates[topic.pk], record_version=F("record_version") + 1, updated_at=timezone.now())
+            self._records(owner).filter(pk=plan.pk).update(record_version=F("record_version") + 1,
+                                                           updated_at=timezone.now())
+
+
 class_sessions = StudentRecords(ClassSession, {"course_id", "weekday", "start_time", "end_time", "kind", "venue"},
                                 ("course_id", Course))
+study_plans = PlanRecords(StudyPlan, {"course_id", "exam_date", "review_days"}, ("course_id", Course))
+study_topics = StudentRecords(StudyTopic, {"plan_id", "title", "position", "planned_date", "done"},
+                              ("plan_id", StudyPlan))
 
 
 class MaterialRecords(StudentRecords):

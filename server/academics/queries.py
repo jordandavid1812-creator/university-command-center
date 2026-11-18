@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
-from .models import (Assignment, ClassSession, Course, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
+from .models import (Assignment, ClassSession, Course, StudyPlan, StudyTopic, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
                      StudyMaterial)
 from .ownership import database_alias, student_transaction
 from .services import (AI_REQUESTS_PER_DAY, MAX_AI_RESULTS_PER_STUDENT, InvalidRecord, RecordNotFound, ai_day_range,
@@ -168,6 +168,36 @@ def _classes(owner, weekday=None):
     return rows
 
 
+MAX_PLANS = 100
+
+
+def study_plans(identity):
+    """The student's study plans with their course and topic counts, soonest exam first."""
+    with student_transaction(identity):
+        owner = identity.student_id
+        return list(_records(StudyPlan, owner).select_related('course')
+                    .annotate(topic_count=Count('topics'), done_count=Count('topics', filter=Q(topics__done=True)))
+                    .order_by('exam_date', 'id')[:MAX_PLANS])
+
+
+def study_plan(identity, identifier):
+    """One plan with its course and topics (by date, then order), or RecordNotFound."""
+    with student_transaction(identity):
+        owner = identity.student_id
+        try:
+            plan = _records(StudyPlan, owner).select_related('course').get(pk=record_id(identifier))
+        except StudyPlan.DoesNotExist:
+            raise RecordNotFound() from None
+        topics = list(_records(StudyTopic, owner).filter(plan_id=plan.pk).order_by('planned_date', 'position', 'id'))
+        return plan, topics
+
+
+def _study_today(owner, today):
+    """Unfinished topics planned for today or earlier, with their course, for the dashboard."""
+    return list(_records(StudyTopic, owner).filter(done=False, planned_date__lte=today, plan__exam_date__gt=today)
+                .select_related('plan__course').order_by('planned_date', 'plan__exam_date', 'position', 'id')[:20])
+
+
 def timetable(identity):
     """All of the student's weekly classes with their courses, Monday first, in time order."""
     with student_transaction(identity):
@@ -187,7 +217,7 @@ def dashboard_reads(identity, today):
         totals, upcoming = _assignment_metrics(owner, today)
         name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
         return (semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today),
-                _classes(owner, today.weekday()))
+                _classes(owner, today.weekday()), _study_today(owner, today))
 
 
 def _ai_panel(owner):
@@ -220,10 +250,12 @@ def export_records(identity):
         ai_requests = list(_records(StudyAiRequest, owner).order_by("created_at", "id")[:MAX_EXPORT_AI_REQUESTS + 1])
         ai_results = list(_records(StudyAiResult, owner).order_by("created_at", "id")[:MAX_AI_RESULTS_PER_STUDENT + 1])
         classes = list(_records(ClassSession, owner).order_by("weekday", "start_time", "id")[:MAX_CLASSES + 1])
-    if (len(classes) > MAX_CLASSES or len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
+        plans = list(_records(StudyPlan, owner).order_by("exam_date", "id")[:MAX_PLANS + 1])
+        topics = list(_records(StudyTopic, owner).order_by("plan_id", "planned_date", "position", "id")[:MAX_PLANS * 60 + 1])
+    if (len(classes) > MAX_CLASSES or len(plans) > MAX_PLANS or len(topics) > MAX_PLANS * 60 or len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
             or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS
             or len(ai_requests) > MAX_EXPORT_AI_REQUESTS or len(ai_results) > MAX_AI_RESULTS_PER_STUDENT):
         raise WorkspaceLimit("Your workspace is too large to export in one file. No file was created.")
     return {"semesters": semesters, "courses": courses, "assignments": assignments,
             "materials": materials, "stored": stored, "profile": profile,
-            "ai_requests": ai_requests, "ai_results": ai_results, "classes": classes}
+            "ai_requests": ai_requests, "ai_results": ai_results, "classes": classes, "plans": plans, "topics": topics}

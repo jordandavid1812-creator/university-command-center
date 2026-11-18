@@ -10,9 +10,36 @@ def snapshot(identity, today=None):
     returns assignment totals, upcoming work and the greeting name, in one transaction."""
     if today is None:
         return workspace(*academic_snapshot(identity))
-    semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes = dashboard_reads(identity, today)
+    semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study = dashboard_reads(identity, today)
     return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
-            'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True}
+            'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
+            'today_study': study}
+
+
+def plan_days(plan, topics, today):
+    """Each planned day (earliest topic or today, up to the day before the exam) with its topics,
+    plus progress and the revision days. Unfinished topics on past days are overdue. An empty
+    revision day is shown once, as a revision day, not also as an empty study day."""
+    from datetime import timedelta
+    from .study_plan import review_dates
+    first = min([today] + [topic.planned_date for topic in topics])
+    last = max([plan.exam_date - timedelta(days=1)] + [topic.planned_date for topic in topics])
+    review = review_dates(today, plan.exam_date, plan.review_days)
+    by_day = {}
+    for topic in topics:
+        by_day.setdefault(topic.planned_date, []).append({'topic': topic, 'overdue': not topic.done and topic.planned_date < today})
+    days = []
+    day = first
+    while day <= last:
+        if day in by_day or (day >= today and day not in review):
+            days.append({'date': day, 'topics': by_day.get(day, []), 'is_today': day == today, 'past': day < today})
+        day += timedelta(days=1)
+    done = sum(topic.done for topic in topics)
+    return {'days': days, 'done': done, 'total': len(topics),
+            'percent': round(100 * done / len(topics)) if topics else 0,
+            'overdue': sum(1 for topic in topics if not topic.done and topic.planned_date < today),
+            'days_left': (plan.exam_date - today).days,
+            'review': [day for day in review if day not in by_day]}
 
 
 def timetable_days(classes):
