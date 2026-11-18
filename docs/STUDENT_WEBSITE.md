@@ -554,3 +554,30 @@ validation, deeper search/selector scaling and production operations remain defe
   - The data export includes `study_plans` with their topics.
 - Tests: `tests/test_study_plan.py`, `security_tests/test_study_plan_rls.py`,
   `web_tests/test_study_planner.py` and `tools/test_study_planner_browser.py`.
+
+## Content Security Policy
+
+Every response carries a `Content-Security-Policy` header from
+`accounts.middleware.ContentSecurityPolicyMiddleware` (placed right after Django's
+`SecurityMiddleware`, so sign-in, error and outage pages get it too):
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self';
+img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none';
+form-action 'self'; frame-ancestors 'none'
+```
+
+- Scripts run only from this site's own files: no inline scripts, event handlers, `eval` or
+  outside scripts. Page data from `json_script` is a data block and is never run.
+- Style sheets and `<style>` blocks must come from this site. Style *attributes* stay allowed
+  because the class-band bar positions its parts with them and every page must work without
+  JavaScript. Scripts change styles through the DOM, which the policy does not restrict.
+- Pages can never be shown inside another website (`frame-ancestors 'none'`, plus the
+  existing `X-Frame-Options`), and forms may only post back to this site.
+- Responses that set their own policy keep it: study-file downloads, AI result downloads
+  and the data export still send the stricter `default-src 'none'; sandbox`.
+- No calculation, data or form behaviour changed.
+- Tests: `web_tests/test_content_security.py` (the header on every page, and the sandbox kept)
+  and `tools/test_content_security_browser.py` (17 real pages, with motion on and off, show
+  zero blocked items; the flashcards, quiz and class bar still work; and a control confirms an
+  injected inline script, `<style>` block and outside script are all refused).

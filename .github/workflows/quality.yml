@@ -194,3 +194,4 @@ jobs:
       - run: python tools/test_search_browser.py -v
       - run: python tools/test_timetable_browser.py -v
       - run: python tools/test_study_planner_browser.py -v
+      - run: python tools/test_content_security_browser.py -v
