@@ -124,3 +124,13 @@ AI pages (stage 3b): only ai_views.send may call ask(), after a valid consent to
 and with no transaction open. Look up the token hash before rejecting an expired token. AI text is
 inserted with textContent only. ai.js/ai.css load only on AI pages; keep every AI page working without JS.
 prune_ai_ledger runs only as the table owner with the website stopped.
+
+Launch milestone (invited trial): the owner approved putting the website online for invited
+classmates. Read docs/LAUNCH.md first. One small PR per step; do not skip ahead.
+Use only config.settings.web_production behind Caddy on one server; config.settings.production
+stays disabled and serve_local_website.py stays local-only. Keep accounts.E105 blocking until a
+reviewed real-email backend is approved (step 4). Sign-up must be invite-only until the owner says
+otherwise. Keep every RLS role, signed-context and runtime-privilege rule; the web process never
+gets migration or DBA credentials. Secrets live only in the server's private environment file,
+never in the repository, images, logs or chat. gunicorn and whitenoise are approved packages;
+ask before adding any other. Use synthetic data in tests; never copy real student data off the server.
