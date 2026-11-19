@@ -13,6 +13,7 @@ urlpatterns = [
     path('planner/projection/', views.planner_projection, name='planner-projection'),
     path('performance/print/', views.standing_print, name='standing-print'),
     path('settings/', views.settings, name='settings'),
+    path('settings/delete-account/', views.account_delete, name='account-delete'),
     path('settings/display/', views.display_preference, name='display-preference'),
     path('settings/profile/', views.profile_edit, name='profile-edit'),
     path('settings/class-bands/', views.class_bands_edit, name='class-bands'),

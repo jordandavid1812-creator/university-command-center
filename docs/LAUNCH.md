@@ -30,7 +30,7 @@ Original decisions:
 4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
 5. AI limits for the shared key (done: 10 per student and 200 for the site per day; see
    docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
-6. Account deletion and email change.
+6. Account deletion and email change (account deletion done; email change next; see "Account deletion" below).
 7. Privacy page and terms (NDPA) (done: `/accounts/privacy/` and `/accounts/terms/`; see "Privacy notice and terms" below).
 8. Backups and a tested restore (done: daily encrypted backups through GitHub Actions; see docs/BACKUPS.md).
 
@@ -220,3 +220,22 @@ account you agree to the Terms of use and confirm you have read the Privacy noti
 - **Keep them true:** any change to what the site stores, its cookies, its providers or where they
   run must update the privacy notice in the same pull request.
 - Tests: `web_tests.test_legal_pages`.
+
+## Account deletion (step F, part 1)
+
+**Settings → Delete account** (`/settings/delete-account/`) permanently deletes the signed-in
+student's account. The student types their current password and the word `DELETE`; the form works
+without JavaScript and is rate-limited (`delete-account`, 5 per hour).
+
+- `ucc_security.delete_my_account()` (migration `academics.0024`, Supabase `0008`/`0009`) takes **no
+  arguments**: it deletes only the student proven by the signed transaction context and refuses
+  without one. In one transaction it removes that student's rows from every table that refers to
+  `accounts_student` (12 academic, 4 sign-in tables), children first, then the account. Explicit
+  `WHERE` clauses keep it correct where the owner bypasses row-level security (Supabase).
+- Only the website login may call it (`configure_runtime`); it runs with `search_path=pg_catalog`.
+  The AI ledger still cannot be deleted directly.
+- Afterwards the student is signed out and emailed a confirmation. Encrypted backups keep a copy for
+  up to 30 days (privacy notice).
+- Tests: `security_tests.test_account_deletion` (including a check that every foreign key to
+  `accounts_student` is handled, so a new table cannot be forgotten) and
+  `web_tests.test_account_delete`.

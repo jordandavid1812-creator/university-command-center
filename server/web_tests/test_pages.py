@@ -61,7 +61,10 @@ class WebsitePageTests(WebsiteCase):
         self.assertContains(response, 'Email verified')
         self.assertContains(response, reverse('accounts:password-change'))
         self.assertNotContains(response, 'name="email"')
-        self.assertNotContains(response, 'Delete account')
+        # Owner-approved change (launch step F): Settings offers account deletion only as a link to the
+        # separate confirmation page (password + DELETE), never as a control on this page.
+        self.assertContains(response, f'href="{reverse("student_web:account-delete")}"')
+        self.assertNotContains(response, 'name="confirm"')
 
     def test_empty_semesters_courses_assignments_and_prediction_states(self):
         self.login()

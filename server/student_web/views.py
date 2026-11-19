@@ -581,6 +581,52 @@ def settings(request, identity):
                   'class_bands': list(zip(CLASS_NAMES, bands)), 'class_bands_custom': custom})
 
 
+ACCOUNT_DELETED = ('Your account and all your records have been deleted, and you have been signed out. A '
+                   'confirmation email was sent to your address. Encrypted backups that still contain them are '
+                   'deleted automatically within 30 days.')
+
+
+@protected(('GET', 'POST'))
+def account_delete(request, identity):
+    """Launch step F: permanently delete the account. Needs the current password and the word DELETE;
+    everything is removed in one database transaction (services.delete_account)."""
+    import logging
+    from django.contrib.auth import logout as auth_logout
+    from django.contrib.auth.hashers import check_password
+    from django.core.mail import send_mail
+    from accounts.models import Student
+    from accounts.throttling import rate_limit
+    if request.method == 'POST':
+        limited = rate_limit(request, 'delete-account')
+        if limited is not None:
+            return limited
+    form = forms.AccountDeleteForm(request.POST if request.method == 'POST' else None)
+    status = 200
+    if request.method == 'POST':
+        status = 400
+        if form.is_valid():
+            current = Student.objects.using('auth').filter(pk=request.user.pk, is_active=True).first()
+            if current is None or not check_password(form.cleaned_data['password'], current.password):
+                form.add_error('password', 'That password is not right. Nothing was deleted.')
+            elif services.delete_account(identity):
+                email = current.email
+                auth_logout(request)
+                if email:
+                    try:
+                        send_mail('Your University Command Center account was deleted',
+                                  'Your University Command Center account and all its records were deleted at your '
+                                  'request.\n\nIf you did not do this, reply to this email straight away.',
+                                  django_settings.DEFAULT_FROM_EMAIL, [email])
+                    except Exception:
+                        logging.getLogger(__name__).warning('Account deletion notice could not be sent.')
+                response = render(request, 'accounts/message.html', {'message': ACCOUNT_DELETED})
+                add_never_cache_headers(response)
+                return response
+            else:
+                form.add_error(None, 'Your account could not be deleted. Nothing was changed; please try again.')
+    return render(request, 'student_web/account_delete.html', {'form': form}, status=status)
+
+
 @protected()
 def data_export(request, identity):
     records = queries.export_records(identity)
