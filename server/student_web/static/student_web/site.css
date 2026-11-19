@@ -1056,3 +1056,11 @@ legend {
   min-height:44px;
   padding:6px 2px;
 }
+
+/* Launch step G: privacy notice and terms of use. */
+.legal-page { max-width:46rem; line-height:1.6 }
+.legal-page h2 { margin-top:1.6em; font-size:1.05rem }
+.legal-page ul { padding-left:1.2em }
+.legal-page li { margin:.35em 0 }
+.legal-links { display:flex; gap:12px }
+.legal-agree { font-size:.8125rem }
