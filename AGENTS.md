@@ -5,6 +5,7 @@ main.py runs the app.
 web_app.py runs the local Streamlit interface.
 academic_logic.py contains pure shared grading, validation, summaries, and planning calculations.
 It also validates assignments before they enter dashboard pending counts.
+grading_policy.py defines immutable letter-grade policies and the explicit legacy five-point default.
 web_actions.py validates form edits and returns new records without writing files.
 web_data.py safely loads and saves web records, with snapshots, backups, and atomic replacement.
 courses.py handles courses.

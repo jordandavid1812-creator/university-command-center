@@ -128,6 +128,41 @@ class PolicyCalculationTests(unittest.TestCase):
         self.assertEqual((result["gpa"], result["units"], result["ungraded"]), (0, 2, 1))
         self.assertEqual(len(result["warnings"]), 2)
 
+    def test_target_plan_uses_selected_policy_for_current_quality_points(self):
+        courses = [record("A", "A", 2), record("B", "B", 1),
+                   record("F", "F", 1), record("N", None, 5)]
+        before = deepcopy(courses)
+        plan = target_plan(courses, 3, 4, policy=FOUR)
+        # Four-point current quality points = 2*4 + 1*3 + 1*0 = 11.
+        # Required = (3*8 - 11)/4 = 3.25; using legacy points yields 2.5.
+        self.assertEqual(plan["current"]["points"], Decimal(11))
+        self.assertEqual(plan["current"]["units"], Decimal(4))
+        self.assertEqual(plan["total"], Decimal(8))
+        self.assertEqual(plan["required"], Decimal("3.25"))
+        self.assertEqual(plan["status"], "achievable")
+        self.assertEqual(courses, before)
+
+    def test_target_plan_rejects_target_above_selected_maximum(self):
+        courses = [record("A", "A", 1)]
+        with self.assertRaises(ValueError):
+            target_plan(courses, "4.5", 3, policy=FOUR)
+        # The same target remains valid under the explicit legacy default.
+        self.assertEqual(target_plan(courses, "4.5", 3)["status"], "achievable")
+
+    def test_projection_rejects_expected_average_above_selected_maximum(self):
+        courses = [record("A", "A", 1)]
+        with self.assertRaises(ValueError):
+            projected_cgpa(courses, "4.5", 3, policy=FOUR)
+        self.assertEqual(projected_cgpa(courses, "4.5", 3)["projected"], Decimal("4.625"))
+
+    def test_legacy_invalid_grade_message_is_preserved(self):
+        for value in ("Z", 0, None):
+            for kwargs in ({}, {"policy": LEGACY_POLICY}):
+                with self.subTest(value=value, kwargs=kwargs):
+                    with self.assertRaises(ValueError) as caught:
+                        checked_grade(value, allow_ungraded=False, **kwargs)
+                    self.assertEqual(str(caught.exception), "Grades must be letters A to F.")
+
     def test_empty_and_target_status_boundaries(self):
         self.assertIsNone(academic_summary([], policy=FOUR)["gpa"])
         self.assertEqual(target_plan([], 4, 3, policy=FOUR)["status"], "achievable")
@@ -150,6 +185,20 @@ class PolicyMutationTests(unittest.TestCase):
             "drop_prediction_policy":
                 ("academic_summary(hypothetical, policy=policy)", "academic_summary(hypothetical)"),
         }
+        # These single-call mutations reproduce reviewer P9, P11, P12 and L3.
+        current_prefix = ("target = checked_target(target, policy=policy)\n"
+                          "    remaining = checked_credits(remaining)\n"
+                          "    current = academic_summary(courses")
+        mutations.update({
+            "target_current_uses_legacy_policy":
+                (current_prefix + ", policy=policy)", current_prefix + ")"),
+            "target_validation_uses_legacy_policy":
+                ("target = checked_target(target, policy=policy)", "target = checked_target(target)"),
+            "projection_validation_uses_legacy_policy":
+                ("expected = checked_target(expected, policy=policy)", "expected = checked_target(expected)"),
+            "legacy_grade_error_changed":
+                ('"Grades must be letters A to F."', '"Grades must be A-F."'),
+        })
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder)
             (target / "grading_policy.py").write_text((root / "grading_policy.py").read_text())
