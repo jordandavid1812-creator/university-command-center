@@ -20,11 +20,20 @@ student's material answers 404, as elsewhere on the site.
 
 ## Upload checks
 
+**File cap per deployment** (`settings.UCC_MAX_UPLOAD_BYTES`, set only through
+`web_common.set_upload_cap`): **10 MiB** locally and on the server package; **4,000,000
+bytes (4 MB)** on Vercel (`web_vercel`), because Vercel Functions refuse request bodies over
+4.5 MB before Django runs. With 64 KiB for the other fields and multipart framing, the largest
+accepted request is 4,065,536 bytes, so every upload reaches the website and gets a clear
+message. The form help text, the size error and the 413 page all name the same cap. The
+database limit (`academics.models.MAX_MATERIAL_BYTES`, 10 MiB) is unchanged, so files stored
+earlier stay readable. Tests: `web_tests.test_upload_cap`, `tests/test_upload_cap.py`.
+
 Checks run in this order, and anything rejected is never stored:
 
 1. **Request size.** Web settings keep uploads in memory only
    (`FILE_UPLOAD_HANDLERS` = memory handler; `FILE_UPLOAD_MAX_MEMORY_SIZE` =
-   10 MiB + 64 KiB). Nothing is written to a temporary file on disk. A request
+   the deployment's file cap + 64 KiB). Nothing is written to a temporary file on disk. A request
    that announces a larger `Content-Length` gets a 413 page. Django's CSRF check
    reads the body before any view, so an oversized body is still received and
    discarded; it is not stored.
@@ -32,8 +41,8 @@ Checks run in this order, and anything rejected is never stored:
    (max 200), a course from the student's own list only, no extra fields.
 3. **File** (`student_web/upload_validation.py`): simple name with a base name,
    no folders or control characters, and a `.pdf` or `.txt` extension
-   (case-insensitive; bare `pdf` or `.pdf` is refused), 1 byte to
-   10 MiB, at most 10 MiB + 1 byte read. A PDF must start with `%PDF-`; a TXT
+   (case-insensitive; bare `pdf` or `.pdf` is refused), 1 byte to the
+   deployment's file cap, at most the cap + 1 byte read. A PDF must start with `%PDF-`; a TXT
    must be UTF-8 text without unsupported control characters (tabs, line
    breaks and form-feed page breaks are allowed).
 4. **File facts** (name, type, size) come only from the checked bytes. The

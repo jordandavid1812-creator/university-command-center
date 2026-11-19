@@ -20,6 +20,7 @@ from django.core.exceptions import ImproperlyConfigured
 from .web_secure import *  # noqa: F403
 from .base import required
 from . import public_site
+from .web_common import set_upload_cap
 
 _PROJECT_REF = re.compile(r'[a-z0-9]{20}')
 _POOLER_HOST = re.compile(r'aws-[0-9]+-[a-z]{2}-[a-z]+-[0-9]+\.pooler\.supabase\.com')
@@ -39,6 +40,12 @@ def pooler_host(value):
 
 public_site.configure(globals(), public_site.site_host(required('UCC_SITE_HOST')))
 public_site.configure_email(globals(), os.environ)
+
+# Vercel Functions refuse request bodies over 4.5 MB before Django sees them. Accept files up to
+# 4,000,000 bytes so a whole upload (file + other fields + multipart overhead, at most
+# 4,065,536 bytes) always reaches the website and gets a clear message instead.
+VERCEL_MAX_UPLOAD_BYTES = 4_000_000
+set_upload_cap(globals(), VERCEL_MAX_UPLOAD_BYTES)
 UCC_TRUSTED_PROXIES = ()
 
 _ref = project_ref(required('UCC_SUPABASE_PROJECT_REF'))

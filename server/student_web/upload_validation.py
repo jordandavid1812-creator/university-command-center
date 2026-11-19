@@ -1,12 +1,20 @@
 """Study file upload checks: name, extension, size and real content (PDF signature, UTF-8 text)."""
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # The largest any deployment allows (database limit).
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 PDF_SIGNATURE = b"%PDF-"
 
 
-def validate_upload_metadata(filename, size):
-    """Return the allowed extension or raise a friendly error."""
+def describe_size(limit):
+    """A size for people: 10485760 -> '10 MiB', 4000000 -> '4 MB'."""
+    if limit % (1024 * 1024) == 0:
+        return f"{limit // (1024 * 1024)} MiB"
+    return f"{limit / 1_000_000:g} MB"
+
+
+def validate_upload_metadata(filename, size, limit=MAX_UPLOAD_BYTES):
+    """Return the allowed extension or raise a friendly error. `limit` is the deployment's
+    per-file cap (settings.UCC_MAX_UPLOAD_BYTES), never more than MAX_UPLOAD_BYTES."""
     if not isinstance(filename, str) or not filename.strip():
         raise ValueError("Choose a file with a name.")
 
@@ -27,8 +35,8 @@ def validate_upload_metadata(filename, size):
     if type(size) is not int or size <= 0:
         raise ValueError("Choose a file that is not empty.")
 
-    if size > MAX_UPLOAD_BYTES:
-        raise ValueError("Choose a file no larger than 10 MiB.")
+    if size > min(limit, MAX_UPLOAD_BYTES):
+        raise ValueError(f"Choose a file no larger than {describe_size(min(limit, MAX_UPLOAD_BYTES))}.")
 
     return extension
 
