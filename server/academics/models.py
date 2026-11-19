@@ -444,3 +444,14 @@ class StudyAiResult(ValidatedRecord):
                                    name="airesult_question_matches_tool"),
             models.CheckConstraint(condition=models.Q(shape_version__gte=1), name="airesult_shape_version_positive"),
         ]
+
+
+class AiSiteUsage(models.Model):
+    """Launch step E: how many AI requests the whole site reserved on one day (Lagos time).
+    One row per day and no student data. Row-level security lets only a signed student
+    transaction read or add to it (migration 0023); the website can never delete it."""
+    day = models.DateField(primary_key=True)
+    requests = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(requests__lte=100000), name="aisiteusage_requests_range")]

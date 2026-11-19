@@ -10,7 +10,7 @@ from django.db.models import Count, Q
 from .models import (Assignment, ClassSession, Course, StudyPlan, StudyTopic, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
                      StudyMaterial)
 from .ownership import database_alias, student_transaction
-from .services import (AI_REQUESTS_PER_DAY, MAX_AI_RESULTS_PER_STUDENT, InvalidRecord, RecordNotFound, ai_day_range,
+from .services import (MAX_AI_RESULTS_PER_STUDENT, ai_daily_limit, InvalidRecord, RecordNotFound, ai_day_range,
                        record_id)
 
 PAGE_SIZE = 25
@@ -226,7 +226,7 @@ def _ai_panel(owner):
     used = _records(StudyAiRequest, owner).filter(created_at__gte=start, created_at__lt=end).count()
     recent = list(_records(StudyAiResult, owner).order_by('-created_at', 'id')
                   .values('id', 'tool', 'created_at', 'material__title')[:DASHBOARD_RECENT_AI_RESULTS])
-    return {'used_today': used, 'daily_limit': AI_REQUESTS_PER_DAY, 'recent': recent}
+    return {'used_today': used, 'daily_limit': ai_daily_limit(), 'recent': recent}
 
 
 def code_in_use(identity, code, exclude=None):

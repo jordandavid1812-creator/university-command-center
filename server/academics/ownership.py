@@ -126,6 +126,14 @@ def require_runtime_role(connection):
                          AND a.attname NOT IN ('status', 'error_category', 'status_class', 'updated_at')
                          AND has_column_privilege(current_user, a.attrelid, a.attnum, 'UPDATE'))
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
+                   -- Launch step E: the site-wide AI counter is never deleted, truncated or
+                   -- re-dated by the website; only its count may change.
+                   OR COALESCE(has_table_privilege(current_user, to_regclass('public.academics_aisiteusage'),
+                                                   'DELETE, TRUNCATE, REFERENCES, TRIGGER'), false)
+                   OR COALESCE(has_column_privilege(current_user, to_regclass('public.academics_aisiteusage'),
+                                                    'day', 'UPDATE'), false)
+                   OR EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass('public.academics_aisiteusage')
+                              AND (relowner = r.oid OR NOT (relrowsecurity AND relforcerowsecurity)))
                    -- S0-02A: no access to device/login-limit records; never PG17 MAINTAIN anywhere.
                    OR {support}
                    OR {maintain}

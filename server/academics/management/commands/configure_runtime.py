@@ -70,6 +70,11 @@ class Command(BaseCommand):
             # AI ledger: never deleted by the website; results: never edited.
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studyairequest TO {}").format(sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_studyairesult TO {}").format(sql.Identifier(role)))
+            # Launch step E: the site-wide AI counter (0022/0023). Only its count may change.
+            cursor.execute("SELECT to_regclass('public.academics_aisiteusage') IS NOT NULL")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_aisiteusage TO {}").format(sql.Identifier(role)))
+                cursor.execute(sql.SQL("GRANT UPDATE (requests) ON public.academics_aisiteusage TO {}").format(sql.Identifier(role)))
             for table, columns in (
                 ("academics_semester", ("label", "display_order", "record_version", "updated_at")),
                 ("academics_course", ("semester_id", "original_code", "normalized_code", "name", "credit_units", "actual_grade", "record_version", "updated_at")),

@@ -67,7 +67,8 @@ print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIG
     "SECURE_PROXY_SSL_HEADER", "SESSION_COOKIE_NAME", "CSRF_COOKIE_NAME", "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE", "SESSION_COOKIE_HTTPONLY", "CSRF_COOKIE_HTTPONLY", "DEBUG", "UCC_TRUSTED_PROXIES",
     "UCC_LOCAL_STATIC", "MIDDLEWARE", "STORAGES", "EMAIL_BACKEND", "UCC_SECURE_PROFILE",
-    "UCC_PUBLIC_SITE", "UCC_REQUIRE_INVITE", "UCC_SIGNUP_CODE")}))''')
+    "UCC_PUBLIC_SITE", "UCC_REQUIRE_INVITE", "UCC_SIGNUP_CODE",
+    "UCC_AI_REQUESTS_PER_DAY", "UCC_AI_SITE_REQUESTS_PER_DAY")}))''')
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         host = GOOD['UCC_SITE_HOST']
@@ -86,6 +87,7 @@ print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIG
         self.assertIs(data['UCC_PUBLIC_SITE'], True)
         # Open sign-up confirmed by a 6-digit email code, instead of invite codes.
         self.assertEqual((data['UCC_REQUIRE_INVITE'], data['UCC_SIGNUP_CODE']), (False, True))
+        self.assertEqual((data['UCC_AI_REQUESTS_PER_DAY'], data['UCC_AI_SITE_REQUESTS_PER_DAY']), (10, 200))
         self.assertEqual(data['UCC_TRUSTED_PROXIES'], ['172.30.0.0/24'])
         self.assertEqual(data['MIDDLEWARE'][:3], ['django.middleware.security.SecurityMiddleware',
                                                   'whitenoise.middleware.WhiteNoiseMiddleware',

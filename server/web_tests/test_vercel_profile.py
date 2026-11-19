@@ -66,6 +66,7 @@ from django.conf import settings as s
 print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS", "AUTH_LINK_ORIGIN",
     "SECURE_SSL_REDIRECT", "SECURE_HSTS_SECONDS", "SECURE_HSTS_INCLUDE_SUBDOMAINS", "SECURE_PROXY_SSL_HEADER",
     "SESSION_COOKIE_NAME", "CSRF_COOKIE_NAME", "UCC_TRUSTED_PROXIES", "UCC_PUBLIC_SITE", "UCC_REQUIRE_INVITE", "UCC_SIGNUP_CODE",
+    "UCC_AI_REQUESTS_PER_DAY", "UCC_AI_SITE_REQUESTS_PER_DAY",
     "MIDDLEWARE", "STATIC_ROOT", "WHITENOISE_USE_FINDERS", "DEBUG", "UCC_SECURE_PROFILE",
     "UCC_MAX_UPLOAD_BYTES", "FILE_UPLOAD_MAX_MEMORY_SIZE", "FILE_UPLOAD_HANDLERS")} |
     {"db": {alias: {k: s.DATABASES[alias][k] for k in ("NAME", "USER", "HOST", "PORT", "DISABLE_SERVER_SIDE_CURSORS",
@@ -83,6 +84,7 @@ print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIG
         self.assertEqual(data['UCC_TRUSTED_PROXIES'], [])  # REMOTE_ADDR is the visitor, set at Vercel's edge
         self.assertTrue(data['UCC_PUBLIC_SITE'] and data['UCC_SIGNUP_CODE'] and data['UCC_SECURE_PROFILE'])
         self.assertIs(data['UCC_REQUIRE_INVITE'], False)  # open sign-up
+        self.assertEqual((data['UCC_AI_REQUESTS_PER_DAY'], data['UCC_AI_SITE_REQUESTS_PER_DAY']), (10, 200))
         self.assertIs(data['DEBUG'], False)
         self.assertEqual(data['MIDDLEWARE'][:2], ['django.middleware.security.SecurityMiddleware',
                                                   'whitenoise.middleware.WhiteNoiseMiddleware'])

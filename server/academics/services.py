@@ -364,7 +364,7 @@ profiles = ProfileRecords(StudentProfile, PROFILE_FIELDS | set(CLASS_BAND_FIELDS
 
 
 # AI study assistant records (docs/AI_STUDY_ASSISTANT_PLAN.md, stage 1). No provider code here.
-AI_REQUESTS_PER_DAY = 50
+AI_REQUESTS_PER_DAY = 50  # Default for local and test profiles; the public site sets UCC_AI_REQUESTS_PER_DAY.
 MAX_AI_RESULTS_PER_STUDENT = 500
 AI_DAY_ZONE = ZoneInfo("Africa/Lagos")
 AI_STALE_AFTER = timedelta(minutes=2)
@@ -372,7 +372,7 @@ _AI_CATEGORIES = frozenset(code for code, _ in AI_ERROR_CATEGORIES)
 
 
 class AiLimitReached(Exception):
-    """Refused before anything is sent. `reason` is "daily", "results" or "busy"."""
+    """Refused before anything is sent. `reason` is "daily", "site", "results" or "busy"."""
     def __init__(self, reason):
         super().__init__("AI request refused: " + reason)
         self.reason = reason
@@ -382,6 +382,33 @@ class AiRequestClosed(Exception):
     """The request is no longer in progress (for example it was marked interrupted); nothing was saved."""
     def __init__(self):
         super().__init__("This AI request is no longer in progress.")
+
+
+def ai_daily_limit():
+    """Requests per student per Lagos day: settings.UCC_AI_REQUESTS_PER_DAY on the public site
+    (10, owner's choice), otherwise AI_REQUESTS_PER_DAY."""
+    from django.conf import settings
+    return getattr(settings, "UCC_AI_REQUESTS_PER_DAY", None) or AI_REQUESTS_PER_DAY
+
+
+def ai_site_limit():
+    """Requests for the whole site per Lagos day (settings.UCC_AI_SITE_REQUESTS_PER_DAY, 200 on the
+    public site), or None for no site-wide limit (local and test profiles)."""
+    from django.conf import settings
+    return getattr(settings, "UCC_AI_SITE_REQUESTS_PER_DAY", None)
+
+
+def _count_site_request(day, limit):
+    """Add one request to today's site-wide count, unless it is already at `limit`. Runs in the
+    caller's signed student transaction, so a later failure rolls the count back too."""
+    with connections[database_alias()].cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO academics_aisiteusage (day, requests) VALUES (%s, 1)
+            ON CONFLICT (day) DO UPDATE SET requests = academics_aisiteusage.requests + 1
+            WHERE academics_aisiteusage.requests < %s
+            RETURNING requests
+        """, [day, limit])
+        return cursor.fetchone() is not None
 
 
 def ai_day_range(now=None):
@@ -446,7 +473,7 @@ class AiRecords:
                 if self._requests(owner).filter(status="sent").exists():
                     raise AiLimitReached("busy")
                 start, end = ai_day_range(now)
-                if self._requests(owner).filter(created_at__gte=start, created_at__lt=end).count() >= AI_REQUESTS_PER_DAY:
+                if self._requests(owner).filter(created_at__gte=start, created_at__lt=end).count() >= ai_daily_limit():
                     raise AiLimitReached("daily")
                 if self._results(owner).count() >= MAX_AI_RESULTS_PER_STUDENT:
                     raise AiLimitReached("results")
@@ -460,6 +487,10 @@ class AiRecords:
                     request.full_clean(exclude=["owner"], validate_unique=False)
                 except ValidationError:
                     raise InvalidRecord() from None
+                # Last check, in the same transaction as the new row: the site-wide daily count.
+                site_limit = ai_site_limit()
+                if site_limit is not None and not _count_site_request(start.date(), site_limit):
+                    raise AiLimitReached("site")
                 StudyAiRequest.objects.using(database_alias()).bulk_create([request])
                 return request, True
         except IntegrityError:
@@ -558,7 +589,7 @@ class AiRecords:
             owner = require_identity(identity)
             start, end = ai_day_range()
             return {"used_today": self._requests(owner).filter(created_at__gte=start, created_at__lt=end).count(),
-                    "daily_limit": AI_REQUESTS_PER_DAY, "results": self._results(owner).count(),
+                    "daily_limit": ai_daily_limit(), "results": self._results(owner).count(),
                     "max_results": MAX_AI_RESULTS_PER_STUDENT}
 
 
