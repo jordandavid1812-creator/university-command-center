@@ -28,7 +28,7 @@ application database. It has no migration/DBA connection or credentials:
 | Connection/role | Allowed | Not allowed |
 | --- | --- | --- |
 | `default`, academic runtime | Existing academic DML, column-limited updates and signed-context verifier | Account/session/token/throttle reads; private signing key; DDL, TRUNCATE, role membership/bypass |
-| `auth`, authentication role | Account SELECT/INSERT; UPDATE only password, last_login, email_verified_at and updated_at. Token/throttle/session DML limited to needed columns | Academic records; private schemas/key/verifier; migration history; account deletion; changing account IDs, usernames, email or active status; DDL/TRUNCATE/bypass |
+| `auth`, authentication role | Account SELECT/INSERT; UPDATE only password, last_login, email, email_verified_at and updated_at (email only through accounts.email_change). Token/throttle/session DML limited to needed columns | Academic records; private schemas/key/verifier; migration history; account deletion; changing account IDs, usernames or active status; DDL/TRUNCATE/bypass |
 | Offline migrator | Schema ownership, migrations, role grant/key provisioning | Must NEVER serve web requests or be configured in the application process |
 
 `AuthenticationRouter` sends account/session ORM reads and writes to `auth`.
@@ -96,7 +96,7 @@ New usernames use 3–30 ASCII letters/digits/underscore/dot/hyphen, starting wi
 an alphanumeric character, and are case-sensitive. Existing internal username
 storage remains compatible (150 characters). Email is not a login identifier;
 registration lowercases it and requires it to be unique. Internationalized email
-addresses, social login and email/username change features are not implemented.
+addresses, social login and username changes are not implemented. Email change: see below.
 
 Passwords use Django's supported default PBKDF2 hasher and password validators:
 12–128 characters, common/numeric/similar passwords rejected, confirmation required.
@@ -142,9 +142,19 @@ Generic email responses do not promise constant timing; local synchronous delive
 can differ from unknown-account handling. Review queueing/timing before public use.
 
 Email links use a fixed trusted `AUTH_LINK_ORIGIN`, not request Host/forwarding
-headers. No email-change route exists, and the auth role cannot update email.
-An offline administrative email change must clear verification, revoke tokens and
-sessions, then arrange fresh verification; there is no public shortcut around that.
+headers.
+
+**Email change (launch step F, part 2):** Settings → Change email (`/settings/change-email/`,
+website only). The signed-in student types their current password and the new address; a
+6-digit code is emailed to the NEW address (`accounts.email_change`). The code is a row in
+`accounts_signupcode` with `new_email` set: HMAC-stored, 10 minutes, 5 tries, a new code retires
+the old one, and sign-up confirmation ignores these rows. Entering it, under the Student lock,
+replaces the email (it stays verified, because the code proved the new inbox) and emails a notice
+to the old address. An address another account uses gets the same reply and no email; a race on
+the unique email index changes nothing. Outstanding reset/verification links stop working because
+they are bound to the email at issue. Sessions are not ended (the password did not change). Both
+steps are rate-limited (`change-email` 5/hour, `change-email-code` 20/hour). The auth role gained
+UPDATE(email) on accounts_student only; usernames, IDs and active status stay unchangeable.
 
 **Password-hash upgrades (F04b fix):** `StudentBackend` verifies passwords
 without Django's auto-saving upgrade setter. Previously, a login that loaded the
@@ -354,7 +364,7 @@ SPF/DKIM/DMARC, TLS/authenticated delivery, retries/queues, bounce handling and 
 logs; none is purchased or configured here. Do not use the console backend publicly.
 Auth role/DB compromise, stolen sessions/email links, credential stuffing from many
 IPs, endpoint compromise and arbitrary trusted Python/DBA access remain material
-risks. No MFA/social login/payments/email-change/dashboard work is included.
+risks. No MFA/social login/payments/dashboard work is included.
 
 ## Milestone 4A website
 

@@ -30,7 +30,7 @@ Original decisions:
 4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
 5. AI limits for the shared key (done: 10 per student and 200 for the site per day; see
    docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
-6. Account deletion and email change (account deletion done; email change next; see "Account deletion" below).
+6. Account deletion and email change (done; see "Account deletion" below and "Email change (launch step F, part 2)" in docs/AUTHENTICATION.md).
 7. Privacy page and terms (NDPA) (done: `/accounts/privacy/` and `/accounts/terms/`; see "Privacy notice and terms" below).
 8. Backups and a tested restore (done: daily encrypted backups through GitHub Actions; see docs/BACKUPS.md).
 

@@ -581,6 +581,59 @@ def settings(request, identity):
                   'class_bands': list(zip(CLASS_NAMES, bands)), 'class_bands_custom': custom})
 
 
+EMAIL_CODE_SENT = ('If that address can be used, we have sent it a 6-digit code. It works for 10 minutes. '
+                   'Your email stays the same until you enter it.')
+EMAIL_CODE_WRONG = 'That code is wrong or has expired. Check the newest email, or ask for a new code.'
+
+
+def _email_change_page(request, identity, form=None, code_form=None, notice=None, status=200):
+    from accounts import email_change
+    return render(request, 'student_web/email_change.html', {
+        'form': form or forms.EmailChangeForm(), 'code_form': code_form or forms.EmailChangeCodeForm(),
+        'pending': email_change.pending(request.user.pk), 'notice': notice}, status=status)
+
+
+@protected(('GET', 'POST'))
+def email_change(request, identity):
+    """Launch step F, part 2: the password and the new address; a code goes to the new address."""
+    from django.contrib.auth.hashers import check_password
+    from accounts import email_change as changes
+    from accounts.models import Student
+    from accounts.throttling import rate_limit
+    if request.method != 'POST':
+        return _email_change_page(request, identity)
+    limited = rate_limit(request, 'change-email')
+    if limited is not None:
+        return limited
+    form = forms.EmailChangeForm(request.POST)
+    if form.is_valid():
+        current = Student.objects.using('auth').filter(pk=request.user.pk, is_active=True).first()
+        if current is None or not check_password(form.cleaned_data['password'], current.password):
+            form.add_error('password', 'That password is not right. Nothing was changed.')
+        elif form.cleaned_data['new_email'] == current.email:
+            form.add_error('new_email', 'That is already your email address.')
+        else:
+            changes.request_code(current.pk, form.cleaned_data['new_email'])
+            return _email_change_page(request, identity, notice=EMAIL_CODE_SENT)
+    return _email_change_page(request, identity, form=form, status=400)
+
+
+@protected(('POST',))
+def email_change_confirm(request, identity):
+    from accounts import email_change as changes
+    from accounts.throttling import rate_limit
+    limited = rate_limit(request, 'change-email-code')
+    if limited is not None:
+        return limited
+    code_form = forms.EmailChangeCodeForm(request.POST)
+    if code_form.is_valid() and changes.confirm(request.user.pk, code_form.cleaned_data['code']):
+        messages.success(request, 'Your email address was changed. A notice was sent to your old address.')
+        return redirect('student_web:settings')
+    if code_form.is_valid():
+        code_form.add_error('code', EMAIL_CODE_WRONG)
+    return _email_change_page(request, identity, code_form=code_form, status=400)
+
+
 ACCOUNT_DELETED = ('Your account and all your records have been deleted, and you have been signed out. A '
                    'confirmation email was sent to your address. Encrypted backups that still contain them are '
                    'deleted automatically within 30 days.')

@@ -63,7 +63,8 @@ def verify(email, text):
         if student is None:
             return False
         record = (SignupCode.objects.using('auth').select_for_update()
-                  .filter(student=student, consumed_at__isnull=True).order_by('-created_at').first())
+                  .filter(student=student, consumed_at__isnull=True, new_email__isnull=True)
+                  .order_by('-created_at').first())
         now = timezone.now()
         if record is None or record.expires_at <= now or record.attempts >= MAX_ATTEMPTS:
             return False
