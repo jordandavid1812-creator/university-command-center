@@ -28,7 +28,8 @@ Original decisions:
 3. **Invite-only sign-up** (done), later replaced on the public site by **open sign-up with an
    emailed 6-digit code** (see "Open sign-up" below).
 4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
-5. AI limits for the shared key.
+5. AI limits for the shared key (done: 10 per student and 200 for the site per day; see
+   docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
 6. Account deletion and email change.
 7. Privacy page and terms (NDPA).
 8. Backups and a tested restore.

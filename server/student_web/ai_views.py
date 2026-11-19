@@ -25,6 +25,7 @@ LIMIT_MESSAGES = {
     "daily": "You have used all 50 AI requests for today. The count starts again at midnight (Lagos time).",
     "results": "You have 500 saved AI results, the most you can keep. Delete some results to make room.",
     "busy": "Another AI request of yours is still in progress. Wait for it to finish, then try again.",
+    "site": "The AI tools have reached today's limit for the whole site. They open again at midnight (Lagos time).",
 }
 FAILURE_MESSAGES = {
     "network": "The request to the AI service could not be completed (for example no internet connection, or an "
@@ -168,7 +169,11 @@ def send(request, identity, identifier):
                                               truncated=extracted.truncated or extracted.picked_from is not None,
                                               consent_token_hash=token_hash)
     except AiLimitReached as refused:
-        return error_page(request, 'Request not sent', LIMIT_MESSAGES[refused.reason], 429)
+        message = LIMIT_MESSAGES[refused.reason]
+        if refused.reason == "daily" and getattr(django_settings, "UCC_AI_REQUESTS_PER_DAY", None):
+            message = (f"You have used all {django_settings.UCC_AI_REQUESTS_PER_DAY} AI requests for today. "
+                       "The count starts again at midnight (Lagos time).")
+        return error_page(request, 'Request not sent', message, 429)
     if not created:
         return redirect('student_web:ai-request', ledger.pk)
     # 3. Call the provider with no database transaction open. From here on every outcome is

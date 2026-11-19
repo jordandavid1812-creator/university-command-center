@@ -118,6 +118,29 @@ ever fires despite the lock, the existing request is returned instead of an erro
 counts, whatever its status, because a failed or interrupted call may still cost
 money.
 
+## Limits for the shared key (launch step E)
+
+The owner's shared AI key is protected by two daily limits, both counted per Lagos day
+(midnight to midnight) and checked in `services.ai.reserve` before anything is sent:
+
+| Limit | Public site (`public_site.py`) | Local and test profiles |
+| --- | --- | --- |
+| Requests per student per day (`UCC_AI_REQUESTS_PER_DAY`) | 10 | 50 (`AI_REQUESTS_PER_DAY`) |
+| Requests for the whole site per day (`UCC_AI_SITE_REQUESTS_PER_DAY`) | 200 | none |
+
+- The site-wide count is one row per day in `academics_aisiteusage` (migrations 0022/0023). It
+  holds no student data. Row-level security is forced: only a transaction with a valid signed
+  student context can read it or add to it; the table owner sees nothing without one.
+- The count goes up in the same transaction as the new ledger row, after every other check,
+  with `INSERT ... ON CONFLICT DO UPDATE ... WHERE requests < limit`. The row lock makes two
+  students at the last request take turns, so the limit is never passed. A refused or failed
+  reservation rolls the count back; a repeated Send (same consent token) is not counted again.
+- The website may only `SELECT`, `INSERT` and `UPDATE (requests)` it: never delete, truncate or
+  change the day. `require_runtime_role` refuses to start otherwise, or without forced RLS.
+- Students see "You have used all 10 AI requests for today" or "The AI tools have reached
+  today's limit for the whole site", and nothing is sent.
+- Tests: `security_tests.test_ai_site_limit`, `web_tests.test_ai_limit_pages`.
+
 ## Stage 2: text extraction
 
 `student_web.text_extraction.extract_text(file_type, content)` returns an

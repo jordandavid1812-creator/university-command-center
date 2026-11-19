@@ -158,3 +158,7 @@ The PDF child may only append a folder that really holds pypdf; never import pyp
 Real email (step C): ReviewedSMTPBackend is the ONLY approved backend (E105 refuses all others); keep
 its fixed hosts, port 587 STARTTLS with verified TLS 1.2+, one recipient per message and generic failure
 logs. Email credentials come only from the private env (UCC_EMAIL_ADDRESS, UCC_EMAIL_APP_PASSWORD).
+AI limits (launch step E): the public profiles keep UCC_AI_REQUESTS_PER_DAY = 10 and
+UCC_AI_SITE_REQUESTS_PER_DAY = 200. Count the site total only through academics_aisiteusage in
+the same signed transaction as the ledger row; never give the runtime DELETE, TRUNCATE or
+UPDATE(day) on it, and keep its forced RLS. Add the AI key only after these limits are live.
