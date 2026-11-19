@@ -219,14 +219,20 @@ Do not manufacture an owner UUID or weaken signed student policies to make them 
 | Existing migrator | DDL and approved fixture setup in disposable tests | Privileged maintenance only; never website request credentials. |
 | Publisher | No role created or granted by GP2a | Separate least-privilege offline capability, explicit release operation; never website credentials or student-table access. Requires approval. |
 | Extraction/monitor worker | Not introduced | Proposal/evidence creation only, never publication or student data. Separate later design. |
-| Backup role | Existing privileges unchanged initially | Explicit reviewed reference export/restore access, never broad table SELECT defaults. |
+| Backup role (`ucc_backup`) | Existing privileges unchanged initially. It already has BYPASSRLS, read-only transactions and SELECT only on `BACKUP_TABLES` (`supabase/backup/backup_role.sql`). | Either add catalogue tables to its explicit allowlist, or a separate reference-export login; owner decision. Never broad table SELECT defaults. |
 
 GP2a enables and forces RLS on new catalogue tables, with no website policies/grants;
 normal runtime/auth/API reads and writes fail closed. Proposed draft maintenance
 uses an explicit owner-only RLS policy targeting the configured migration role,
-with no role membership or SET ROLE path from web logins. FORCE RLS does not itself
-give even the table owner row access; tests must prove fixtures work through that
-explicit policy rather than bypassing RLS. The migration role remains privileged
+with no role membership or SET ROLE path from web logins. On plain PostgreSQL 17,
+FORCE RLS does not itself give even the table owner row access; tests there must prove
+fixtures work through that explicit policy rather than bypassing RLS. On the live
+Supabase database the migration login (`postgres`) bypasses RLS entirely (see the
+account-deletion notes in docs/LAUNCH.md and migration academics.0024), so the policy
+is not what protects the catalogue there; the restricted logins' missing grants and
+policies are. Run the role-boundary tests on Supabase's own database image as well
+(`tools/test_supabase_sql.py`), and never treat the migrator as a restricted principal
+in either environment. The migration role remains privileged
 and unavailable to the web process. Test missing-policy and grant drift
 explicitly. The privileged migrator may alter schema; test fixtures must not pretend it
 is a safe publisher. Before any future runtime read projection, review base-table grants,
@@ -267,12 +273,18 @@ to a policy-monitoring provider. External services/regions or processing changes
 updating privacy.html and LEGAL_UPDATED together under AGENTS.md.
 
 Reference backup/restore access is a pre-implementation owner decision for GP2a, not just
-an operational follow-up. SELECT alone does not permit reading rows under FORCE RLS. The
-approved approach must specify the exact export login, table/column grants, any explicit
-read-only RLS policy or export function, encrypted output format, and restore actor/rights.
-Possible approaches are a separately restricted reference-export login or an explicit
-extension of the existing allowlisted backup process; neither is authorized by this draft.
-Never grant BYPASSRLS, broad default privileges or new student-table access to solve this.
+an operational follow-up. For a login without BYPASSRLS, SELECT alone does not permit
+reading rows under FORCE RLS. The existing backup login `ucc_backup` already has BYPASSRLS
+(owner-approved in launch step H; docs/BACKUPS.md), read-only transactions and SELECT only
+on the tables listed in `BACKUP_TABLES` and `backup_role.sql`. The approved approach must
+specify the exact export login, table/column grants, any explicit read-only RLS policy or
+export function, encrypted output format, and restore actor/rights. The two options are:
+(a) the simplest: add the catalogue tables to the existing encrypted backup's allowlist
+(`BACKUP_TABLES`, `backup_role.sql`, restore tool and its test together), which needs no
+new login or privilege; or (b) a separately restricted reference-export login without
+BYPASSRLS plus an explicit read-only RLS policy. Neither is authorized by this draft.
+Never give BYPASSRLS to any other login, add broad default privileges, or widen
+`ucc_backup` beyond explicitly listed tables to solve this.
 
 GP2a acceptance must run a restricted-login synthetic reference export/restore drill before
 persistent use. Restore identities/evidence/revisions and links in valid FK order with exact
@@ -311,10 +323,10 @@ with independent gates; do not expose an incomplete catalogue to website request
 | Integrity | Unique references/grade rules, protected FKs, mismatched maximum, missing endpoints; draft parent/child version changes; immutable source payload and institutional identity enforced in GP2a; released-parent/child mutation rejected by the GP3 guard. |
 | Applicability | Cohort/session boundaries, unknown scope and variant exceptions; direct university/identity reassignment rejected; display renames preserve resolution; new identities retain historical links; no automatic university inheritance. |
 | Role boundary | Actual runtime/auth/API/PUBLIC direct-SQL denials on drafts and writes; forced RLS, memberships, ownership, column grants, default privileges and MAINTAIN drift. |
-| Migrations | Fresh PostgreSQL 17, upgrade from exact master history, reverse/reapply only on disposable data, grants re-provisioned, generated Supabase SQL unchanged by re-export. |
+| Migrations | Fresh PostgreSQL 17 and Supabase's database image (where the migrator bypasses RLS), upgrade from exact master history, reverse/reapply only on disposable data, grants re-provisioned, generated Supabase SQL unchanged by re-export. |
 | Concurrency (GP3) | Independent connections release overlapping scopes or edit draft children; verify lock order, stale versions/hashes, fresh post-lock READ COMMITTED reads, rejected edits after release, rollback and ambiguous COMMIT. No partial publication. |
 | Publication visibility (GP3+) | Draft/rejected/withdrawn definitions unavailable for new bindings; no privileged-view bypass or stale process cache. Pooler tests use real separate logins. |
-| Backup/restore | Restricted export login reads only the approved reference scope under forced RLS; unauthorized writes/reads denied; restored identities, source snapshots, FKs and hashes match; existing encrypted student backup and account deletion suites remain intact. |
+| Backup/restore | The approved export login (existing `ucc_backup` allowlist, or a separate restricted login) reads only the approved reference scope; unauthorized writes/reads denied; restored identities, source snapshots, FKs and hashes match; existing encrypted student backup and account deletion suites remain intact. |
 | Privacy/security | Direct evidence UPDATE/referenced DELETE and artifact substitution rejected; new evidence snapshots invalidate old approval; source strings rendered safely, no secrets/PII leakage, bounded resources; no external network in tests/CI. |
 
 Negative controls must deliberately remove precision validation, forced RLS, an access-denial
@@ -334,7 +346,9 @@ not claim those future controls or PostgreSQL experiments have been implemented 
 4. Approve the first official-source batches and artifact licensing/retention/privacy policy
    before real data is ingested. An official institution registry is not grading evidence.
 5. Before GP2a implementation, approve the reference export/restore principal, exact
-   grants/RLS access and restoration contract. Do not widen the student backup role implicitly.
+   grants/RLS access and restoration contract: option (a) list the catalogue tables in the
+   existing encrypted backup (recommended, no new privilege), or option (b) a separate
+   restricted export login. Do not widen the student backup role implicitly.
 
 This document recommends defaults; none of these choices is recorded as owner-approved.
 The next safe action is independent review of this proposal, then explicit authorization
