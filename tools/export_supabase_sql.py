@@ -189,6 +189,16 @@ $keep$;
         if auth_uses:
             lines.append(f'DROP POLICY IF EXISTS ucc_auth_access ON public.{table};')
             lines.append(f'CREATE POLICY ucc_auth_access ON public.{table} FOR ALL TO {auth} USING (true) WITH CHECK (true);')
+    from accounts.dbsafety import DEFAULTS
+    lines.append(f'''
+-- 4b. Database time limits on the website logins themselves. The website also sends them when it
+--     connects, but Supabase's pooler ignores per-connection options; these always apply.
+ALTER ROLE {runtime} SET statement_timeout = '{DEFAULTS["runtime_statement_ms"]}ms';
+ALTER ROLE {runtime} SET lock_timeout = '{DEFAULTS["lock_ms"]}ms';
+ALTER ROLE {runtime} SET idle_in_transaction_session_timeout = '{DEFAULTS["idle_ms"]}ms';
+ALTER ROLE {auth} SET statement_timeout = '{DEFAULTS["auth_statement_ms"]}ms';
+ALTER ROLE {auth} SET lock_timeout = '{DEFAULTS["lock_ms"]}ms';
+ALTER ROLE {auth} SET idle_in_transaction_session_timeout = '{DEFAULTS["idle_ms"]}ms';''')
     lines.append(f'''
 -- 5. Self-check: stop with an error if any Data API login can still reach a table or function.
 DO $check$

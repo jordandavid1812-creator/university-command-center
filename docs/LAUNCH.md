@@ -8,8 +8,8 @@ This page records the plan and what each step added. It is built one small PR at
 **Update (owner's choice):** the database moves to **Supabase** (set up with numbered SQL files in
 its SQL editor, RLS on every table) and hosting to **Vercel**; big study files will go to
 **Supabase Storage** with storage-only keys. The step 2 server package stays as a tested backup
-option. See [SUPABASE_GUIDE.md](SUPABASE_GUIDE.md). Remaining steps: Supabase database (done in
-this step), Vercel hosting, real email, big uploads to Supabase Storage, AI limits, account
+option. See [SUPABASE_GUIDE.md](SUPABASE_GUIDE.md) and [VERCEL_GUIDE.md](VERCEL_GUIDE.md). Steps: Supabase
+database (done), Vercel hosting (done), real email, big uploads to Supabase Storage, AI limits, account
 deletion and email change, privacy page and terms, backups.
 
 Original decisions:

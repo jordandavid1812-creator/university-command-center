@@ -7,6 +7,7 @@ time limit and an output cap; its output is checked strictly before any text is 
 import collections
 import dataclasses
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -150,10 +151,23 @@ def _run_child(content):
         return None
 
 
+def library_folder():
+    """The folder that holds pypdf, found WITHOUT importing it (the website never imports pypdf).
+    On hosts like Vercel it is not on the isolated child's search path, so the child is told."""
+    try:
+        spec = importlib.util.find_spec("pypdf")
+    except (ImportError, ValueError):
+        return None
+    if spec is None or not spec.submodule_search_locations:
+        return None
+    return str(Path(next(iter(spec.submodule_search_locations))).resolve().parent)
+
+
 def _run_child_in(workdir, content):
     output, state = [], {"size": 0, "too_large": False}
+    folder = library_folder()
     process = subprocess.Popen(
-        [sys.executable, "-I", str(CHILD_SCRIPT)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        [sys.executable, "-I", str(CHILD_SCRIPT)] + ([folder] if folder else []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, env=child_environment(), cwd=workdir, close_fds=True, shell=False)
     code, threads = None, []
     try:

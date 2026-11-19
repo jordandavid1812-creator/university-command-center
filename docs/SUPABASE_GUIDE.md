@@ -13,6 +13,8 @@ them by hand. Run them **in number order** in the SQL editor:
 | `0001_schema.sql` | Every table, constraint and row-level security policy (all 40 Django migrations), and Django's list of applied migrations. |
 | `0002_security.sql` | The website's two restricted logins (`ucc_runtime`, `ucc_auth`), removes Supabase's automatic Data API access from every table and private function (also for tables made later), keeps Supabase's own services able to connect, the exact website grants, row-level security on **every** table, and a self-check that stops with an error if anything is still open. |
 
+| `0003_security.sql` | Everything in 0002, plus database time limits stored on the two website logins (`statement_timeout` 10 s / 5 s, `lock_timeout` 3 s, `idle_in_transaction_session_timeout` 15 s). Supabase's pooler ignores the time limits the website sends when it connects, so they live on the logins. |
+
 Later updates come as a new schema file and a new security file. Run both, in order. Running a
 security file again is always safe.
 

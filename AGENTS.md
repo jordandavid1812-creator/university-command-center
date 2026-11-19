@@ -145,3 +145,7 @@ Supabase (owner's choice, replaces the server for the database): supabase/migrat
 tools/export_supabase_sql.py and must stay in step with the Django migrations (CI supabase-sql). Never
 grant anon/authenticated/service_role anything; the website refuses to start if they can reach a table.
 Keep RLS on every table. Never put passwords or the signing key in the numbered files.
+Vercel (owner's choice): vercel_app.py must keep forcing config.settings.web_vercel and running
+check --deploy (fail level WARNING) before serving. uv.lock must match requirements-django-lock.txt.
+Keep .vercelignore sending only the website; Vercel env vars go to Production only, never Preview.
+The PDF child may only append a folder that really holds pypdf; never import pypdf in the website.
