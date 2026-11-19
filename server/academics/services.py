@@ -594,3 +594,13 @@ class AiRecords:
 
 
 ai = AiRecords()
+
+
+def delete_account(identity):
+    """Launch step F: permanently delete the signed-in student's account and every record of
+    theirs, in one transaction (ucc_security.delete_my_account, academics.0024). Returns True when
+    the account row was removed. The caller checks the password first and signs the session out."""
+    with student_transaction(identity):
+        with connections[database_alias()].cursor() as cursor:
+            cursor.execute("SELECT ucc_security.delete_my_account()")
+            return cursor.fetchone()[0] == 1

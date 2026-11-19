@@ -91,6 +91,12 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT EXECUTE ON FUNCTION ucc_security.current_student() TO {}").format(sql.Identifier(role)))
+            # Launch step F (academics.0024): self-service deletion, only for the signed student.
+            cursor.execute("SELECT to_regprocedure('ucc_security.delete_my_account()') IS NOT NULL")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("REVOKE ALL ON FUNCTION ucc_security.delete_my_account() FROM PUBLIC"))
+                cursor.execute(sql.SQL("GRANT EXECUTE ON FUNCTION ucc_security.delete_my_account() TO {}").format(
+                    sql.Identifier(role)))
             cursor.execute("""
                 INSERT INTO ucc_security.context_key(singleton, secret) VALUES (true, %s)
                 ON CONFLICT (singleton) DO UPDATE SET secret = EXCLUDED.secret

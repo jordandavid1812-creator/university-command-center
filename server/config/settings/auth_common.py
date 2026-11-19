@@ -56,7 +56,8 @@ def configure(namespace):
         AUTH_LINK_ORIGIN="http://127.0.0.1:8000",
         AUTH_RATE_LIMITS={"login": (10, 900), "register": (5, 3600), "reset": (5, 3600),
                           "resend": (5, 3600), "verify": (20, 3600), "reset-confirm": (20, 3600),
-                          "password-change": (5, 900), "verify-code": (20, 3600)},
+                          "password-change": (5, 900), "verify-code": (20, 3600),
+                          "delete-account": (5, 3600)},
         # S0-01: forwarded headers are never trusted until a reviewed deployment
         # topology lists its proxy networks here. Keep empty in every profile.
         UCC_TRUSTED_PROXIES=(),

@@ -197,6 +197,21 @@ def versioned(form):
     return form
 
 
+class AccountDeleteForm(StrictForm):
+    """Launch step F: delete the whole account. The password and a typed word guard against mistakes."""
+    password = forms.CharField(label='Your password', strip=False, max_length=128,
+                               widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
+    confirm = forms.CharField(label='Type DELETE to confirm', max_length=10,
+                              help_text='In capital letters. This cannot be undone.',
+                              widget=forms.TextInput(attrs={'autocomplete': 'off', 'spellcheck': 'false',
+                                                            'autocapitalize': 'characters'}))
+
+    def clean_confirm(self):
+        if self.cleaned_data['confirm'].strip() != 'DELETE':
+            raise forms.ValidationError('Type DELETE in capital letters to confirm.')
+        return 'DELETE'
+
+
 class DeleteForm(StrictForm):
     version = forms.IntegerField(min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
     confirm = forms.BooleanField(label='I confirm I want to delete this record')

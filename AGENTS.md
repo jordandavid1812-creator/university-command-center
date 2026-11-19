@@ -170,3 +170,6 @@ only, default_transaction_read_only) and never reads sessions, tokens, counters 
 Backups are always age-encrypted before touching disk; never print or log data, keys or passwords.
 The backup workflow never runs on pull requests. Run tools/test_backup_restore.py when changing it,
 and add new student tables to BACKUP_TABLES, backup_role.sql and the privacy notice together.
+Account deletion (launch step F): only through ucc_security.delete_my_account() in a signed student
+transaction; it takes no arguments. Any new table referring to accounts_student must be added to the
+function (new migration) and to security_tests.test_account_deletion.OWNED in the same PR.
