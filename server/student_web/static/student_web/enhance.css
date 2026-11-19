@@ -151,3 +151,8 @@
   .main-content a:not(.button, .skip-link), .public-nav a, .metric, .main-content .panel { border:1px solid LinkText; }
   .ucc-glide, .ucc-progress { display:none; }
 }
+/* Launch step G: links inside the privacy notice and terms read as plain text links, not pills. */
+.main-content .legal-page a, .main-content .legal-agree a, .main-content .legal-page a:hover, .main-content .legal-agree a:hover {
+  display:inline; padding:0; min-height:0; border:0; border-radius:0; background:none; box-shadow:none; transform:none;
+  color:inherit; font-weight:650; text-decoration:underline; text-underline-offset:2px; }
+

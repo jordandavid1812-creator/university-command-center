@@ -24,6 +24,7 @@
         {% for field in form %}<div class="form-field">{{ field.as_field_group }}</div>{% endfor %}
       {% endif %}
     {% endif %}
+    {% if auth_page == 'accounts:register' %}<p class="muted legal-agree">By creating an account you agree to the <a href="{% url 'accounts:terms' %}">Terms of use</a> and confirm you have read the <a href="{% url 'accounts:privacy' %}">Privacy notice</a>.</p>{% endif %}
     <button class="button auth-submit" type="submit">{{ submit }}</button>
   </form>
   {% if website_enabled %}

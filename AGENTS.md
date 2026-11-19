@@ -162,3 +162,6 @@ AI limits (launch step E): the public profiles keep UCC_AI_REQUESTS_PER_DAY = 10
 UCC_AI_SITE_REQUESTS_PER_DAY = 200. Count the site total only through academics_aisiteusage in
 the same signed transaction as the ledger row; never give the runtime DELETE, TRUNCATE or
 UPDATE(day) on it, and keep its forced RLS. Add the AI key only after these limits are live.
+Privacy notice and terms (launch step G): /accounts/privacy/ and /accounts/terms/ must stay true. Any
+change to stored data, cookies, outside services or their regions updates privacy.html and
+LEGAL_UPDATED in the same PR. The AI pages still never name the provider; the privacy notice must.

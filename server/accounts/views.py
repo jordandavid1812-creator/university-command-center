@@ -58,6 +58,22 @@ def register(request):
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Register', 'submit': 'Register'})
 
 
+LEGAL_UPDATED = '19 November 2026'
+LEGAL_CONTACT = 'unicommand.info@gmail.com'
+
+
+@require_http_methods(['GET', 'HEAD'])
+def privacy(request):
+    """Public privacy notice (launch step G). Keep it in step with what the site stores and sends."""
+    return render(request, 'accounts/privacy.html', {'updated': LEGAL_UPDATED, 'contact': LEGAL_CONTACT})
+
+
+@require_http_methods(['GET', 'HEAD'])
+def terms(request):
+    """Public terms of use (launch step G)."""
+    return render(request, 'accounts/terms.html', {'updated': LEGAL_UPDATED, 'contact': LEGAL_CONTACT})
+
+
 @never_cache
 @sensitive_post_parameters()
 @require_http_methods(['GET', 'POST'])

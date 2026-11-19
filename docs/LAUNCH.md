@@ -31,7 +31,7 @@ Original decisions:
 5. AI limits for the shared key (done: 10 per student and 200 for the site per day; see
    docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
 6. Account deletion and email change.
-7. Privacy page and terms (NDPA).
+7. Privacy page and terms (NDPA) (done: `/accounts/privacy/` and `/accounts/terms/`; see "Privacy notice and terms" below).
 8. Backups and a tested restore.
 
 Then: put it online, an independent security test, and the first invitations.
@@ -200,3 +200,23 @@ clean deploy check and refuse bad email values; `tools/test_server_package.py` s
 start command refusing without email settings and booting after the full preflight with them;
 `tools/test_vercel_stack.py` shows `vercel_app.py` starting with email settings and refusing
 without; `tests/test_vercel_env.py` covers the hidden app-password prompt.
+
+## Privacy notice and terms (step G)
+
+Two public pages, linked from every page's footer and from the sign-up form ("By creating an
+account you agree to the Terms of use and confirm you have read the Privacy notice"):
+
+- `/accounts/privacy/` (`accounts/templates/accounts/privacy.html`): what is kept (account, records,
+  files and their text, AI ledger and saved results, hashed security counters), the cookies, why,
+  who else handles it (Vercel in Dublin, Supabase in Ireland, Gmail, Google Gemini: only the chosen
+  file text up to 60,000 characters and the question, never name, username, email, matric, file
+  name or title; free tier may be kept, used and read by Google), retention, NDPA 2023 rights
+  (access with Export my data, correction, deletion by email until step F, objection, complaint to
+  the NDPC), security, age (under 18 with permission) and changes.
+- `/accounts/terms/`: account, content, fair use, estimates and AI accuracy, the free trial "as is",
+  ending, Nigerian law.
+- Contact and date: `LEGAL_CONTACT` and `LEGAL_UPDATED` in `accounts/views.py`. Change the date
+  whenever the wording changes.
+- **Keep them true:** any change to what the site stores, its cookies, its providers or where they
+  run must update the privacy notice in the same pull request.
+- Tests: `web_tests.test_legal_pages`.
