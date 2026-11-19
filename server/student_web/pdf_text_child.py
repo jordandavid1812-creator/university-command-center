@@ -164,7 +164,21 @@ def extract(data):
     return EXIT_TEXT, {"pages_read": pages_read, "pages_total": total, "truncated": truncated}, text
 
 
+def use_library_folder(argv):
+    """Hosts such as Vercel keep installed packages in a folder that Python's isolated mode (-I)
+    does not search. The parent may name that folder as the only argument. It is used only if it
+    is an absolute folder that really holds pypdf, and is added AFTER the standard library, so it
+    can never replace a standard module."""
+    if len(argv) != 2:
+        return
+    folder = argv[1]
+    if (os.path.isabs(folder) and os.path.isfile(os.path.join(folder, "pypdf", "__init__.py"))
+            and folder not in sys.path):
+        sys.path.append(folder)
+
+
 def main():
+    use_library_folder(sys.argv)
     # pypdf messages (through Python's last-resort log handler) and warnings can contain
     # fragments of the file; this process's stderr goes to the null device. Logging
     # settings are not changed (the parent also discards stderr).
