@@ -37,7 +37,9 @@ def configure(namespace):
     namespace["AUTH_PASSWORD_VALIDATORS"] = deepcopy(namespace["AUTH_PASSWORD_VALIDATORS"])
     for validator in namespace["AUTH_PASSWORD_VALIDATORS"]:
         if validator["NAME"].endswith("MinimumLengthValidator"):
-            validator["OPTIONS"] = {"min_length": 12}
+            # Owner's choice: 8 characters (12 felt too long for students). Common, all-number and
+            # username-like passwords are still refused, and sign-in attempts are rate-limited.
+            validator["OPTIONS"] = {"min_length": 8}
     namespace.update(
         AUTHENTICATION_BACKENDS=["accounts.backends.StudentBackend"],
         SESSION_ENGINE="django.contrib.sessions.backends.db",
