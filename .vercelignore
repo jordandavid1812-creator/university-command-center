@@ -1,11 +1,12 @@
 # Vercel receives only what the website needs: vercel_app.py, pyproject.toml, uv.lock,
-# .python-version, academic_logic.py and server/ (without its tests).
+# .python-version, academic_logic.py, grading_policy.py and server/ (without its tests).
 /*
 !/vercel_app.py
 !/pyproject.toml
 !/uv.lock
 !/.python-version
 !/academic_logic.py
+!/grading_policy.py
 !/server/
 /server/*_tests/
 /server/**/tests/
