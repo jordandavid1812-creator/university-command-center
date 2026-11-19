@@ -18,7 +18,7 @@ class LegalPageTests(WebsiteCase):
         for text in ('Nigeria Data Protection Act 2023', 'ndpc.gov.ng', 'Dublin, Ireland', 'Supabase',
                      'Google Gemini', "Gemini's free service", 'people at Google may read it',
                      'up to 60,000 characters', 'Export my data', '__Host-ucc_session', 'ucc_display',
-                     'tracking or analytics cookies'):
+                     'tracking or analytics cookies', 'GitHub', 'deleted automatically after 30 days'):
             with self.subTest(text=text):
                 self.assertContains(page, text)
 
