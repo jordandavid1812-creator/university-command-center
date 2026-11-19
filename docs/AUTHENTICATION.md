@@ -449,10 +449,14 @@ has only the minimal FAILURE/UNCLASSIFIED values; B1c is still separate work.
 
 E104/E105 are **not deploy-only** and are registered independently of logging
 enforcement. Both `check` and `check --deploy` under `web_secure` intentionally
-fail E105 today: `APPROVED_EMAIL_BACKENDS=()` and **no actual backend is approved**.
+still fail E105 (console email). **Launch step C (owner-approved, reviewed) approved
+exactly one backend:** `accounts.email_backend.ReviewedSMTPBackend` (fixed providers,
+port 587 STARTTLS with verified certificates and TLS 1.2+, 10 s timeout, one
+recipient per message, configured sender only). Only the public profiles
+(`web_production`, `web_vercel`) select it; see docs/LAUNCH.md step C.
 Console/file, subclasses, wrappers, unknown/unimportable classes and selecting
 SMTP/locmem do not bypass this. Do not populate the allow-list, skip the check or
-configure a provider without its separate review/authorization. Development/test
+configure another provider without its separate review/authorization. Development/test
 email behavior is unchanged, including console output in development.
 
 Checks execute only when the command/framework requests them; WSGI setup does not

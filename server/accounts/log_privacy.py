@@ -6,8 +6,12 @@ from django.core.exceptions import ImproperlyConfigured
 from .logging import (SanitizingHandler, process_exception_hook, thread_exception_hook,
                       unraisable_exception_hook)
 
-# No backend/provider is approved. Identity approval needs a separate reviewed change.
-APPROVED_EMAIL_BACKENDS = ()
+# Exactly one reviewed backend is approved (launch step C, accounts.email_backend): fixed
+# providers, STARTTLS with verified certificates, one recipient per message. Changing this
+# needs a separate reviewed change. Local and test profiles keep console/locmem and E105.
+from .email_backend import ReviewedSMTPBackend  # noqa: E402
+
+APPROVED_EMAIL_BACKENDS = (ReviewedSMTPBackend,)
 _PREFIXES = ('django', 'psycopg', 'accounts', 'academics', 'student_web')
 
 

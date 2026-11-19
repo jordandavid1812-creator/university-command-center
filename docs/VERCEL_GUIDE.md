@@ -1,9 +1,15 @@
 # Vercel guide: hosting the website
 
 The website runs on Vercel and uses the Supabase database (see SUPABASE_GUIDE.md). Claude will
-give you the exact values; this page is the reference. **The site stays switched off until real
-email is set up (launch step C):** `vercel_app.py` runs every safety check before serving
-anything, and check `accounts.E105` refuses to start without approved email.
+give you the exact values; this page is the reference. `vercel_app.py` runs every safety check
+before serving anything; without the email settings below the site refuses to start.
+
+## Email account (once)
+
+1. Create a **new Gmail account just for the website** (for example `ucc.notifications@gmail.com`).
+2. In that account: **Manage your Google Account → Security → 2-Step Verification**: turn it on.
+3. Then search **App passwords** in the account settings, create one named `University Command
+   Center`, and keep the 16 letters Google shows. Never paste them into chat.
 
 ## What Vercel uses
 
@@ -15,16 +21,17 @@ anything, and check `accounts.E105` refuses to start without approved email.
 | `.vercelignore` | Vercel receives only `vercel_app.py`, `pyproject.toml`, `uv.lock`, `.python-version`, `academic_logic.py` and `server/` without its tests. |
 | `server/config/settings/web_vercel.py` | The public-site rules shared with the server package (`public_site.py`: one https address, HSTS, `__Host-` cookies, invite-only sign-up, WhiteNoise), plus Supabase's transaction pooler (port 6543, users `ucc_runtime.<ref>` / `ucc_auth.<ref>`, TLS required, no server-side cursors). |
 
-## Set up (once, after step C is merged)
+## Set up (once)
 
 1. **Make your private Vercel file** on your computer (after `tools/supabase_secrets.py` and its
    `private-setup.sql` are done):
 
    ```powershell
-   & $py tools/vercel_env.py --site-host YOUR-VERCEL-ADDRESS --project-ref YOUR-PROJECT-REF --pooler-host YOUR-POOLER-HOST
+   & $py tools/vercel_env.py --site-host YOUR-VERCEL-ADDRESS --project-ref YOUR-PROJECT-REF --pooler-host YOUR-POOLER-HOST --email-address YOUR-SITE-GMAIL
    ```
 
-   It writes `vercel.env` to `%LOCALAPPDATA%\UCC\supabase`. Nothing secret is printed.
+   It asks for the app password (hidden) and writes `vercel.env` to `%LOCALAPPDATA%\UCC\supabase`.
+   Nothing secret is printed.
 2. **Import it into Vercel:** Project → **Settings → Environment Variables → Import .env**,
    choose that file, and tick **Production only** (not Preview or Development). Preview builds
    then have no settings and cannot start, so they can never show real data.

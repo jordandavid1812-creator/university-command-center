@@ -4,8 +4,7 @@ Runs behind the Caddy proxy on the same server: Caddy holds the HTTPS certificat
 only thing that can reach this process. Everything that differs per server comes from the
 environment and is checked here; a missing or unsafe value stops the website before it starts.
 
-Still blocked by check accounts.E105 until a reviewed real-email backend is approved (launch
-step 4): without real email, sign-up and password-reset links would have nowhere safe to go.
+Real email (launch step C) uses the reviewed backend; check accounts.E105 refuses any other.
 """
 import ipaddress
 import os
@@ -30,6 +29,7 @@ def proxy_network(value):
 
 
 public_site.configure(globals(), site_host(required('UCC_SITE_HOST')))
+public_site.configure_email(globals(), os.environ)
 
 # Only Caddy can reach this process, so its X-Forwarded-* headers are trusted: the scheme for
 # HTTPS detection, and the client address for the sign-in limits (accounts.throttling).

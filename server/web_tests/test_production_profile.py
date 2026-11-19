@@ -12,7 +12,8 @@ from django.test import SimpleTestCase
 
 SERVER = Path(__file__).resolve().parents[1]
 PROFILE = 'config.settings.web_production'
-GOOD = {'UCC_SITE_HOST': 'ucc-synthetic.example.com', 'UCC_TRUSTED_PROXY': '172.30.0.0/24'}
+GOOD = {'UCC_EMAIL_ADDRESS': 'ucc.synthetic.site@gmail.com', 'UCC_EMAIL_APP_PASSWORD': 'abcd efgh ijkl mnop',
+        'UCC_SITE_HOST': 'ucc-synthetic.example.com', 'UCC_TRUSTED_PROXY': '172.30.0.0/24'}
 
 
 def run(code='', env_updates=None, args=None):
@@ -29,14 +30,34 @@ def run(code='', env_updates=None, args=None):
 class ProductionProfileTests(SimpleTestCase):
     databases = {'default', 'runtime', 'auth'}  # the website test runner prepares them (run alone too)
 
-    def test_deploy_check_is_clean_except_the_email_gate(self):
-        """Only accounts.E105 remains: real email must be approved (launch step 4) before launch."""
-        result = run(args=['manage.py', 'check', '--deploy', '--settings=' + PROFILE])
-        self.assertNotEqual(result.returncode, 0)
-        output = result.stdout + result.stderr
-        self.assertIn('(accounts.E105)', output)
-        self.assertIn('System check identified 1 issue (1 silenced).', output)
-        self.assertNotIn('WARNINGS', output)
+    def test_deploy_check_is_completely_clean_with_real_email(self):
+        """Launch step C: with the reviewed email backend, every check passes (warnings count as errors)."""
+        result = run(args=['manage.py', 'check', '--deploy', '--fail-level', 'WARNING', '--settings=' + PROFILE])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('System check identified no issues (1 silenced).', result.stdout + result.stderr)
+
+    def test_email_settings_are_required_and_checked(self):
+        catch = ('import sys\nfrom django.core.exceptions import ImproperlyConfigured\n'
+                 f'try:\n    import {PROFILE}\n'
+                 'except ImproperlyConfigured as error:\n    print(error); sys.exit(3)\n')
+        for env_updates, message in (({'UCC_EMAIL_ADDRESS': None}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_ADDRESS': 'someone@yahoo.com'}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_ADDRESS': 'not an address@gmail.com'}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': None}, 'UCC_EMAIL_APP_PASSWORD'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': 'short'}, 'UCC_EMAIL_APP_PASSWORD'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': 'abcd-efgh-ijkl-mnop'}, 'UCC_EMAIL_APP_PASSWORD')):
+            with self.subTest(env=env_updates):
+                caught = run(env_updates=env_updates, args=['-c', catch])
+                self.assertEqual(caught.returncode, 3, caught.stderr)
+                self.assertIn(message, caught.stdout)
+        result = run('''import json
+from django.conf import settings as s
+print(json.dumps([s.EMAIL_BACKEND, s.EMAIL_HOST, s.EMAIL_PORT, s.EMAIL_USE_TLS, s.EMAIL_USE_SSL, s.EMAIL_HOST_USER,
+                  s.EMAIL_HOST_PASSWORD == "abcdefghijklmnop", s.DEFAULT_FROM_EMAIL]))''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ['accounts.email_backend.ReviewedSMTPBackend', 'smtp.gmail.com', 587, True,
+                                                     False, 'ucc.synthetic.site@gmail.com', True,
+                                                     'University Command Center <ucc.synthetic.site@gmail.com>'])
 
     def test_https_cookies_hosts_and_order(self):
         result = run('''import json
@@ -69,8 +90,7 @@ print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIG
                                                   'whitenoise.middleware.WhiteNoiseMiddleware',
                                                   'accounts.middleware.ContentSecurityPolicyMiddleware'])
         self.assertEqual(data['STORAGES']['staticfiles']['BACKEND'], 'whitenoise.storage.CompressedStaticFilesStorage')
-        # Console email would print sign-up links into server logs; E105 blocks it (see above).
-        self.assertEqual(data['EMAIL_BACKEND'], 'django.core.mail.backends.console.EmailBackend')
+        self.assertEqual(data['EMAIL_BACKEND'], 'accounts.email_backend.ReviewedSMTPBackend')
 
     def test_unsafe_host_and_proxy_values_stop_the_website(self):
         cases = [({'UCC_SITE_HOST': None}, 'Set UCC_SITE_HOST')]

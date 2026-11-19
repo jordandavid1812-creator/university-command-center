@@ -149,3 +149,6 @@ Vercel (owner's choice): vercel_app.py must keep forcing config.settings.web_ver
 check --deploy (fail level WARNING) before serving. uv.lock must match requirements-django-lock.txt.
 Keep .vercelignore sending only the website; Vercel env vars go to Production only, never Preview.
 The PDF child may only append a folder that really holds pypdf; never import pypdf in the website.
+Real email (step C): ReviewedSMTPBackend is the ONLY approved backend (E105 refuses all others); keep
+its fixed hosts, port 587 STARTTLS with verified TLS 1.2+, one recipient per message and generic failure
+logs. Email credentials come only from the private env (UCC_EMAIL_ADDRESS, UCC_EMAIL_APP_PASSWORD).
