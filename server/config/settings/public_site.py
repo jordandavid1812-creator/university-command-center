@@ -41,9 +41,11 @@ def configure(namespace, host):
                       'whitenoise.middleware.WhiteNoiseMiddleware')
     namespace['MIDDLEWARE'] = middleware
     namespace['UCC_LOCAL_STATIC'] = False
-    # Launch step 3: only people with an invite code can create an account (check accounts.E106).
+    # Open sign-up (owner's choice): anyone with an email can register, and the account works
+    # only after its 6-digit email code is entered within 1 minute (check accounts.E106).
     namespace['UCC_PUBLIC_SITE'] = True
-    namespace['UCC_REQUIRE_INVITE'] = True
+    namespace['UCC_REQUIRE_INVITE'] = False
+    namespace['UCC_SIGNUP_CODE'] = True
 
 
 _ADDRESS = re.compile(r'[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,63}')

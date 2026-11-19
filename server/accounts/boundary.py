@@ -12,8 +12,10 @@ SUPPORT_TABLES = {
 }
 # Launch step 3: checked exactly like the support tables, but on its own (it arrives in a later
 # migration, so it is not part of the all-or-none support-table count).
+# Open sign-up: the emailed 6-digit codes (accounts.0005) are checked the same way.
 INVITE_TABLES = {
     'accounts_invitecode': (('SELECT',), ('used_at',)),
+    'accounts_signupcode': (('SELECT', 'INSERT', 'DELETE'), ('attempts', 'consumed_at')),
 }
 BASE_TABLE_PRIVILEGES = ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')
 

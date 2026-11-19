@@ -74,4 +74,10 @@ class Command(BaseCommand):
             if cursor.fetchone()[0]:
                 cursor.execute(sql.SQL('GRANT SELECT ON accounts_invitecode TO {}').format(sql.Identifier(role)))
                 cursor.execute(sql.SQL('GRANT UPDATE (used_at) ON accounts_invitecode TO {}').format(sql.Identifier(role)))
+            # Open sign-up codes (accounts.0005): create a code, count wrong tries, mark it used,
+            # and delete old ones. Who it belongs to, its digest and its times never change.
+            cursor.execute('SELECT to_regclass(%s) IS NOT NULL', ['public.accounts_signupcode'])
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL('GRANT SELECT, INSERT, DELETE ON accounts_signupcode TO {}').format(sql.Identifier(role)))
+                cursor.execute(sql.SQL('GRANT UPDATE (attempts, consumed_at) ON accounts_signupcode TO {}').format(sql.Identifier(role)))
         self.stdout.write('Separate authentication role configured; academic runtime privileges unchanged.')

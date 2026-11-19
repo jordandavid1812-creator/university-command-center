@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.sessions.backends.db import SessionStore
 from django.utils import timezone
 from accounts.devices import cleanup_expired
-from accounts.models import AccountToken, AuthThrottle
+from accounts.models import AccountToken, AuthThrottle, SignupCode
 
 
 class Command(BaseCommand):
@@ -14,6 +14,7 @@ class Command(BaseCommand):
         now = timezone.now()
         AuthThrottle.objects.using('auth').filter(expires_at__lte=now).delete()
         AccountToken.objects.using('auth').filter(expires_at__lt=now - timedelta(days=7)).delete()
+        SignupCode.objects.using('auth').filter(expires_at__lt=now - timedelta(days=1)).delete()
         SessionStore.clear_expired()
         cleanup_expired(now=now)
         self.stdout.write('Expired authentication artifacts removed; no private records printed.')

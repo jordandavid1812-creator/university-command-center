@@ -131,10 +131,12 @@ class InviteSettingTests(AuthenticationCase):
         page = self.client.get(reverse('accounts:register'))
         self.assertNotContains(page, 'invite_code')
 
-    def test_public_site_without_invites_fails_its_system_check(self):
-        with override_settings(UCC_PUBLIC_SITE=True, UCC_REQUIRE_INVITE=False):
-            self.assertEqual([e.id for e in checks.public_invite_check()], ['accounts.E106'])
-        with override_settings(UCC_PUBLIC_SITE=True, UCC_REQUIRE_INVITE=True):
+    def test_public_site_without_email_codes_fails_its_system_check(self):
+        # Open sign-up replaced invite-only sign-up: the public site must confirm emails by code.
+        for invite in (False, True):
+            with override_settings(UCC_PUBLIC_SITE=True, UCC_SIGNUP_CODE=False, UCC_REQUIRE_INVITE=invite):
+                self.assertEqual([e.id for e in checks.public_invite_check()], ['accounts.E106'])
+        with override_settings(UCC_PUBLIC_SITE=True, UCC_SIGNUP_CODE=True):
             self.assertEqual(checks.public_invite_check(), [])
         self.assertEqual(checks.public_invite_check(), [])  # local profiles are not public
 
