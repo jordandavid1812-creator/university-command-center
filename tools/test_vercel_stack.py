@@ -25,6 +25,7 @@ POOLER_IMAGE = 'mirror.gcr.io/edoburu/pgbouncer:v1.24.1-p1'
 NETWORK = 'ucc-vercel-test'
 SUPA, RUNTIME_POOL, AUTH_POOL = 'ucc-vtest-supabase', 'ucc-vtest-pool-runtime', 'ucc-vtest-pool-auth'
 HOST = 'ucc-synthetic.example.com'
+EMAIL = {'UCC_EMAIL_ADDRESS': 'ucc.synthetic.site@gmail.com', 'UCC_EMAIL_APP_PASSWORD': 'abcdefghijklmnop'}
 POOLER_INI = '''[databases]
 postgres = host={supa} port=5432 dbname=postgres user={user} password={password}
 [pgbouncer]
@@ -194,7 +195,7 @@ class VercelStackTests(unittest.TestCase):
 
     def test_student_journey_through_a_transaction_pooler(self):
         codes = self.invite_codes()
-        result = subprocess.run([sys.executable, '-c', JOURNEY], env=self.website_env(UCC_TEST_CODES=json.dumps(codes)),
+        result = subprocess.run([sys.executable, '-c', JOURNEY], env=self.website_env(UCC_TEST_CODES=json.dumps(codes), **EMAIL),
                                 capture_output=True, text=True, timeout=300)
         lines = [line for line in result.stdout.splitlines() if line.startswith('RESULT ')]
         self.assertTrue(lines, result.stdout[-2000:] + result.stderr[-4000:])
@@ -210,13 +211,17 @@ class VercelStackTests(unittest.TestCase):
         # The pooler ignored the per-connection options; the login settings still apply.
         self.assertEqual((data['runtime_timeout'], data['runtime_lock'], data['auth_timeout']), ('10s', '3s', '5s'), data)
 
-    def test_the_real_entry_point_refuses_to_start_without_approved_email(self):
+    def test_the_real_entry_point_starts_only_with_email_settings(self):
         code = ('import os, sys; sys.path[:0] = [os.environ["UCC_REPO"]]\n'
                 'try:\n    import vercel_app\nexcept SystemExit as stop:\n    print("STOPPED", stop.code)\n'
-                'except Exception as error:\n    print("REFUSED", type(error).__name__)\nelse:\n    print("STARTED")\n')
-        result = subprocess.run([sys.executable, '-c', code], env=self.website_env(), capture_output=True, text=True, timeout=120)
-        self.assertIn('REFUSED SystemCheckError', result.stdout, result.stdout + result.stderr[-2000:])
-
+                'except Exception as error:\n    print("REFUSED", type(error).__name__)\n'
+                'else:\n    print("STARTED", callable(vercel_app.app))\n')
+        started = subprocess.run([sys.executable, '-c', code], env=self.website_env(**EMAIL), capture_output=True, text=True,
+                                 timeout=120)
+        self.assertIn('STARTED True', started.stdout, started.stdout + started.stderr[-2000:])
+        refused = subprocess.run([sys.executable, '-c', code], env=self.website_env(), capture_output=True, text=True,
+                                 timeout=120)
+        self.assertIn('REFUSED ImproperlyConfigured', refused.stdout, refused.stdout + refused.stderr[-2000:])
 
 if __name__ == '__main__':
     unittest.main()

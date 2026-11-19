@@ -22,6 +22,7 @@ RUN chmod 0555 deploy/start-web.sh deploy/provision.sh
 RUN cd server && env DJANGO_SECRET_KEY=build-only PGDATABASE=build PGUSER=build \
       UCC_CONTEXT_SIGNING_KEY=00 UCC_RUNTIME_ROLE=build UCC_AUTH_ROLE=build UCC_AUTH_PASSWORD=build \
       UCC_SITE_HOST=build.example.com UCC_TRUSTED_PROXY=172.30.0.10/32 \
+      UCC_EMAIL_ADDRESS=build.only@gmail.com UCC_EMAIL_APP_PASSWORD=buildonlybuildon \
       python manage.py collectstatic --noinput -v 0 --settings=config.settings.web_production
 
 USER ucc

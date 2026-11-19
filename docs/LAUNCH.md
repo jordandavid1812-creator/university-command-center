@@ -140,3 +140,30 @@ the auth role can only read and mark used; the runtime role cannot read; six kin
 drift stop the website; and the owner command creates, lists (never showing codes), cancels and
 refuses bad values. `tools/test_server_package.py` now signs up on the real server with a code
 made by the owner command, after a missing and a wrong code are refused.
+
+
+## Step C: real email
+
+Sign-up and password-reset emails are sent through the website's **own** Gmail account (never a
+personal one), using a Google **app password**.
+
+- `accounts.email_backend.ReviewedSMTPBackend` is the one approved backend (check E105 refuses
+  every other, including Django's own SMTP backend): only `smtp.gmail.com` or
+  `smtp-relay.brevo.com`, port 587 with STARTTLS, verified certificate and host name, TLS 1.2 or
+  newer, a 10-second limit, exactly one recipient per message, sent only from the configured
+  address. It takes nothing from callers except the empty values `send_mail` passes.
+- `public_site.configure_email` (used by `web_production` and `web_vercel`) needs
+  `UCC_EMAIL_ADDRESS` (a `@gmail.com` address) and `UCC_EMAIL_APP_PASSWORD` (16 letters; spaces
+  as Google shows them are fine). Missing or malformed values stop the website before it starts.
+- A delivery failure is logged as one generic line (no address, link or server reply), and the
+  visitor still sees the same generic message (no account enumeration).
+- With email set, `check --deploy` passes with **no issues**, so the public site can start.
+- The owner's helpers ask for the app password hidden: `tools/vercel_env.py --email-address ...`
+  (Vercel) or two lines added to `deploy/secrets/web.env` (server package).
+
+Tests: `web_tests/test_email_backend.py` (5, no network: verified STARTTLS before login, one
+recipient, refusals, E105 identity, private failure logging); the profile tests now require a
+clean deploy check and refuse bad email values; `tools/test_server_package.py` shows the real
+start command refusing without email settings and booting after the full preflight with them;
+`tools/test_vercel_stack.py` shows `vercel_app.py` starting with email settings and refusing
+without; `tests/test_vercel_env.py` covers the hidden app-password prompt.

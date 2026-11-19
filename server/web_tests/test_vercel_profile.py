@@ -11,7 +11,8 @@ from django.test import SimpleTestCase
 
 SERVER = Path(__file__).resolve().parents[1]
 PROFILE = 'config.settings.web_vercel'
-GOOD = {'UCC_SITE_HOST': 'ucc-synthetic.example.com', 'UCC_SUPABASE_PROJECT_REF': 'abcdefghijklmnopqrst',
+GOOD = {'UCC_EMAIL_ADDRESS': 'ucc.synthetic.site@gmail.com', 'UCC_EMAIL_APP_PASSWORD': 'abcd efgh ijkl mnop',
+        'UCC_SITE_HOST': 'ucc-synthetic.example.com', 'UCC_SUPABASE_PROJECT_REF': 'abcdefghijklmnopqrst',
         'PGHOST': 'aws-0-eu-west-1.pooler.supabase.com', 'PGPORT': '6543', 'PGDATABASE': 'postgres'}
 
 
@@ -30,12 +31,34 @@ def run(code='', env_updates=None, args=None):
 class VercelProfileTests(SimpleTestCase):
     databases = {'default', 'runtime', 'auth'}  # the website test runner prepares them (run alone too)
 
-    def test_deploy_check_is_clean_except_the_email_gate(self):
-        result = run(args=['manage.py', 'check', '--deploy', '--settings=' + PROFILE])
-        self.assertNotEqual(result.returncode, 0)
-        output = result.stdout + result.stderr
-        self.assertIn('(accounts.E105)', output)
-        self.assertIn('System check identified 1 issue (1 silenced).', output)
+    def test_deploy_check_is_completely_clean_with_real_email(self):
+        """Launch step C: with the reviewed email backend, every check passes (warnings count as errors)."""
+        result = run(args=['manage.py', 'check', '--deploy', '--fail-level', 'WARNING', '--settings=' + PROFILE])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('System check identified no issues (1 silenced).', result.stdout + result.stderr)
+
+    def test_email_settings_are_required_and_checked(self):
+        catch = ('import sys\nfrom django.core.exceptions import ImproperlyConfigured\n'
+                 f'try:\n    import {PROFILE}\n'
+                 'except ImproperlyConfigured as error:\n    print(error); sys.exit(3)\n')
+        for env_updates, message in (({'UCC_EMAIL_ADDRESS': None}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_ADDRESS': 'someone@yahoo.com'}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_ADDRESS': 'not an address@gmail.com'}, 'UCC_EMAIL_ADDRESS'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': None}, 'UCC_EMAIL_APP_PASSWORD'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': 'short'}, 'UCC_EMAIL_APP_PASSWORD'),
+                                     ({'UCC_EMAIL_APP_PASSWORD': 'abcd-efgh-ijkl-mnop'}, 'UCC_EMAIL_APP_PASSWORD')):
+            with self.subTest(env=env_updates):
+                caught = run(env_updates=env_updates, args=['-c', catch])
+                self.assertEqual(caught.returncode, 3, caught.stderr)
+                self.assertIn(message, caught.stdout)
+        result = run('''import json
+from django.conf import settings as s
+print(json.dumps([s.EMAIL_BACKEND, s.EMAIL_HOST, s.EMAIL_PORT, s.EMAIL_USE_TLS, s.EMAIL_USE_SSL, s.EMAIL_HOST_USER,
+                  s.EMAIL_HOST_PASSWORD == "abcdefghijklmnop", s.DEFAULT_FROM_EMAIL]))''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ['accounts.email_backend.ReviewedSMTPBackend', 'smtp.gmail.com', 587, True,
+                                                     False, 'ucc.synthetic.site@gmail.com', True,
+                                                     'University Command Center <ucc.synthetic.site@gmail.com>'])
 
     def test_public_site_rules_and_supabase_pooler_connections(self):
         result = run('''import json

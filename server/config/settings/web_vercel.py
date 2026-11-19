@@ -1,8 +1,8 @@
 """Public HTTPS website on Vercel with the Supabase database (owner's choice).
 
 Started only by /vercel_app.py, which runs every system check (including deploy checks and the
-project's E101-E106 gates) before it serves anything. Still blocked by accounts.E105 until real
-email is approved (launch step C).
+project's E101-E106 gates) before it serves anything. Real email uses the reviewed backend (launch
+step C); check accounts.E105 refuses any other.
 
 - Vercel's edge terminates HTTPS and sets REMOTE_ADDR (the visitor) and wsgi.url_scheme itself
   (vercel_runtime builds them from the x-forwarded-for / x-forwarded-proto headers it adds), so
@@ -12,6 +12,7 @@ email is approved (launch step C).
   the user name, ignores per-connection options (the timeouts are set on the logins themselves
   by the Supabase security file), and cannot keep server-side cursors between transactions.
 """
+import os
 import re
 
 from django.core.exceptions import ImproperlyConfigured
@@ -37,6 +38,7 @@ def pooler_host(value):
 
 
 public_site.configure(globals(), public_site.site_host(required('UCC_SITE_HOST')))
+public_site.configure_email(globals(), os.environ)
 UCC_TRUSTED_PROXIES = ()
 
 _ref = project_ref(required('UCC_SUPABASE_PROJECT_REF'))

@@ -24,10 +24,16 @@ import urllib.parse
 REPO = Path(__file__).resolve().parents[1]
 HOST = 'ucc-synthetic.example.com'
 PROJECT = 'ucc-package-test'
-# Smoke test only: start gunicorn without the preflight, because accounts.E105 (no approved
-# real-email backend yet) rightly stops the real start command. The real command is tested too.
+# Smoke run for the journey only: the same image and settings, but sign-up emails are printed to the
+# website's log (console backend) instead of being sent to Gmail, so the test can follow the link.
+# The real start command, with its full preflight, is tested separately (it must boot).
 SMOKE = '''services:
   web:
+    environment:
+      DJANGO_SETTINGS_MODULE: ucc_smoke_settings
+      PYTHONPATH: /app:/smoke
+    volumes:
+      - {smoke}:/smoke:ro
     command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000",
               "--worker-class", "gthread", "--workers", "2", "--threads", "4", "--worker-tmp-dir", "/tmp"]
 '''
@@ -41,7 +47,14 @@ class ServerPackageTests(unittest.TestCase):
         cls.secrets = folder / 'secrets'
         subprocess.run([sys.executable, str(REPO / 'deploy' / 'make_secrets.py'), '--host', HOST, '--internal-tls',
                         '--folder', str(cls.secrets)], check=True, capture_output=True)
-        (folder / 'smoke.yml').write_text(SMOKE)
+        smoke = folder / 'smoke'
+        smoke.mkdir()
+        (smoke / 'ucc_smoke_settings.py').write_text(
+            'from config.settings.web_production import *  # noqa\n'
+            "EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # test only: links go to the log\n")
+        os.chmod(smoke, 0o755)
+        os.chmod(smoke / 'ucc_smoke_settings.py', 0o644)
+        (folder / 'smoke.yml').write_text(SMOKE.format(smoke=smoke))
         cls.base = ['docker', 'compose', '-p', PROJECT, '-f', str(REPO / 'deploy' / 'compose.yml')]
         cls.smoke = cls.base + ['-f', str(folder / 'smoke.yml')]
         cls.env = dict(os.environ, UCC_SECRETS=str(cls.secrets))
@@ -49,8 +62,15 @@ class ServerPackageTests(unittest.TestCase):
             cls.compose('build', 'web', timeout=1200)
             cls.compose('up', '-d', '--wait', 'db', timeout=300)
             cls.migrated = cls.compose('run', '--rm', 'migrate', timeout=600).stdout
+            # 1. The real start command without email settings: the website refuses to start.
             cls.compose('up', '-d', 'web', timeout=120)
-            cls.refused = cls.wait_for_log('accounts.E105')
+            cls.refused = cls.wait_for_log('ucc-log')
+            cls.compose('stop', 'web', timeout=120)
+            # 2. With the owner's email settings added: the full preflight passes and gunicorn boots.
+            with open(cls.secrets / 'web.env', 'a', encoding='utf-8') as handle:
+                handle.write('UCC_EMAIL_ADDRESS=ucc.synthetic.site@gmail.com\nUCC_EMAIL_APP_PASSWORD=abcdefghijklmnop\n')
+            cls.compose('up', '-d', '--force-recreate', 'web', timeout=120)
+            cls.booted = cls.wait_for_log('Booting worker')
             cls.compose('stop', 'web', timeout=120)
             cls.compose('up', '-d', '--force-recreate', 'web', 'caddy', command=cls.smoke, timeout=300)
             cls.wait_for_site()
@@ -196,9 +216,13 @@ class ServerPackageTests(unittest.TestCase):
                              '"SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = \'ucc\'"').stdout.strip()
         self.assertEqual(owner, 'ucc_migrator')
 
-    def test_real_start_command_refuses_without_approved_email(self):
-        self.assertIn('accounts.E105', self.refused)
+    def test_real_start_command_refuses_without_email_settings(self):
         self.assertNotIn('Booting worker', self.refused)
+        self.assertNotIn('Traceback', self.refused)  # the reason is kept out of the log on purpose
+
+    def test_real_start_command_boots_after_the_full_preflight(self):
+        self.assertIn('System check identified no issues (1 silenced).', self.booted)
+        self.assertIn('Booting worker', self.booted)
 
     def test_containers_are_locked_down(self):
         names = {'web': None, 'caddy': None, 'db': None}

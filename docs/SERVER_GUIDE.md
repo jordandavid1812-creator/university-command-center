@@ -4,9 +4,7 @@ This guide is for the owner. It sets up one small cloud server that runs the dat
 website and Caddy (which handles HTTPS). Claude will give you the exact commands with your own
 domain filled in when you are ready. This page is the reference.
 
-**Wait for launch step 4 (real email) before step H.** Until then the website deliberately
-refuses to start (check `accounts.E105`), because sign-up emails would have nowhere to go.
-You can do steps A to G earlier.
+The website refuses to start until the email lines in step G are added.
 
 ## What it costs
 
@@ -90,7 +88,16 @@ This makes `deploy/secrets/` with new random passwords and keys, readable only b
 administrator. It never prints them and refuses to overwrite them. Copy that folder somewhere
 private (not GitHub, not chat) — without it you cannot reach the database.
 
-## H. Start everything (after step 4)
+Then add the website's email account (a new Gmail account with a Google app password; see
+VERCEL_GUIDE.md "Email account") to `deploy/secrets/web.env` with `nano deploy/secrets/web.env`,
+adding these two lines with your values:
+
+```
+UCC_EMAIL_ADDRESS=your.site.address@gmail.com
+UCC_EMAIL_APP_PASSWORD=the16letterpassword
+```
+
+## H. Start everything
 
 ```bash
 docker compose -f deploy/compose.yml build
