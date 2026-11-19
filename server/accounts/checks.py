@@ -59,6 +59,6 @@ def secure_email_check(app_configs=None, **kwargs):
 
 @register()
 def public_invite_check(app_configs=None, **kwargs):
-    if getattr(settings, 'UCC_PUBLIC_SITE', False) is True and getattr(settings, 'UCC_REQUIRE_INVITE', False) is not True:
-        return [Error('The public site requires invite-only sign-up (UCC_REQUIRE_INVITE).', id='accounts.E106')]
+    if getattr(settings, 'UCC_PUBLIC_SITE', False) is True and getattr(settings, 'UCC_SIGNUP_CODE', False) is not True:
+        return [Error('The public site requires email-code sign-up (UCC_SIGNUP_CODE).', id='accounts.E106')]
     return []

@@ -45,7 +45,7 @@ LEVELS = {10: 'DEBUG', 20: 'INFO', 30: 'WARNING', 40: 'ERROR', 50: 'CRITICAL'}
 METHODS = ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT')
 ROUTES = (
     'accounts:register', 'accounts:login', 'accounts:logout', 'accounts:resend',
-    'accounts:verify', 'accounts:reset', 'accounts:reset-confirm', 'accounts:password-change',
+    'accounts:verify', 'accounts:verify-code', 'accounts:reset', 'accounts:reset-confirm', 'accounts:password-change',
     'accounts:academic', 'accounts:course', 'accounts:delete-assignment',
     'student_web:dashboard', 'student_web:semester-list', 'student_web:course-list',
     'student_web:assignment-list', 'student_web:overview', 'student_web:predictor',

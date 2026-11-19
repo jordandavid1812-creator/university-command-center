@@ -19,7 +19,7 @@ before serving anything; without the email settings below the site refuses to st
 | `uv.lock` | The exact package versions with SHA-256 fingerprints. Vercel installs exactly these (`uv sync --frozen`). They match `requirements-django-lock.txt` (checked by `tests/test_vercel_config.py`). |
 | `vercel_app.py` | Always uses `config.settings.web_vercel`, runs `manage.py check --deploy` with warnings treated as errors, then starts Django. |
 | `.vercelignore` | Vercel receives only `vercel_app.py`, `pyproject.toml`, `uv.lock`, `.python-version`, `academic_logic.py` and `server/` without its tests. |
-| `server/config/settings/web_vercel.py` | The public-site rules shared with the server package (`public_site.py`: one https address, HSTS, `__Host-` cookies, invite-only sign-up, WhiteNoise), plus Supabase's transaction pooler (port 6543, users `ucc_runtime.<ref>` / `ucc_auth.<ref>`, TLS required, no server-side cursors). |
+| `server/config/settings/web_vercel.py` | The public-site rules shared with the server package (`public_site.py`: one https address, HSTS, `__Host-` cookies, open sign-up with emailed codes, WhiteNoise), plus Supabase's transaction pooler (port 6543, users `ucc_runtime.<ref>` / `ucc_auth.<ref>`, TLS required, no server-side cursors). |
 
 ## Set up (once)
 
@@ -66,7 +66,7 @@ clear message. Files already stored are not affected.
 - `tools/test_vercel_stack.py` (CI job `supabase-sql`, Docker): Supabase's own PostgreSQL with all
   SQL files and a private test file, behind two PgBouncer transaction-mode poolers that, like
   Supabase's, ignore connection options and keep no session state. A two-student journey with
-  invite codes, email links on the https address, interleaved requests sharing pooled
+  emailed sign-up codes naming the https address, interleaved requests sharing pooled
   connections (row-level security holds), GPA and data export; the login time limits apply; and
   the real `vercel_app.py` refuses to start without approved email.
 - `tests/test_vercel_config.py`, `tests/test_vercel_env.py`, `tests/test_pdf_child_vendor.py`.
