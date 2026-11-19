@@ -15,11 +15,23 @@ from django.views.decorators.http import require_http_methods, require_POST
 from academics.ownership import OwnershipRequired, identity_for_verified_student
 from academics.services import assignments, courses, semesters, InvalidRecord, RecordConflict, RecordNotFound
 from .forms import (EmailRequestForm, RegistrationForm, BoundedAuthenticationForm,
-                    BoundedPasswordChangeForm, BoundedSetPasswordForm)
+                    BoundedPasswordChangeForm, BoundedSetPasswordForm, SignupCodeForm)
 from .models import Student
 from .principals import principal_for_request
 from .throttling import rate_limit
-from . import invites, tokens
+from . import invites, signup_codes, tokens
+
+CODE_SENT = 'If this email needs confirming, we have sent it a 6-digit code. It works for 1 minute.'
+CODE_WRONG = 'That code is wrong or has expired. Check the newest email, or ask for a new code.'
+
+
+def _code_page(request, form, notice=None):
+    return render(request, 'accounts/code.html', {'form': form, 'title': 'Enter your code', 'notice': notice})
+
+
+def _code_sent(request, email):
+    """After sign-up or a resend on the public site: the code page with the email filled in."""
+    return _code_page(request, SignupCodeForm(initial={'email': email}), CODE_SENT)
 
 
 @never_cache
@@ -40,6 +52,8 @@ def register(request):
                 form.add_error('invite_code', invites.INVALID)
             else:
                 tokens.register(form.cleaned_data)
+                if getattr(settings, 'UCC_SIGNUP_CODE', False):
+                    return _code_sent(request, form.cleaned_data['email'])
                 return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Register', 'submit': 'Register'})
 
@@ -92,9 +106,38 @@ def email_request(request, purpose):
     form = EmailRequestForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         tokens.request_email(form.cleaned_data['email'], purpose)
+        if purpose == 'verify' and getattr(settings, 'UCC_SIGNUP_CODE', False):
+            return _code_sent(request, form.cleaned_data['email'])
         return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
     title = 'Resend email verification' if purpose == 'verify' else 'Reset password'
     return render(request, 'accounts/form.html', {'form': form, 'title': title, 'submit': 'Send email'})
+
+
+@never_cache
+@sensitive_post_parameters('code')
+@require_http_methods(['GET', 'POST'])
+def verify_code(request):
+    """Public site: type the emailed code (1 minute, 5 tries), or press "Send me a new code".
+    One form with two buttons, so it works without JavaScript. Replies never reveal accounts."""
+    if not getattr(settings, 'UCC_SIGNUP_CODE', False):
+        return HttpResponse('Not found.', status=404)
+    if request.method != 'POST':
+        return _code_page(request, SignupCodeForm())
+    resend = request.POST.get('action') == 'resend'
+    limited = rate_limit(request, 'resend' if resend else 'verify-code')
+    if limited is not None:
+        return limited
+    form = SignupCodeForm(request.POST)
+    if not form.is_valid():
+        return _code_page(request, form)
+    email = form.cleaned_data['email']
+    if resend:
+        tokens.request_email(email, 'verify')
+        return _code_sent(request, email)
+    if signup_codes.verify(email, form.cleaned_data['code']):
+        return render(request, 'accounts/message.html', {'message': 'Email confirmed. You can now log in.'})
+    form.add_error('code', CODE_WRONG)
+    return _code_page(request, form)
 
 
 @never_cache

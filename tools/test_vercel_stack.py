@@ -9,7 +9,6 @@ removed afterwards. Only the pooler addresses, plain user names and TLS are swap
 
     python tools/test_vercel_stack.py -v
 """
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -60,7 +59,6 @@ from academics.ownership import require_runtime_role, database_alias
 from accounts.boundary import require_auth_role
 PASSWORD = "Synthetic-Long-Passphrase-42"
 HOST = os.environ["UCC_SITE_HOST"]
-codes = json.loads(os.environ["UCC_TEST_CODES"])
 result = {}
 
 def get(client, path):
@@ -69,31 +67,35 @@ def get(client, path):
 def post(client, path, data):
     return client.post(path, data, secure=True)
 
-def student(name, code):
+def student(name):
     client = Client(HTTP_HOST=HOST)
-    post(client, "/accounts/register/", {"username": name, "email": f"{name}@example.invalid",
-                                         "password1": PASSWORD, "password2": PASSWORD, "invite_code": code})
-    link = urlsplit(mail.outbox[-1].body.split()[0])
-    result[name + "_link_host"] = link.netloc
-    post(client, link.path, {})
+    email = f"{name}@example.invalid"
+    page = post(client, "/accounts/register/", {"username": name, "email": email,
+                                                "password1": PASSWORD, "password2": PASSWORD}).content.decode()
+    result[name + "_code_page"] = "Enter your code" in page
+    body = mail.outbox[-1].body
+    code = re.search(r"code is (\d{6})", body).group(1)
+    result[name + "_page_host"] = urlsplit(re.search(r"https://\S+", body).group(0)).netloc
+    result[name + "_confirmed"] = "Email confirmed" in post(client, "/accounts/verify/code/", {
+        "email": email, "code": code, "action": "verify"}).content.decode()
     result[name + "_login"] = post(client, "/accounts/login/", {"username": name, "password": PASSWORD}).status_code
     return client
 
-alpha = student("synthetic_alpha", codes[0])
+alpha = student("synthetic_alpha")
 post(alpha, "/semesters/new/", {"label": "Synthetic semester", "display_order": "0"})
 page = get(alpha, "/courses/new/").content.decode()
 semester = re.search('<option value="([0-9a-f-]{36})"', page).group(1)
 result["course"] = post(alpha, "/courses/new/", {"name": "Synthetic course", "original_code": "SYN101",
                                                  "credit_units": "3", "semester_id": semester, "actual_grade": "A"}).status_code
-bravo = student("synthetic_bravo", codes[1])
+bravo = student("synthetic_bravo")
 # Interleave the two students so pooled server connections are shared between them.
 for _ in range(3):
     result.setdefault("alpha_sees", []).append("SYN101" in get(alpha, "/courses/").content.decode())
     result.setdefault("bravo_sees", []).append("SYN101" in get(bravo, "/courses/").content.decode())
 result["gpa"] = "Your CGPA <strong>5.00</strong>" in get(alpha, "/performance/").content.decode()
 result["export"] = get(alpha, "/settings/export/").status_code
-result["no_code"] = "This field is required" in post(Client(HTTP_HOST=HOST), "/accounts/register/", {
-    "username": "synthetic_charlie", "email": "c@example.invalid", "password1": PASSWORD, "password2": PASSWORD}).content.decode()
+result["wrong_code"] = "wrong or has expired" in post(Client(HTTP_HOST=HOST), "/accounts/verify/code/", {
+    "email": "synthetic_alpha@example.invalid", "code": "000000", "action": "verify"}).content.decode()
 require_runtime_role(connections[database_alias()])
 require_auth_role()
 with connections["default"].cursor() as cursor:
@@ -167,15 +169,6 @@ class VercelStackTests(unittest.TestCase):
         return docker('exec', '-e', f'PGPASSWORD={supabase.ADMIN_PASSWORD}', SUPA, 'psql', '-h', 'localhost', '-U',
                       'postgres', '-d', 'postgres', '-Atc', sql).stdout.strip()
 
-    def invite_codes(self):
-        """Two synthetic invite codes, stored the way accounts.invites does: SHA-256 of the code
-        without dashes (only the digest is ever stored)."""
-        codes = ['SYNT-HETC-ABCD-EFGH-JKMN', 'SYNT-HETC-ABCD-EFGH-JKMP']
-        values = ', '.join(f"('{hashlib.sha256(code.replace('-', '').encode()).hexdigest()}', 'Synthetic', now(), "
-                           f"now() + interval '1 day')" for code in codes)
-        self.query(f'INSERT INTO accounts_invitecode (code_hash, note, created_at, expires_at) VALUES {values}')
-        return codes
-
     def website_env(self, **extra):
         return dict(os.environ, PGHOST='aws-0-eu-west-1.pooler.supabase.com', PGPORT='6543', PGDATABASE='postgres',
                     PGUSER='ignored-by-web-vercel', PGPASSWORD=self.secrets['runtime_password'],
@@ -194,20 +187,20 @@ class VercelStackTests(unittest.TestCase):
         self.assertIn('ucc_auth:statement_timeout=5000ms,lock_timeout=3000ms,idle_in_transaction_session_timeout=15000ms', settings)
 
     def test_student_journey_through_a_transaction_pooler(self):
-        codes = self.invite_codes()
-        result = subprocess.run([sys.executable, '-c', JOURNEY], env=self.website_env(UCC_TEST_CODES=json.dumps(codes), **EMAIL),
+        result = subprocess.run([sys.executable, '-c', JOURNEY], env=self.website_env(**EMAIL),
                                 capture_output=True, text=True, timeout=300)
         lines = [line for line in result.stdout.splitlines() if line.startswith('RESULT ')]
         self.assertTrue(lines, result.stdout[-2000:] + result.stderr[-4000:])
         data = json.loads(lines[-1][7:])
         self.assertEqual((data['synthetic_alpha_login'], data['synthetic_bravo_login']), (302, 302), data)
-        self.assertEqual(data['synthetic_alpha_link_host'], HOST)  # email links use the public https address
+        self.assertTrue(data['synthetic_alpha_code_page'] and data['synthetic_alpha_confirmed'], data)  # open sign-up
+        self.assertEqual(data['synthetic_alpha_page_host'], HOST)  # the email names the public https address
         self.assertEqual(data['course'], 302, data)
         self.assertEqual(data['alpha_sees'], [True] * 3, data)
         self.assertEqual(data['bravo_sees'], [False] * 3, data)  # row-level security holds through the pooler
         self.assertTrue(data['gpa'], data)
         self.assertEqual(data['export'], 200, data)
-        self.assertTrue(data['no_code'], data)  # invite-only sign-up
+        self.assertTrue(data['wrong_code'], data)
         # The pooler ignored the per-connection options; the login settings still apply.
         self.assertEqual((data['runtime_timeout'], data['runtime_lock'], data['auth_timeout']), ('10s', '3s', '5s'), data)
 

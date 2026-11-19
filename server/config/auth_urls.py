@@ -6,6 +6,7 @@ account_patterns = [
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
     path('verify/request/', views.email_request, {'purpose': 'verify'}, name='resend'),
+    path('verify/code/', views.verify_code, name='verify-code'),
     path('verify/<uuid:selector>/<str:secret>/', views.verify, name='verify'),
     path('reset/', views.email_request, {'purpose': 'reset'}, name='reset'),
     path('reset/<uuid:selector>/<str:secret>/', views.reset_confirm, name='reset-confirm'),

@@ -41,13 +41,22 @@ def _issue_locked(student, purpose):
     transaction.on_commit(lambda: _deliver(subject, link, student.email), using='auth')
 
 
+def _issue_verification(student):
+    """Public site (UCC_SIGNUP_CODE): a 6-digit email code. Otherwise the original email link."""
+    if getattr(settings, 'UCC_SIGNUP_CODE', False):
+        from .signup_codes import issue_locked
+        issue_locked(student)
+    else:
+        _issue_locked(student, 'verify')
+
+
 def register(values):
     try:
         with transaction.atomic(using='auth'):
             student = Student(username=values['username'], email=values['email'])
             student.set_password(values['password1'])
             student.save(using='auth', force_insert=True)
-            _issue_locked(student, 'verify')
+            _issue_verification(student)
     except IntegrityError:
         # Duplicate username OR normalized email gets the same response as success.
         return
@@ -59,7 +68,10 @@ def request_email(email, purpose):
         students = students.filter(email_verified_at__isnull=(purpose == 'verify'))
         student = students.first()
         if student and student.has_usable_password():
-            _issue_locked(student, purpose)
+            if purpose == 'verify':
+                _issue_verification(student)
+            else:
+                _issue_locked(student, purpose)
 
 
 def valid_token(selector, secret, purpose, *, lock=False):

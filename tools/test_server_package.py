@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 HOST = 'ucc-synthetic.example.com'
 PROJECT = 'ucc-package-test'
 # Smoke run for the journey only: the same image and settings, but sign-up emails are printed to the
-# website's log (console backend) instead of being sent to Gmail, so the test can follow the link.
+# website's log (console backend) instead of being sent to Gmail, so the test can read the sign-up code.
 # The real start command, with its full preflight, is tested separately (it must boot).
 SMOKE = '''services:
   web:
@@ -154,33 +154,23 @@ class ServerPackageTests(unittest.TestCase):
         return status, response_headers, data.decode('utf-8', 'replace')
 
     def test_a_full_student_journey_through_the_real_server(self):
-        """Register, confirm the email link, sign in, add a semester and a course, and see it,
+        """Register, enter the emailed code, sign in, add a semester and a course, and see it,
         all through Caddy, gunicorn and the restricted database logins."""
         jar = {}
         _, _, page = self.browse(jar, 'GET', '/accounts/register/')
-        self.assertIn('name="invite_code"', page)  # the public site is invite-only
+        self.assertNotIn('invite_code', page)  # open sign-up: anyone with an email
         password = 'Synthetic-Long-Passphrase-42'
         details = {'username': 'synthetic_student', 'email': 'synthetic.student@example.invalid',
                    'password1': password, 'password2': password}
-        _, _, page = self.browse(jar, 'POST', '/accounts/register/', details)
-        self.assertIn('This field is required', page)
-        _, _, page = self.browse(jar, 'POST', '/accounts/register/', {**details, 'invite_code': 'AAAA-BBBB-CCCC-DDDD-EEEE'})
-        self.assertIn('This invite code is not valid', page)
-        # The owner's command, exactly as in docs/SERVER_GUIDE.md, prints one new code.
-        created = self.compose('run', '--rm', 'migrate', 'python', 'manage.py', 'invites', 'create', '--note', 'Synthetic').stdout
-        code = re.search(r'[A-Z2-9]{4}(?:-[A-Z2-9]{4}){4}', created).group(0)
-        status, _, page = self.browse(jar, 'POST', '/accounts/register/', {**details, 'invite_code': code})
+        status, _, page = self.browse(jar, 'POST', '/accounts/register/', details)
         self.assertEqual(status, 200)
-        self.assertIn('If these details are eligible', page)
-        listing = self.compose('run', '--rm', 'migrate', 'python', 'manage.py', 'invites', 'list').stdout
-        self.assertRegex(listing, r'(?<!un)used \d{4}-\d\d-\d\d +Synthetic')
-        self.assertNotIn(code, listing)
-        # The smoke run uses the console email backend, so the link is in the website's output.
-        link = re.findall(r'https://' + re.escape(HOST) + r'(/accounts/verify/[^\s]+/)', self.compose('logs', 'web').stdout)
-        self.assertEqual(len(link), 1, 'one verification link expected')
-        self.assertEqual(self.browse(jar, 'GET', link[0])[0], 200)
-        status, _, page = self.browse(jar, 'POST', link[0], {})
-        self.assertIn('Email verified', page)
+        self.assertIn('Enter your code', page)
+        # The smoke run uses the console email backend, so the code is in the website's output.
+        codes = re.findall(r'sign-up code is (\d{6})', self.compose('logs', 'web').stdout)
+        self.assertEqual(len(codes), 1, 'one sign-up code expected')
+        status, _, page = self.browse(jar, 'POST', '/accounts/verify/code/', {
+            'email': details['email'], 'code': codes[0], 'action': 'verify'})
+        self.assertIn('Email confirmed', page)
         self.browse(jar, 'GET', '/accounts/login/')
         status, headers, _ = self.browse(jar, 'POST', '/accounts/login/', {'username': 'synthetic_student',
                                                                            'password': password})

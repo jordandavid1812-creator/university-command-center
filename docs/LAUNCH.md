@@ -25,7 +25,8 @@ Original decisions:
 
 1. **Production settings** (done): `config.settings.web_production`, gunicorn, whitenoise.
 2. **Server package** (done): Docker Compose for website + PostgreSQL + Caddy, and a step-by-step guide.
-3. **Invite-only sign-up** (this step).
+3. **Invite-only sign-up** (done), later replaced on the public site by **open sign-up with an
+   emailed 6-digit code** (see "Open sign-up" below).
 4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
 5. AI limits for the shared key.
 6. Account deletion and email change.
@@ -99,7 +100,38 @@ Tests:
   dodge the sign-in limit.
 
 
-## Step 3: invite-only sign-up
+## Open sign-up with an emailed code (replaces invite-only sign-up on the public site)
+
+The owner chose to let anyone with an email address create an account. To stop fake or
+mistyped addresses, the account works only after the student types the **6-digit code** the
+site emails them. Public profiles set `UCC_SIGNUP_CODE = True` and `UCC_REQUIRE_INVITE = False`;
+system check **`accounts.E106`** now refuses a public profile without email codes. The local
+website keeps the original email-link flow, so nothing changes there.
+
+- **Flow:** Register → the "Enter your code" page opens with the email filled in → type the
+  code from the email → "Email confirmed. You can now log in." The page has one form with two
+  buttons, **Confirm email** and **Send me a new code**, so it works without JavaScript. It is
+  also at `/accounts/verify/code/`, and "Resend verification" sends a new code.
+- **Limits:** each code works for **1 minute** and allows **5 tries** (the database refuses a
+  sixth). A new code retires the old one. Typing a code is limited to 20 per hour per address
+  (`verify-code`), and new codes to 5 per hour (the existing `resend` limit); sign-up keeps its
+  limit of 5 per hour.
+- **Storage:** only an HMAC-SHA256 of the code, keyed with the site's secret key, is stored
+  (`accounts_signupcode`, migration `accounts.0005`), so a copy of the database cannot be used
+  to work codes out. Old codes are removed by `clear_auth_artifacts` a day after they expire.
+- **Privacy:** every reply is the same whether or not the email has an account, is already
+  confirmed, or was mistyped; duplicate sign-ups get the same page and no email.
+- **Database rights:** the auth role may `SELECT`, `INSERT`, `DELETE` and `UPDATE` only
+  `attempts` and `consumed_at` — never who a code belongs to, its digest or its times. The
+  runtime role has no access. Any extra or missing grant stops the website
+  (`accounts.boundary.INVITE_TABLES`).
+- **Supabase:** `supabase/migrations/0004_schema.sql` and `0005_security.sql` add the table,
+  its grants and row-level security.
+
+Tests: `auth_tests/test_signup_codes.py` (13, real PostgreSQL with the separate roles), plus the
+public-profile, Docker server and Vercel/Supabase journeys, which now sign up with a code.
+
+## Step 3: invite-only sign-up (no longer used on the public site)
 
 On the public site (`UCC_REQUIRE_INVITE = True` in `web_production`; system check
 **`accounts.E106`** refuses a public profile without it) the Register page asks for an

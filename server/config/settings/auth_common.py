@@ -54,13 +54,16 @@ def configure(namespace):
         AUTH_LINK_ORIGIN="http://127.0.0.1:8000",
         AUTH_RATE_LIMITS={"login": (10, 900), "register": (5, 3600), "reset": (5, 3600),
                           "resend": (5, 3600), "verify": (20, 3600), "reset-confirm": (20, 3600),
-                          "password-change": (5, 900)},
+                          "password-change": (5, 900), "verify-code": (20, 3600)},
         # S0-01: forwarded headers are never trusted until a reviewed deployment
         # topology lists its proxy networks here. Keep empty in every profile.
         UCC_TRUSTED_PROXIES=(),
         # Launch step 3: invite-only sign-up. Off for the local website; web_production turns it
         # on and its system check (accounts.E106) refuses to start the public site without it.
         UCC_REQUIRE_INVITE=False,
+        # Open sign-up with a 6-digit email code (accounts.signup_codes). Off locally, where the
+        # original email link is used; the public profiles turn it on (check accounts.E106).
+        UCC_SIGNUP_CODE=False,
     )
     # B1a only: application aliases; test/offline migrator defaults stay untouched.
     from accounts.dbsafety import apply_db_safety

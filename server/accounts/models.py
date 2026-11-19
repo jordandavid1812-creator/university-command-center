@@ -162,3 +162,23 @@ class InviteCode(models.Model):
             models.CheckConstraint(condition=models.Q(used_at__isnull=True) | models.Q(used_at__gte=models.F('created_at')),
                                    name='invite_used_after_creation'),
         ]
+
+
+class SignupCode(models.Model):
+    """Email sign-up code for the public site: 6 digits, stored only as an HMAC (keyed with the
+    site's secret, so a database copy cannot be used to work codes out), 1 minute, 5 tries."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='signup_codes')
+    digest = models.CharField(max_length=64)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(digest__regex=r'^[0-9a-f]{64}$'), name='signup_code_digest_hex'),
+            models.CheckConstraint(condition=models.Q(expires_at__gt=models.F('created_at')), name='signup_code_expiry'),
+            models.CheckConstraint(condition=models.Q(attempts__lte=5), name='signup_code_attempts'),
+        ]
+        indexes = [models.Index(fields=['student', 'created_at']), models.Index(fields=['expires_at'])]
