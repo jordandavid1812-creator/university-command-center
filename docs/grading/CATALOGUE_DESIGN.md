@@ -5,7 +5,7 @@ No policy, institution, programme, publisher privilege or activation is approved
 
 ## Verified baseline and purpose
 
-Master: `70576145910bbe92344bc12699b4fc60343ab412`.
+Historical design-source baseline: `70576145910bbe92344bc12699b4fc60343ab412`.
 PR #106 introduced the pure policy core; PR #108 closed four regression-test gaps.
 Master push [run 44598505368](https://github.com/jordandavid1812-creator/university-command-center/actions/runs/44598505368)
 completed successfully in all six quality jobs, including PostgreSQL 17.
@@ -46,11 +46,11 @@ UUIDs identify records; display names do not establish relationships or chronolo
 | Record | Proposed information | Required enforcement |
 | --- | --- | --- |
 | University | UUID, stable internal code, official name, evidence reference, catalogue timestamps | Unique internal code; renames preserve UUID. A listing is separate from grading verification. |
-| Programme | UUID, university FK, stable local code, title and award descriptor | Unique `(university, code)`; protected parent deletion. Distinct campuses/modes/award variants need explicit identity when rules differ. |
-| PolicyRevision | UUID, stable policy identifier, revision, schema version, explicit maximum, content hash | Unique `(identifier, revision)`; no published payload mutation. Hash is integrity/provenance, not authority. |
+| Programme | UUID, university FK, stable local code, award/campus/mode/entry-route identifiers and display title | Immutable identity tuple from creation; unique `(university, code)`; protected parent deletion. Identity changes require a new row/UUID with explicit lineage. Display renames cannot change applicability. |
+| PolicyRevision | UUID, stable policy identifier, revision, schema version, explicit maximum, draft record_version and content hash | Unique `(identifier, revision)`; monotonic draft version includes child changes; no published payload mutation. A draft hash may remain unset until GP2b canonicalization exists; no release without a verified canonical hash. |
 | GradeRule | revision FK, grade letter, exact points | Unique `(revision, grade)`; ASCII A–Z; finite points from 0 to maximum; at most four decimal places. Release requires both scale endpoints. |
 | PolicyApplicability | revision FK, explicit programme FK, admission-cohort range and academic-session range | Cohort and session are independent dimensions. No implicit university-wide inheritance or name-based matching. |
-| SourceEvidence | UUID, official URL, retrieval/publication dates when known, artifact SHA-256, bounded citation/excerpt and locator | Missing/unknown dates stay unknown. URL alone or a mutable link is insufficient release evidence. Safe plain text; no executable HTML. |
+| SourceEvidence | Immutable snapshot UUID, official origin, retrieval/publication dates when known, artifact SHA-256 and logical artifact reference, bounded citation/excerpt and locator | Append-only from creation, including draft evidence. Corrections create a new UUID; no payload UPDATE or referenced DELETE. Missing/unknown dates stay unknown. Safe plain text; URL or digest alone is insufficient release evidence. |
 | RevisionEvidence | revision/evidence links and exact rule/applicability citations | Release requires traceability for the full supported rule subset, not merely an A/B example. |
 | ReviewDecision | exact revision content hash, reviewer reference, decision, rationale, time | Append-only; stale hashes cannot approve modified content. No student credentials or tokens. |
 | PublicationEvent | revision, approved content hash, release/withdrawal/supersession event, actor reference, time | Append-only history; validity is not a freely editable Boolean. |
@@ -86,6 +86,60 @@ no general cascading removal of policy history is proposed. Actor references sho
 be opaque operational identifiers, not new Student FKs or raw personal log fields.
 Their governance/retention remains an owner decision before publication tooling.
 
+## Stable catalogue identity (GP2-R2)
+
+GP2a must enforce the immutable Programme identity tuple from creation:
+`(university_uuid, local_code, award_id, campus_id, study_mode_id, entry_route_id)`.
+These are bounded stable identifiers, not display names. The local code is an internal
+variant key; it must not assume an official programme code distinguishes all variants.
+University UUID and its
+stable internal code are also immutable. Unknown optional dimensions are represented
+explicitly as unknown, never as "all variants"; a policy cannot be released for a case
+where an unknown dimension can affect its rules. Exact identifier formats and supported
+dimensions require the pending owner/schema approval before GP2a implementation.
+
+A transfer between universities or a different award/campus/mode/entry-route identity
+requires a new Programme UUID and an explicit predecessor reference. Old rows and their
+applicability remain intact. An audited display-title rename may retain the identity,
+but cannot change resolution or rewrite a published manifest's captured display labels.
+A registry-code alias or institutional reorganization needs an explicit correction
+workflow; it cannot silently reassign an existing institutional identity.
+
+PROTECT/RESTRICT on deletion alone does not prevent FK reassignment. GP2a must include
+database guards against updates to identity fields, plus direct-SQL tests, even before
+publication exists. Future canonical applicability pins both the programme/university
+UUIDs and the complete immutable identity tuple, scope ranges and unknown-bound meanings.
+Shared rule content may apply to different institutions only through separately explicit,
+source-backed applicability links; it never implies institution-wide inheritance.
+
+## Immutable evidence snapshots (GP2-R1)
+
+SourceEvidence payloads are append-only from creation, not merely once published. GP2a
+must enforce no payload UPDATE and no deletion of referenced evidence through ordinary
+access paths, with database guards as well as grants. An artifact digest, official origin,
+citation/excerpt, locator or source-date correction creates a new snapshot UUID. Linking
+that new snapshot into a draft is a versioned draft edit that invalidates prior approval.
+Existing released revision/evidence links continue to name their original snapshot.
+
+Mutable operational annotations, if needed later, are separate records and cannot change
+approved payload fields, eligibility or the canonical manifest. A physical storage mirror
+may change only under a reviewed availability mechanism that retrieves the same bytes and
+checks the pinned digest; it must not substitute content under an existing logical artifact
+reference. No artifact storage service or retention policy is approved here.
+
+The GP2b canonical manifest must include bounded, schema-versioned representations of:
+revision identity/schema/maximum, sorted exact grade rules, complete applicability identity
+and ranges, evidence snapshot UUIDs, official origin, logical artifact reference, artifact
+digest, citation/excerpt, locator, explicit known/unknown source dates and captured labels
+needed to understand the approval. Decimal/time/text normalization and all field bounds
+need golden tests. Hashing a mutable evidence UUID or artifact digest alone is insufficient.
+
+A digest proves byte equality when the artifact is available; it does not retain the
+artifact or prove official authority. Before GP3 publication, the approved evidence-access
+and retention process must let an authorized reviewer retrieve the pinned artifact and
+verify its digest. A live URL plus an unavailable digest is not sufficient to release.
+Real artifact ingestion, retention/access, licensing and privacy choices remain pending.
+
 ## State transitions, immutability and historical meaning
 
 Proposed lifecycle: `DRAFT -> REVIEW_READY -> RELEASED`.
@@ -100,9 +154,9 @@ revision is ineligible for new bindings; a future student-facing flow must flag 
 existing bindings and follow an approved correction process, rather than silently
 switching scales. No binding/correction workflow is implemented in GP2.
 
-Content hashing needs a versioned canonical representation: sorted grade rules and
-applicability links, exact canonical decimal strings, explicit null/open-bound meaning,
-source artifact hashes and evidence links. Review signs off on that complete snapshot.
+Content hashing uses the complete versioned manifest defined under immutable evidence
+above. The manifest pins immutable institutional identity and source payloads, not only
+indirect references. Review signs off on that exact snapshot, not on a mutable live join.
 A hash collision/implementation error is not treated as proof of authority; review and
 privilege boundaries remain required. Canonicalization golden tests precede release work.
 
@@ -115,11 +169,33 @@ Draft applicability may overlap while evidence is evaluated. Released/eligible r
 must not offer conflicting rules for the same programme, cohort, session and any approved
 additional dimensions. Dates must not choose a winner by "latest row" ordering.
 
-Before a future release, a database-controlled operation must serialize releases for all
-affected programme UUIDs in a fixed lock order, re-read conflicts after acquiring locks,
-verify the expected draft version/hash and evidence, and commit the publication event
-atomically. Competing/stale publication fails without partial release. Actual PostgreSQL
-concurrency tests must prove this; application-only prechecks are insufficient.
+Proposed synchronization contract, to be proven in GP3 on PostgreSQL 17:
+
+1. Each revision starts with a positive `record_version`. Draft changes to the parent,
+   grade rules, applicability or revision/evidence links lock that revision's parent row
+   before changing its logical payload, verify an expected version where relevant, and
+   increment the version atomically in the same transaction. Direct SQL cannot bypass
+   the parent-lock/state/version guard. Immutable evidence and identity rows cannot be edited.
+2. Initial publication handles one revision per transaction. It locks the revision parent
+   first, then discovers its protected applicability and locks all affected Programme rows
+   in sorted UUID order. The same parent-before-programme order applies to every operation
+   that needs both. No operation may acquire another revision's parent after programme locks;
+   multi-revision publication is unsupported until separately designed. Draft edits need
+   the parent lock; they cannot race a publication snapshot by changing a child independently.
+3. Use an explicitly verified READ COMMITTED transaction. After acquiring locks, execute
+   fresh reads of committed release conflicts, eligibility and the complete canonical
+   manifest. Recompute the hash and compare the expected version/hash and approved decision.
+   Do not reuse a pre-lock snapshot, trust a client-supplied hash, or assume a REPEATABLE READ
+   snapshot refreshed after waiting. Check conflicts in the same protected programme scope.
+4. Insert the release event and make the revision immutable atomically. Withdrawal and
+   supersession operations that alter eligibility obey the same synchronization boundary.
+   A waiting publisher rechecks committed state after getting its programme locks; stale
+   approvals, conflicting applicability and child edits yield a conflict without partial release.
+
+GP2a must define draft version/child-change guards; GP2b defines canonicalization. The exact
+GP3 SQL, review-ready edit semantics, transition guards and lock/deadlock behaviour still
+require independent implementation review and two-connection tests. This is not a claim
+that an RLS policy, FK or application precheck alone implements publication synchronization.
 
 Direct publication-table writes are denied to ordinary callers; only an independently
 reviewed release operation could acquire publication authority. No new extension such
@@ -168,6 +244,13 @@ than simply adding a new table to the student-owned table count. Runtime connect
 continue to fail closed on drift. Test direct SQL with actual LOGIN roles, not a superuser
 SET ROLE shortcut. Transaction-pooler reuse must not carry unpublished access or identity.
 
+Startup/preflight may query catalogue privilege metadata. Student workflows must not fetch
+catalogue rows or gain extra request-time database round trips in GP2a. Incorporate required
+per-request drift predicates into existing boundary queries where feasible; verify existing
+query budgets and injected privilege/RLS drift together. Do not omit drift checks to make a
+query-count assertion pass. If both requirements cannot be met, stop for a separately reviewed
+query-budget/design decision rather than silently adding queries or weakening the boundary.
+
 ## Evidence ingestion, privacy and operations
 
 GP2a has no source-fetching code, AI requests or real institutional seeds. Only synthetic
@@ -183,12 +266,21 @@ unrelated personal data into excerpts. Never upload student records, grades or i
 to a policy-monitoring provider. External services/regions or processing changes require
 updating privacy.html and LEGAL_UPDATED together under AGENTS.md.
 
-A catalogue backup/restore requirement belongs in GP2a's implementation acceptance, before
-persistent use. Choose explicit reference-data export/restore support (the existing student
-backup allowlist does not automatically include it). Restore policies/evidence/reviews in
-FK order and prove hashes, access rules and references survive. No new backup grant is
-implied by this proposal; if restoring student-linked policies later, restore the exact
-referenced revisions as well. Missing historical revisions must fail closed, not default.
+Reference backup/restore access is a pre-implementation owner decision for GP2a, not just
+an operational follow-up. SELECT alone does not permit reading rows under FORCE RLS. The
+approved approach must specify the exact export login, table/column grants, any explicit
+read-only RLS policy or export function, encrypted output format, and restore actor/rights.
+Possible approaches are a separately restricted reference-export login or an explicit
+extension of the existing allowlisted backup process; neither is authorized by this draft.
+Never grant BYPASSRLS, broad default privileges or new student-table access to solve this.
+
+GP2a acceptance must run a restricted-login synthetic reference export/restore drill before
+persistent use. Restore identities/evidence/revisions and links in valid FK order with exact
+UUIDs, identity tuples, source payloads, versions and hashes; verify both data equality and
+post-restore RLS/grants. Existing student backup/restore remains intact. GP3 must extend the
+same contract to immutable review/publication history. For later student-linked policies,
+restore the exact referenced revisions as well. Missing history fails closed, not default.
+No export role, RLS policy, credential or live restore is approved by this document.
 
 Generated Supabase SQL must remain in sync with migrations/provisioning and pass the existing
 SQL/pooler tests. Never apply numbered SQL to a live database as part of this design work.
@@ -216,14 +308,14 @@ with independent gates; do not expose an incomplete catalogue to website request
 | --- | --- |
 | Legacy compatibility | Existing core/CLI/Streamlit, website, auth and browser suites; seven GP1 mutation controls remain effective. No new website query or result change in GP2a. |
 | PostgreSQL precision | Raw SQL rejects nonfinite/negative/out-of-range/overprecision points without silent scale rounding; Python validators agree. |
-| Integrity | Unique references/grade rules, protected FKs, mismatched maximum, missing endpoints; parent/child mutation after release rejected by later publication guard. |
-| Applicability | Cohort/session boundary fixtures, unknown scope, campus/mode exceptions, overlap/ambiguity and no automatic university inheritance. |
+| Integrity | Unique references/grade rules, protected FKs, mismatched maximum, missing endpoints; draft parent/child version changes; immutable source payload and institutional identity enforced in GP2a; released-parent/child mutation rejected by the GP3 guard. |
+| Applicability | Cohort/session boundaries, unknown scope and variant exceptions; direct university/identity reassignment rejected; display renames preserve resolution; new identities retain historical links; no automatic university inheritance. |
 | Role boundary | Actual runtime/auth/API/PUBLIC direct-SQL denials on drafts and writes; forced RLS, memberships, ownership, column grants, default privileges and MAINTAIN drift. |
 | Migrations | Fresh PostgreSQL 17, upgrade from exact master history, reverse/reapply only on disposable data, grants re-provisioned, generated Supabase SQL unchanged by re-export. |
-| Concurrency (GP3) | Two independent connections release overlapping scopes, stale review hashes, child edits during approval, rollback and ambiguous COMMIT. No partial publication. |
+| Concurrency (GP3) | Independent connections release overlapping scopes or edit draft children; verify lock order, stale versions/hashes, fresh post-lock READ COMMITTED reads, rejected edits after release, rollback and ambiguous COMMIT. No partial publication. |
 | Publication visibility (GP3+) | Draft/rejected/withdrawn definitions unavailable for new bindings; no privileged-view bypass or stale process cache. Pooler tests use real separate logins. |
-| Backup/restore | Synthetic catalogue/reference data restores with exact hashes and denies unauthorized access; existing encrypted student backup and account deletion suites remain intact. |
-| Privacy/security | Source strings rendered safely, no credential/identifier/sensitive query-string leakage, bounded resources; no external network in tests/CI. |
+| Backup/restore | Restricted export login reads only the approved reference scope under forced RLS; unauthorized writes/reads denied; restored identities, source snapshots, FKs and hashes match; existing encrypted student backup and account deletion suites remain intact. |
+| Privacy/security | Direct evidence UPDATE/referenced DELETE and artifact substitution rejected; new evidence snapshots invalidate old approval; source strings rendered safely, no secrets/PII leakage, bounded resources; no external network in tests/CI. |
 
 Negative controls must deliberately remove precision validation, forced RLS, an access-denial
 check, publication immutability or ambiguity guards when those features exist. Require green
@@ -241,8 +333,8 @@ not claim those future controls or PostgreSQL experiments have been implemented 
    recommended; whether independent second-person sign-off is mandatory remains pending.
 4. Approve the first official-source batches and artifact licensing/retention/privacy policy
    before real data is ingested. An official institution registry is not grading evidence.
-5. Approve catalogue backup/restore support and any precise additional read grant before
-   persistent reference data exists. Do not widen the student backup role implicitly.
+5. Before GP2a implementation, approve the reference export/restore principal, exact
+   grants/RLS access and restoration contract. Do not widen the student backup role implicitly.
 
 This document recommends defaults; none of these choices is recorded as owner-approved.
 The next safe action is independent review of this proposal, then explicit authorization
