@@ -70,6 +70,15 @@ LEGACY_POLICY = GradingPolicy(
     {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "F": 0}, 5,
 )
 
+# The usual 4-point scale (launch: each student chooses 4- or 5-point in Settings). There is no E.
+FOUR_POINT_POLICY = GradingPolicy(
+    "ucc-four-point", "1",
+    {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}, 4,
+)
+
+# The website's choice per student; "five" (the legacy scale) is the default.
+SCALES = {"five": LEGACY_POLICY, "four": FOUR_POINT_POLICY}
+
 
 def checked_policy(policy):
     """Reject missing/unknown policy objects rather than falling back silently."""

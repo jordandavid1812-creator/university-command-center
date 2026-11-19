@@ -294,6 +294,7 @@ class MaterialText(ValidatedRecord):
 
 LEVEL_CHOICES = [("100", "100 level"), ("200", "200 level"), ("300", "300 level"), ("400", "400 level"),
                  ("500", "500 level"), ("600", "600 level"), ("700", "700 level"), ("PG", "Postgraduate")]
+GRADING_SCALES = [("five", "5-point (A=5 to F=0)"), ("four", "4-point (A=4 to F=0, no E)")]
 MATRIC_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9/._-]{0,31}$"
 NO_EDGE_SPACE = r"^\s|\s$"
 
@@ -315,6 +316,9 @@ class StudentProfile(ValidatedRecord):
     second_lower_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
     third_class_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
     pass_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    # The grade scale this student's results use (grading_policy.SCALES). Changed only through
+    # services.profiles.set_scale, which refuses 4-point while any course is graded E.
+    grading_scale = models.CharField(max_length=4, choices=GRADING_SCALES, default="five")
     record_version = models.PositiveBigIntegerField(default=1)
 
     class Meta:
@@ -328,6 +332,8 @@ class StudentProfile(ValidatedRecord):
                                    & ~models.Q(programme__regex=NO_EDGE_SPACE),
                                    name="profile_text_trimmed"),
             models.CheckConstraint(condition=models.Q(record_version__gte=1), name="profile_version_positive"),
+            models.CheckConstraint(condition=models.Q(grading_scale__in=[code for code, _ in GRADING_SCALES]),
+                                   name="profile_grading_scale_valid"),
             # Bands: all empty, or all set, within 0-5 and strictly falling from First to Pass.
             models.CheckConstraint(
                 condition=models.Q(first_class_min__isnull=True, second_upper_min__isnull=True,

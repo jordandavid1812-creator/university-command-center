@@ -3,8 +3,9 @@ import uuid
 from decimal import Decimal
 from django import forms
 from django.conf import settings
+from grading_policy import LEGACY_POLICY
 from academic_logic import CLASS_NAMES, checked_bands, checked_credits, checked_target, checked_grade, GRADE_POINTS
-from academics.models import CLASS_KINDS, LEVEL_CHOICES, MATRIC_PATTERN, WEEKDAYS, Course
+from academics.models import CLASS_KINDS, GRADING_SCALES, LEVEL_CHOICES, MATRIC_PATTERN, WEEKDAYS, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 from .upload_validation import (MAX_UPLOAD_BYTES, describe_size, validate_pdf_content, validate_text_content,
                                 validate_upload_metadata)
@@ -13,6 +14,20 @@ from .upload_validation import (MAX_UPLOAD_BYTES, describe_size, validate_pdf_co
 def upload_cap():
     """This deployment's per-file limit (10 MiB, or 4 MB on Vercel)."""
     return min(getattr(settings, 'UCC_MAX_UPLOAD_BYTES', MAX_UPLOAD_BYTES), MAX_UPLOAD_BYTES)
+
+def grade_help(policy):
+    """'A=5, B=4, C=3, D=2, E=1, F=0' for the student's scale."""
+    return ', '.join(f'{grade}={points}' for grade, points in policy.grade_points.items())
+
+
+def scaled_decimal(form, name, policy, help_text):
+    """Give a 0-to-maximum field the student's scale (the 5-point field is left exactly as it was)."""
+    if policy is LEGACY_POLICY:
+        return
+    old = form.fields[name]
+    form.fields[name] = forms.DecimalField(label=old.label, min_value=0, max_value=policy.maximum, max_digits=5,
+                                           decimal_places=4, initial=old.initial, help_text=help_text)
+
 
 class StrictForm(forms.Form):
     def __getitem__(self, name):
@@ -46,8 +61,12 @@ class CourseForm(StrictForm):
     actual_grade = forms.ChoiceField(required=False, choices=[('', 'Ungraded')] + [(g, g) for g in GRADE_POINTS],
                                     help_text='A=5, B=4, C=3, D=2, E=1, F=0. Ungraded is excluded from GPA.')
 
-    def __init__(self, *args, semesters, **kwargs):
+    def __init__(self, *args, semesters, policy=LEGACY_POLICY, **kwargs):
         super().__init__(*args, **kwargs)
+        self.policy = policy
+        if policy is not LEGACY_POLICY:
+            self.fields['actual_grade'].choices = [('', 'Ungraded')] + [(g, g) for g in policy.grade_points]
+            self.fields['actual_grade'].help_text = grade_help(policy) + '. Ungraded is excluded from GPA.'
         self.fields['semester_id'].choices = [('', 'Choose a semester')] + [(str(s.pk), f'{i}. {s.label}') for i, s in enumerate(semesters, 1)]
 
     def clean_credit_units(self):
@@ -57,7 +76,7 @@ class CourseForm(StrictForm):
             raise forms.ValidationError(str(error)) from error
 
     def clean_actual_grade(self):
-        return checked_grade(self.cleaned_data['actual_grade'])
+        return checked_grade(self.cleaned_data['actual_grade'], policy=self.policy)
 
 
 class AssignmentForm(StrictForm):
@@ -257,6 +276,12 @@ class ProfileForm(StrictForm):
         return values
 
 
+class GradingScaleForm(StrictForm):
+    """Settings: the 4- or 5-point scale. `version` is the profile's (empty when there is none yet)."""
+    scale = forms.ChoiceField(label='Grade scale', choices=GRADING_SCALES)
+    version = forms.IntegerField(required=False, min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
+
+
 class DisplayForm(StrictForm):
     theme = forms.ChoiceField(label='Display', widget=forms.RadioSelect, choices=[
         ('system', 'System (follow this device)'), ('light', 'Light'), ('dark', 'Dark')])
@@ -295,7 +320,7 @@ class AssignmentFilter(PageForm):
 
 
 class PredictorForm(StrictForm):
-    def __init__(self, *args, courses, **kwargs):
+    def __init__(self, *args, courses, policy=LEGACY_POLICY, **kwargs):
         if len(courses) > MAX_PREDICTION_COURSES:
             raise WorkspaceLimit('The predictor supports 200 courses at a time. Choose a semester to narrow the selection.')
         super().__init__(*args, **kwargs)
@@ -303,7 +328,7 @@ class PredictorForm(StrictForm):
             self.fields['grade_' + course.pk.hex] = forms.ChoiceField(
                 required=False, label=f'{course.normalized_code} · {course.name}',
                 help_text=f'{course.credit_units.normalize():f} credits · hypothetical only',
-                choices=[('', 'Do not include')] + [(g, g) for g in GRADE_POINTS])
+                choices=[('', 'Do not include')] + [(g, g) for g in policy.grade_points])
 
     def clean(self):
         values = super().clean()
@@ -319,9 +344,14 @@ class PlannerForm(StrictForm):
                                    max_digits=11, decimal_places=4, initial='30',
                                    help_text='Include all remaining credits, including currently ungraded courses. No graduation policy is inferred.')
 
+    def __init__(self, *args, policy=LEGACY_POLICY, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.policy = policy
+        scaled_decimal(self, 'target', policy, f'0–{policy.maximum}, with at most four decimal places.')
+
     def clean_target(self):
         try:
-            return checked_target(self.cleaned_data['target'])
+            return checked_target(self.cleaned_data['target'], policy=self.policy)
         except ValueError as error:
             raise forms.ValidationError(str(error)) from error
 
@@ -336,18 +366,19 @@ class ClassBandsForm(StrictForm):
     """The student's own class-of-degree bands: the lowest CGPA for each class."""
     FIELDS = ("first_class_min", "second_upper_min", "second_lower_min", "third_class_min", "pass_min")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, policy=LEGACY_POLICY, **kwargs):
         super().__init__(*args, **kwargs)
+        self.policy = policy
         for name, label in zip(self.FIELDS, CLASS_NAMES):
-            self.fields[name] = forms.DecimalField(label=f'{label}: lowest CGPA', min_value=0, max_value=5,
+            self.fields[name] = forms.DecimalField(label=f'{label}: lowest CGPA', min_value=0, max_value=policy.maximum,
                                                    max_digits=5, decimal_places=4,
-                                                   help_text='0–5, at most four decimal places.')
+                                                   help_text=f'0–{policy.maximum}, at most four decimal places.')
 
     def clean(self):
         values = super().clean()
         if not self.errors:
             try:
-                bands = checked_bands([values[name] for name in self.FIELDS])
+                bands = checked_bands([values[name] for name in self.FIELDS], policy=self.policy)
             except ValueError as error:
                 raise forms.ValidationError(str(error)) from error
             values.update(zip(self.FIELDS, bands))
@@ -368,13 +399,16 @@ class ProjectionForm(StrictForm):
                                    max_digits=11, decimal_places=4, initial='30',
                                    help_text='Include all remaining credits, including currently ungraded courses.')
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, policy=LEGACY_POLICY, **kwargs):
         kwargs.setdefault('auto_id', 'projection_%s')  # unique IDs beside the target form
         super().__init__(*args, **kwargs)
+        self.policy = policy
+        scaled_decimal(self, 'expected', policy, 'The GPA you expect to average from now on: '
+                       f'0–{policy.maximum}, at most four decimal places.')
 
     def clean_expected(self):
         try:
-            return checked_target(self.cleaned_data['expected'])
+            return checked_target(self.cleaned_data['expected'], policy=self.policy)
         except ValueError as error:
             raise forms.ValidationError(str(error).replace('Target CGPA', 'The expected average')) from error
 

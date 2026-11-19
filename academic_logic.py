@@ -234,23 +234,23 @@ CLASS_NAMES = ("First Class", "Second Class Upper", "Second Class Lower", "Third
 DEFAULT_CLASS_BANDS = (Decimal("4.50"), Decimal("3.50"), Decimal("2.40"), Decimal("1.50"), Decimal("1.00"))
 
 
-def checked_bands(values):
-    """Five class minimums, highest class first: each 0-5 with at most four decimal places,
-    and each strictly lower than the class above it."""
+def checked_bands(values, *, policy=LEGACY_POLICY):
+    """Five class minimums, highest class first: each from 0 to the scale's maximum with at most
+    four decimal places, and each strictly lower than the class above it."""
     if not isinstance(values, (list, tuple)) or len(values) != len(CLASS_NAMES):
         raise ValueError("Enter a lowest CGPA for each of the five classes.")
-    bands = tuple(checked_target(value) for value in values)
+    bands = tuple(checked_target(value, policy=policy) for value in values)
     if any(higher <= lower for higher, lower in zip(bands, bands[1:])):
         raise ValueError("Each class needs a lower minimum than the class above it.")
     return bands
 
 
-def class_standing(cgpa, bands=DEFAULT_CLASS_BANDS):
+def class_standing(cgpa, bands=DEFAULT_CLASS_BANDS, *, policy=LEGACY_POLICY):
     """Which band the actual CGPA falls in, and how far it is below the next band up.
 
     Uses the unrounded CGPA. Read-only: it describes the student's own bands and never
     decides a classification. `cgpa` is None when nothing is graded yet."""
-    bands = checked_bands(bands)
+    bands = checked_bands(bands, policy=policy)
     rows = [{"name": name, "low": low, "high": None if index == 0 else bands[index - 1]}
             for index, (name, low) in enumerate(zip(CLASS_NAMES, bands))]
     if cgpa is None:

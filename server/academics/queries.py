@@ -215,9 +215,9 @@ def dashboard_reads(identity, today):
         owner = identity.student_id
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
-        name = _records(StudentProfile, owner).values_list('display_name', flat=True).first()
+        name, scale = _records(StudentProfile, owner).values_list('display_name', 'grading_scale').first() or ('', 'five')
         return (semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today),
-                _classes(owner, today.weekday()), _study_today(owner, today))
+                _classes(owner, today.weekday()), _study_today(owner, today), scale)
 
 
 def _ai_panel(owner):
