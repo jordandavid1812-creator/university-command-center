@@ -32,7 +32,7 @@ Original decisions:
    docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
 6. Account deletion and email change.
 7. Privacy page and terms (NDPA) (done: `/accounts/privacy/` and `/accounts/terms/`; see "Privacy notice and terms" below).
-8. Backups and a tested restore.
+8. Backups and a tested restore (done: daily encrypted backups through GitHub Actions; see docs/BACKUPS.md).
 
 Then: put it online, an independent security test, and the first invitations.
 

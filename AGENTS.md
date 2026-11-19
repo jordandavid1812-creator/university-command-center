@@ -165,3 +165,8 @@ UPDATE(day) on it, and keep its forced RLS. Add the AI key only after these limi
 Privacy notice and terms (launch step G): /accounts/privacy/ and /accounts/terms/ must stay true. Any
 change to stored data, cookies, outside services or their regions updates privacy.html and
 LEGAL_UPDATED in the same PR. The AI pages still never name the provider; the privacy notice must.
+Backups (launch step H): read docs/BACKUPS.md. ucc_backup stays read-only (SELECT on BACKUP_TABLES
+only, default_transaction_read_only) and never reads sessions, tokens, counters or the signing key.
+Backups are always age-encrypted before touching disk; never print or log data, keys or passwords.
+The backup workflow never runs on pull requests. Run tools/test_backup_restore.py when changing it,
+and add new student tables to BACKUP_TABLES, backup_role.sql and the privacy notice together.
