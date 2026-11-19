@@ -90,6 +90,8 @@ No deployment or Milestone 5 without a new task.
 
 Study materials (PR #60): read docs/STUDY_MATERIALS.md before changing uploads or file storage.
 Uploads stay in memory, 10 MiB per file; never add a disk-spilling upload handler.
+On Vercel the per-file cap is 4,000,000 bytes (request body limit 4.5 MB); change it only with
+web_common.set_upload_cap, never above 10 MiB, and keep the database limit at 10 MiB.
 StudyMaterial and MaterialFile keep forced RLS and same-owner foreign keys.
 Stored files are never updated: runtime gets no UPDATE on academics_materialfile.
 Keep the 50 files / 200 MiB per-student quota under the advisory lock; it sums stored bytes.

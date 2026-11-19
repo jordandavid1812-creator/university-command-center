@@ -17,6 +17,7 @@ from academics import queries, services
 from academics.ownership import OwnershipRequired
 from accounts.views import student_required
 from . import charts, data, export, forms, search, study_plan
+from .upload_validation import describe_size
 from .data import present
 from .context import DISPLAY_COOKIE, display_theme
 
@@ -375,7 +376,8 @@ def upload_too_large(request):
 @protected(('GET', 'POST'))
 def material_upload(request, identity):
     if request.method == 'POST' and upload_too_large(request):
-        return error_page(request, 'File too large', 'Choose a PDF or TXT file no larger than 10 MiB.', 413)
+        return error_page(request, 'File too large',
+                          f'Choose a PDF or TXT file no larger than {describe_size(forms.upload_cap())}.', 413)
     courses = queries.options(identity, 'course')
     bound = (request.POST, request.FILES) if request.method == 'POST' else ()
     form = forms.MaterialUploadForm(*bound, courses=courses)

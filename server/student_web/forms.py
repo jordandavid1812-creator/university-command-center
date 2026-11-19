@@ -2,10 +2,17 @@ import re
 import uuid
 from decimal import Decimal
 from django import forms
+from django.conf import settings
 from academic_logic import CLASS_NAMES, checked_bands, checked_credits, checked_target, checked_grade, GRADE_POINTS
 from academics.models import CLASS_KINDS, LEVEL_CHOICES, MATRIC_PATTERN, WEEKDAYS, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
-from .upload_validation import MAX_UPLOAD_BYTES, validate_pdf_content, validate_text_content, validate_upload_metadata
+from .upload_validation import (MAX_UPLOAD_BYTES, describe_size, validate_pdf_content, validate_text_content,
+                                validate_upload_metadata)
+
+
+def upload_cap():
+    """This deployment's per-file limit (10 MiB, or 4 MB on Vercel)."""
+    return min(getattr(settings, 'UCC_MAX_UPLOAD_BYTES', MAX_UPLOAD_BYTES), MAX_UPLOAD_BYTES)
 
 class StrictForm(forms.Form):
     def __getitem__(self, name):
@@ -157,6 +164,8 @@ class MaterialUploadForm(StrictForm):
     def __init__(self, *args, courses, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['course_id'].choices = [('', 'Choose a course')] + [(str(c.pk), f'{c.normalized_code} · {c.name}') for c in courses]
+        self.fields['file'].help_text = (f'PDF or UTF-8 TXT, up to {describe_size(upload_cap())}. '
+                                         'The file is checked, then stored privately for you.')
         self.file_facts = None
         self.file_content = None
 
@@ -166,9 +175,11 @@ class MaterialUploadForm(StrictForm):
         if upload is None:
             return values
         try:
-            extension = validate_upload_metadata(upload.name, upload.size)
+            limit = upload_cap()
+            extension = validate_upload_metadata(upload.name, upload.size, limit)
             upload.seek(0)
-            content = upload.read(MAX_UPLOAD_BYTES + 1)
+            content = upload.read(limit + 1)
+            validate_upload_metadata(upload.name, len(content), limit)
             if extension == '.pdf':
                 validate_pdf_content(content)
             else:
