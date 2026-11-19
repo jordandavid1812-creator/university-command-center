@@ -27,7 +27,8 @@ Original decisions:
 2. **Server package** (done): Docker Compose for website + PostgreSQL + Caddy, and a step-by-step guide.
 3. **Invite-only sign-up** (done), later replaced on the public site by **open sign-up with an
    emailed 6-digit code** (see "Open sign-up" below).
-4. Real email through a reviewed SMTP backend (lifts the `accounts.E105` gate).
+4. Real email through a reviewed SMTP backend (done: Gmail through `ReviewedSMTPBackend`, which
+   lifts the `accounts.E105` gate; see "Step C: real email" below).
 5. AI limits for the shared key (done: 10 per student and 200 for the site per day; see
    docs/AI_STUDY_ASSISTANT.md "Limits for the shared key").
 6. Account deletion and email change (done; see "Account deletion" below and "Email change (launch step F, part 2)" in docs/AUTHENTICATION.md).
