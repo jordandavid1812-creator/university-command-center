@@ -166,7 +166,10 @@ class InviteCode(models.Model):
 
 class SignupCode(models.Model):
     """Email sign-up code for the public site: 6 digits, stored only as an HMAC (keyed with the
-    site's secret, so a database copy cannot be used to work codes out), 1 minute, 5 tries."""
+    site's secret, so a database copy cannot be used to work codes out), 1 minute, 5 tries.
+
+    A row with new_email is an email-change code instead (accounts.email_change): it was sent to
+    new_email and, when entered, replaces the account's email. new_email never changes."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='signup_codes')
     digest = models.CharField(max_length=64)
@@ -174,10 +177,13 @@ class SignupCode(models.Model):
     expires_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
     consumed_at = models.DateTimeField(null=True, blank=True)
+    new_email = models.EmailField(max_length=254, null=True, blank=True)
 
     class Meta:
         constraints = [
             models.CheckConstraint(condition=models.Q(digest__regex=r'^[0-9a-f]{64}$'), name='signup_code_digest_hex'),
+            models.CheckConstraint(condition=models.Q(new_email__isnull=True) | (
+                ~models.Q(new_email='') & models.Q(new_email=Lower(Trim('new_email')))), name='signup_code_new_email_normalized'),
             models.CheckConstraint(condition=models.Q(expires_at__gt=models.F('created_at')), name='signup_code_expiry'),
             models.CheckConstraint(condition=models.Q(attempts__lte=5), name='signup_code_attempts'),
         ]

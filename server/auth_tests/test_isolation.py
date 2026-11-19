@@ -208,7 +208,7 @@ class AuthenticationIsolationTests(AuthenticationCase):
                       'SELECT ucc_security.current_student()', 'SELECT * FROM django_migrations',
                       'ALTER TABLE accounts_student ADD COLUMN forbidden integer',
                       'TRUNCATE accounts_student CASCADE', "UPDATE accounts_student SET is_active=true",
-                      "UPDATE accounts_student SET email='changed@example.invalid'", 'DELETE FROM accounts_student']),
+                      "UPDATE accounts_student SET username='changed'", 'DELETE FROM accounts_student']),
         ):
             for statement in statements:
                 with self.subTest(alias=alias, statement=statement):

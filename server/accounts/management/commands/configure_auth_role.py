@@ -43,7 +43,9 @@ class Command(BaseCommand):
                 sql.Identifier(connection.settings_dict['NAME']), sql.Identifier(role)))
             cursor.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))
             cursor.execute(sql.SQL('GRANT SELECT, INSERT ON accounts_student TO {}').format(sql.Identifier(role)))
-            cursor.execute(sql.SQL('GRANT UPDATE (password, last_login, email_verified_at, updated_at) ON accounts_student TO {}').format(sql.Identifier(role)))
+            # email: only accounts.email_change, after the student's password and a code sent to the
+            # new address. Username, active status and IDs stay unchangeable.
+            cursor.execute(sql.SQL('GRANT UPDATE (password, last_login, email, email_verified_at, updated_at) ON accounts_student TO {}').format(sql.Identifier(role)))
             cursor.execute(sql.SQL('GRANT SELECT, INSERT, DELETE ON accounts_accounttoken, accounts_auththrottle, django_session TO {}').format(sql.Identifier(role)))
             for table, fields in (
                 ('accounts_accounttoken', ['consumed_at']),

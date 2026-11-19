@@ -173,3 +173,7 @@ and add new student tables to BACKUP_TABLES, backup_role.sql and the privacy not
 Account deletion (launch step F): only through ucc_security.delete_my_account() in a signed student
 transaction; it takes no arguments. Any new table referring to accounts_student must be added to the
 function (new migration) and to security_tests.test_account_deletion.OWNED in the same PR.
+Email change (step F, part 2): only through accounts.email_change, after the current password and a
+code sent to the NEW address (accounts_signupcode rows with new_email). The auth role may UPDATE only
+email (plus the existing password/last_login/email_verified_at/updated_at) on accounts_student, never
+username, id or is_active. Never reveal whether another account uses an address; tell the old address.

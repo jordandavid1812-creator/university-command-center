@@ -212,6 +212,27 @@ class AccountDeleteForm(StrictForm):
         return 'DELETE'
 
 
+class EmailChangeForm(StrictForm):
+    """Launch step F, part 2: ask for a code at the new address. The password guards the account."""
+    password = forms.CharField(label='Your password', strip=False, max_length=128,
+                               widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
+    new_email = forms.EmailField(label='New email address', max_length=254,
+                                 widget=forms.EmailInput(attrs={'autocomplete': 'email'}))
+
+    def clean_new_email(self):
+        value = self.cleaned_data['new_email'].strip().lower()
+        if not value.isascii():
+            raise forms.ValidationError('Use an ASCII email address.')
+        return value
+
+
+class EmailChangeCodeForm(StrictForm):
+    code = forms.CharField(label='6-digit code', max_length=12,
+                           help_text='From the email we sent to your new address. It works for 10 minutes.',
+                           widget=forms.TextInput(attrs={'autocomplete': 'one-time-code', 'inputmode': 'numeric',
+                                                         'spellcheck': 'false'}))
+
+
 class DeleteForm(StrictForm):
     version = forms.IntegerField(min_value=1, max_value=2**63 - 2, widget=forms.HiddenInput())
     confirm = forms.BooleanField(label='I confirm I want to delete this record')
