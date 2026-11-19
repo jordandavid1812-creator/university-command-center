@@ -174,6 +174,10 @@ and add new student tables to BACKUP_TABLES, backup_role.sql and the privacy not
 Account deletion (launch step F): only through ucc_security.delete_my_account() in a signed student
 transaction; it takes no arguments. Any new table referring to accounts_student must be added to the
 function (new migration) and to security_tests.test_account_deletion.OWNED in the same PR.
+Grade scale (4- or 5-point): each student's choice is academics_studentprofile.grading_scale, changed
+only through services.profiles.set_scale. Never convert saved letters; refuse 4-point while any course
+is graded E; clear own class bands on a change; 5-point pages stay exactly as before. The 4-point scale
+has no built-in class guide. Read docs/STUDENT_WEBSITE.md "Grade scale" first.
 Email change (step F, part 2): only through accounts.email_change, after the current password and a
 code sent to the NEW address (accounts_signupcode rows with new_email). The auth role may UPDATE only
 email (plus the existing password/last_login/email_verified_at/updated_at) on accounts_student, never

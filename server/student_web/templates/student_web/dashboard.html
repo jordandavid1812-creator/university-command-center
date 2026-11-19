@@ -32,7 +32,7 @@
     <section class="panel dashboard-summary" aria-labelledby="actual-cgpa-title">
       <p class="eyebrow">Your academic snapshot</p>
       <h2 id="actual-cgpa-title">Actual CGPA</h2>
-      <p class="dashboard-gpa"><strong id="actual-cgpa-value">{% if summary.gpa != None %}{{ summary.gpa|floatformat:2 }}{% else %}Not graded{% endif %}</strong>{% if summary.gpa != None %}<span> / 5.00</span>{% endif %}</p>
+      <p class="dashboard-gpa"><strong id="actual-cgpa-value">{% if summary.gpa != None %}{{ summary.gpa|floatformat:2 }}{% else %}Not graded{% endif %}</strong>{% if summary.gpa != None %}<span> / {{ scale.max|default:'5.00' }}</span>{% endif %}</p>
       <p class="dashboard-note">Credit-weighted actual results. Ungraded courses are excluded; F counts as 0.</p>
       <dl class="dashboard-stats">
         <div><dt>Attempted credits</dt><dd>{{ summary.units|floatformat:'-4' }}</dd></div>
@@ -90,7 +90,7 @@
       </form>
     </div>
     <div class="dashboard-selected-result">
-      {% if current_selected %}<p class="dashboard-note">Selected semester GPA</p><p class="dashboard-selected-value">{% if current and current.gpa != None %}{{ current.gpa|floatformat:2 }}<span> / 5.00</span>{% else %}Not graded{% endif %}</p><p class="dashboard-note">{% if current %}{{ current.label }} · {{ current.units|floatformat:'-4' }} attempted credits{% else %}No graded courses in the selected semester yet.{% endif %}</p>
+      {% if current_selected %}<p class="dashboard-note">Selected semester GPA</p><p class="dashboard-selected-value">{% if current and current.gpa != None %}{{ current.gpa|floatformat:2 }}<span> / {{ scale.max|default:'5.00' }}</span>{% else %}Not graded{% endif %}</p><p class="dashboard-note">{% if current %}{{ current.label }} · {{ current.units|floatformat:'-4' }} attempted credits{% else %}No graded courses in the selected semester yet.{% endif %}</p>
       {% else %}<p class="dashboard-note">Choose a semester to see its actual GPA here.</p>{% endif %}
     </div>
   </section>

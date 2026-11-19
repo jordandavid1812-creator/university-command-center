@@ -54,6 +54,11 @@ new form input, route or stored value is introduced. Existing grade/credit valid
 first-valid normalized-code deduplication, semester order, ungraded/F distinction,
 Decimal arithmetic and formulas remain. Predictions and plans remain read-only.
 
+Later addition (website only): each student may choose the 4-point scale
+(`FOUR_POINT_POLICY`: A=4, B=3, C=2, D=1, F=0, no E) instead of the legacy 5-point default.
+That choice is stored per student and passed as `policy=`; see docs/STUDENT_WEBSITE.md
+"Grade scale". It is a fixed, owner-approved scale, not a verified institutional policy.
+
 `class_standing`, `checked_bands`, existing UI targets and database A–F CHECKs remain
 legacy-only. Personal class bands are still an unverified guide. A four-point policy
 must not be passed through those existing UI/storage paths. General classification,

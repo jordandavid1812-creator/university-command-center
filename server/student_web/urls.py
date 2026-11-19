@@ -17,6 +17,7 @@ urlpatterns = [
     path('settings/change-email/', views.email_change, name='email-change'),
     path('settings/change-email/confirm/', views.email_change_confirm, name='email-change-confirm'),
     path('settings/display/', views.display_preference, name='display-preference'),
+    path('settings/grade-scale/', views.grading_scale, name='grading-scale'),
     path('settings/profile/', views.profile_edit, name='profile-edit'),
     path('settings/class-bands/', views.class_bands_edit, name='class-bands'),
     path('settings/class-bands/reset/', views.class_bands_reset, name='class-bands-reset'),

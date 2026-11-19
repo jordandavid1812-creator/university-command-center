@@ -1,6 +1,7 @@
 """Adapt PostgreSQL records to the established pure academic engine."""
 from datetime import timedelta
 from academic_logic import academic_summary
+from grading_policy import SCALES
 from academics.models import WEEKDAYS
 from academics.queries import WEEK_DAYS, WEEK_LIMIT, academic_snapshot, dashboard_reads, standing_snapshot
 
@@ -10,8 +11,9 @@ def snapshot(identity, today=None):
     returns assignment totals, upcoming work and the greeting name, in one transaction."""
     if today is None:
         return workspace(*academic_snapshot(identity))
-    semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study = dashboard_reads(identity, today)
-    return {**workspace(semesters, courses), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
+    (semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study,
+     scale) = dashboard_reads(identity, today)
+    return {**workspace(semesters, courses, scale), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
             'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
             'today_study': study}
 
@@ -80,17 +82,33 @@ def due_this_week(assignments, today):
 def standing(identity):
     """Records for the GPA, print and planner pages, plus the profile holding the class bands."""
     semesters, courses, profile = standing_snapshot(identity)
-    return {**workspace(semesters, courses), 'profile': profile}
+    return {**workspace(semesters, courses, profile.grading_scale if profile else 'five'), 'profile': profile}
 
 
-def workspace(semesters, courses):
+# What each scale looks like on the pages. The 5-point texts are exactly the ones used before.
+SCALE_TEXT = {
+    'five': {'code': 'five', 'name': '5-point', 'max': '5.00', 'top': 5, 'letters': 'A=5, B=4, C=3, D=2, E=1 and F=0',
+             'points': 'A=5, B=4, C=3, D=2, E=1, F=0'},
+    'four': {'code': 'four', 'name': '4-point', 'max': '4.00', 'top': 4, 'letters': 'A=4, B=3, C=2, D=1 and F=0',
+             'points': 'A=4, B=3, C=2, D=1, F=0'},
+}
+
+
+def scale_of(code):
+    """(policy, display texts) for a student's saved scale code."""
+    return SCALES[code], SCALE_TEXT[code]
+
+
+def workspace(semesters, courses, scale='five'):
     # Joined metadata also handles a semester created concurrently with this read.
     labels = {str(item.pk): item for item in semesters}
     labels.update({str(item.semester_id): item.semester for item in courses})
     records = [{'code': item.normalized_code, 'name': item.name, 'credit_units': item.credit_units,
                 'grade': item.actual_grade, 'semester': str(item.semester_id)} for item in courses]
-    summary = present(academic_summary(records), labels)
-    return {'semesters': semesters, 'courses': courses, 'records': records, 'summary': summary, 'labels': labels}
+    policy, text = scale_of(scale)
+    summary = present(academic_summary(records, policy=policy), labels)
+    return {'semesters': semesters, 'courses': courses, 'records': records, 'summary': summary, 'labels': labels,
+            'policy': policy, 'scale': text}
 
 
 def present(summary, labels):

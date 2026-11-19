@@ -20,6 +20,7 @@ def document(records, account, exported_at):
         "profile": None if profile is None else {
             "display_name": profile.display_name, "institution": profile.institution,
             "programme": profile.programme, "level": profile.level, "matric_number": profile.matric_number,
+            "grading_scale": profile.grading_scale,
             # Own class-of-degree bands as exact decimal strings, or null when the common guide is used.
             "class_bands": None if profile.first_class_min is None else {
                 name: str(getattr(profile, name)) for name in CLASS_BAND_FIELDS},

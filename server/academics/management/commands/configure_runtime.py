@@ -91,6 +91,13 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT EXECUTE ON FUNCTION ucc_security.current_student() TO {}").format(sql.Identifier(role)))
+            # Grade scale (academics.0025): the student's 4- or 5-point choice. Granted only once the
+            # column exists, so provisioning an older (rolled-back) schema still works.
+            cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.academics_studentprofile'::regclass
+                              AND attname = 'grading_scale' AND NOT attisdropped)""")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("GRANT UPDATE (grading_scale) ON public.academics_studentprofile TO {}").format(
+                    sql.Identifier(role)))
             # Launch step F (academics.0024): self-service deletion, only for the signed student.
             cursor.execute("SELECT to_regprocedure('ucc_security.delete_my_account()') IS NOT NULL")
             if cursor.fetchone()[0]:

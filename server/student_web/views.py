@@ -11,6 +11,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 from decimal import ROUND_CEILING, Decimal
+from grading_policy import LEGACY_POLICY
 from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, academic_summary, class_standing, course_breakdown,
                             predicted_summary, projected_cgpa, target_plan)
 from academics import queries, services
@@ -130,6 +131,8 @@ def edit_form(kind, request, identity, record):
     kwargs = {'initial': initial}
     if kind == 'course':
         kwargs['semesters'] = queries.options(identity, 'semester')
+        profile = services.profiles.current(identity)
+        kwargs['policy'] = data.scale_of(profile.grading_scale if profile else 'five')[0]
     elif kind in ('assignment', 'session'):
         kwargs['courses'] = queries.options(identity, 'course')
     form = form_type(request.POST if request.method == 'POST' else None, **kwargs)
@@ -452,43 +455,57 @@ def class_bands(identity):
 
 
 def _bands_of(profile):
-    """(bands, custom) for a profile (or None): its own five values, or the common guide."""
+    """(bands, custom) for a profile (or None): its own five values, or the common guide. The guide
+    is for the 5-point scale only, so a 4-point student without their own bands gets (None, False)."""
     values = [getattr(profile, name) for name in services.CLASS_BAND_FIELDS] if profile else []
     if values and all(value is not None for value in values):
         return tuple(values), True
+    if getattr(profile, 'grading_scale', 'five') != 'five':
+        return None, False
     return DEFAULT_CLASS_BANDS, False
 
 
-def class_standing_view(cgpa, bands, custom):
-    """Where the actual CGPA sits among the bands, with bar geometry (percent of 0-5) for display."""
-    standing = class_standing(cgpa, bands)
+def class_standing_view(cgpa, bands, custom, policy=LEGACY_POLICY):
+    """Where the actual CGPA sits among the bands, with bar geometry (percent of 0 to the scale's
+    maximum) for display. None when a 4-point student has not entered their bands yet."""
+    if bands is None:
+        return None
+    try:
+        standing = class_standing(cgpa, bands, policy=policy)
+    except ValueError:
+        return None  # bands saved for another scale (a tab racing a scale change): ask for new ones
+    maximum = policy.maximum
+    unit = 100 / int(maximum)  # 20 for the 5-point scale: each grade point is a fifth of the bar
+    low, high, start = (0.6, 4.4, 1) if int(maximum) == 5 else (0.48, 3.52, 0.8)  # 12% and 88% of the bar
     rows = list(reversed(standing['bands']))  # lowest class first, left to right on the bar
-    segments = [{'name': 'Below Pass', 'left': 0, 'width': float(rows[0]['low']) * 20, 'tone': 0}]
+    segments = [{'name': 'Below Pass', 'left': 0, 'width': float(rows[0]['low']) * unit, 'tone': 0}]
     for index, row in enumerate(rows, 1):
-        top = row['high'] if row['high'] is not None else Decimal(5)
-        segments.append({'name': row['name'], 'left': float(row['low']) * 20, 'width': float(top - row['low']) * 20,
+        top = row['high'] if row['high'] is not None else Decimal(maximum)
+        segments.append({'name': row['name'], 'left': float(row['low']) * unit, 'width': float(top - row['low']) * unit,
                          'tone': index})
     gap = standing['gap']
     # Round the distance up, so "0.01 more" is never shown when a little more is really needed.
     gap = None if gap is None else gap.quantize(Decimal('0.01'), rounding=ROUND_CEILING)
     return {**standing, 'segments': [s for s in segments if s['width'] > 0], 'gap': gap, 'custom': custom,
-            'marker': None if cgpa is None else float(cgpa) * 20,
+            'marker': None if cgpa is None else float(cgpa) * unit,
             # Near either end the label lines up with the bar's edge instead of centring past it.
-            'marker_side': '' if cgpa is None or 0.6 <= cgpa <= 4.4 else (' at-start' if cgpa < 1 else ' at-end')}
+            'marker_side': '' if cgpa is None or low <= cgpa <= high else (' at-start' if cgpa < start else ' at-end')}
 
 
 def standing_context(workspace):
     """Chart, step-by-step breakdown, grade scale and class standing for the saved grades (read-only)."""
-    breakdown = present(course_breakdown(workspace['records']), workspace['labels'])
+    policy = workspace.get('policy', LEGACY_POLICY)
+    breakdown = present(course_breakdown(workspace['records'], policy=policy), workspace['labels'])
     bands, custom = _bands_of(workspace.get('profile'))  # no profile read: the common guide
-    return {'chart': charts.semester_chart(workspace['summary']), 'breakdown': breakdown,
-            'grade_scale': sorted(GRADE_POINTS.items(), key=lambda item: -item[1]),
-            'standing': class_standing_view(workspace['summary']['gpa'], bands, custom)}
+    scale = GRADE_POINTS if policy is LEGACY_POLICY else policy.grade_points
+    return {'chart': charts.semester_chart(workspace['summary'], policy.maximum), 'breakdown': breakdown,
+            'grade_scale': sorted(scale.items(), key=lambda item: -item[1]),
+            'standing': class_standing_view(workspace['summary']['gpa'], bands, custom, policy)}
 
 
 @protected(('GET', 'POST'))
 def predictor(request, identity):
-    workspace = data.snapshot(identity)
+    workspace = data.standing(identity)  # with the profile, for the student's grade scale
     # GET only changes which courses are displayed; no hypothetical state is stored.
     selector = forms.SemesterFilter(request.GET, semesters=workspace['semesters'])
     if not selector.is_valid():
@@ -500,7 +517,8 @@ def predictor(request, identity):
     form = None
     status = 200
     try:
-        form = forms.PredictorForm(request.POST if request.method == 'POST' else None, courses=available)
+        form = forms.PredictorForm(request.POST if request.method == 'POST' else None, courses=available,
+                                   policy=workspace['policy'])
     except queries.WorkspaceLimit as error:
         note = str(error)
     if request.method == 'POST' and form:
@@ -508,38 +526,45 @@ def predictor(request, identity):
             grades = {c.normalized_code: form.cleaned_data['grade_' + c.pk.hex] for c in available
                       if form.cleaned_data['grade_' + c.pk.hex]}
             records = [row for row in workspace['records'] if row['code'] in grades]
-            result = data.present(predicted_summary(records, grades), workspace['labels'])
+            result = data.present(predicted_summary(records, grades, policy=workspace['policy']), workspace['labels'])
         else:
             status = 400
     return render(request, 'student_web/predictor.html', {'form': form, 'filter': selector, 'result': result,
-                  'note': note, 'available': available}, status=status)
+                  'note': note, 'available': available, 'scale': workspace['scale']}, status=status)
 
 
 @protected(('GET', 'POST'))
 def planner(request, identity):
     workspace = data.standing(identity)
+    policy = workspace['policy']
     bands, custom = _bands_of(workspace['profile'])
     initial = {}
     if request.method == 'GET' and request.GET:
         # "Aim for a class" buttons: fill the target with that class's lowest CGPA. Nothing is saved.
         aim = forms.AimForm(request.GET)
-        if not aim.is_valid():
-            return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(), 'result': None,
-                          'projection_form': forms.ProjectionForm(), 'aims': _aims(bands), 'aim_error': True}, status=400)
+        if not aim.is_valid() or bands is None:
+            return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(policy=policy),
+                          'result': None, 'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands),
+                          'aim_error': True}, status=400)
         initial['target'] = bands[aim.cleaned_data['aim']]
-    form = forms.PlannerForm(request.POST if request.method == 'POST' else None, initial=initial)
+    form = forms.PlannerForm(request.POST if request.method == 'POST' else None, initial=initial, policy=policy)
     result = None
     status = 200
     if request.method == 'POST':
         if form.is_valid():
-            result = target_plan(workspace['records'], form.cleaned_data['target'], form.cleaned_data['remaining'])
+            result = target_plan(workspace['records'], form.cleaned_data['target'], form.cleaned_data['remaining'],
+                                 policy=policy)
         else:
             status = 400
     return render(request, 'student_web/planner.html', {**workspace, 'form': form, 'result': result,
-                  'projection_form': forms.ProjectionForm(), 'aims': _aims(bands), 'aims_custom': custom}, status=status)
+                  'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands), 'aims_custom': custom},
+                  status=status)
 
 
 def _aims(bands):
+    """Planner shortcut buttons; none for a 4-point student who has not entered bands yet."""
+    if bands is None:
+        return []
     return [{'index': index, 'name': name, 'low': low} for index, (name, low) in enumerate(zip(CLASS_NAMES, bands))]
 
 
@@ -547,15 +572,17 @@ def _aims(bands):
 def planner_projection(request, identity):
     """Graduation predictor: read-only, nothing hypothetical is saved."""
     workspace = data.standing(identity)
-    form = forms.ProjectionForm(request.POST)
+    policy = workspace['policy']
+    form = forms.ProjectionForm(request.POST, policy=policy)
     projection = None
     status = 200
     if form.is_valid():
-        projection = projected_cgpa(workspace['records'], form.cleaned_data['expected'], form.cleaned_data['remaining'])
+        projection = projected_cgpa(workspace['records'], form.cleaned_data['expected'], form.cleaned_data['remaining'],
+                                    policy=policy)
     else:
         status = 400
     bands, custom = _bands_of(workspace['profile'])
-    return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(), 'result': None,
+    return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(policy=policy), 'result': None,
                   'projection_form': form, 'projection': projection, 'aims': _aims(bands), 'aims_custom': custom},
                   status=status)
 
@@ -576,9 +603,35 @@ def settings(request, identity):
     # Show the last four characters only when at least half of the value stays hidden.
     masked = ('\u2022' * 6 + matric[-4:]) if len(matric) >= 8 else ('\u2022' * 6 if matric else '')
     bands, custom = _bands_of(profile)
+    scale = profile.grading_scale if profile else 'five'
     return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
                   'masked_matric': masked, 'storage': services.materials.storage(identity),
-                  'class_bands': list(zip(CLASS_NAMES, bands)), 'class_bands_custom': custom})
+                  'class_bands': list(zip(CLASS_NAMES, bands)) if bands else [], 'class_bands_custom': custom,
+                  'scale': data.SCALE_TEXT[scale], 'scale_form': forms.GradingScaleForm(initial={
+                      'scale': scale, 'version': profile.record_version if profile else None})})
+
+
+@protected(('POST',))
+def grading_scale(request, identity):
+    """Choose the 4- or 5-point scale. Refused while any course is graded E (4-point has no E)."""
+    form = forms.GradingScaleForm(request.POST)
+    if not form.is_valid():
+        return error_page(request, 'Check your request', 'Choose 4-point or 5-point and try again.', 400)
+    scale = form.cleaned_data['scale']
+    try:
+        services.profiles.set_scale(identity, scale, version=form.cleaned_data['version'])
+    except services.ScaleBlocked as blocked:
+        shown = ', '.join(blocked.codes[:10]) + (f' and {len(blocked.codes) - 10} more' if len(blocked.codes) > 10 else '')
+        return error_page(request, 'Change your E grades first',
+                          f'The 4-point scale has no E grade. These courses are graded E: {shown}. Change their grades '
+                          'on the Courses page, then choose 4-point again. Nothing was changed.', 409)
+    except services.RecordConflict:
+        return error_page(request, 'Please reload', 'Your settings changed in another tab. Reload Settings and try '
+                          'again. Nothing was changed.', 409)
+    except services.InvalidRecord:
+        return error_page(request, 'Check your request', 'Your grade scale could not be saved. Please try again.', 400)
+    messages.success(request, f'Grade scale set to {data.SCALE_TEXT[scale]["name"]}. Your GPA and planner now use it.')
+    return redirect('student_web:settings')
 
 
 EMAIL_CODE_SENT = ('If that address can be used, we have sent it a 6-digit code. It works for 10 minutes. '
@@ -729,10 +782,12 @@ def profile_edit(request, identity):
 def class_bands_edit(request, identity):
     """Edit the student's own class-of-degree bands (a guide; their handbook decides)."""
     bands, profile, custom = class_bands(identity)
-    initial = dict(zip(forms.ClassBandsForm.FIELDS, bands))
+    scale = profile.grading_scale if profile else 'five'
+    initial = dict(zip(forms.ClassBandsForm.FIELDS, bands)) if bands else {}
     if profile:
         initial['version'] = profile.record_version
-    form = forms.ClassBandsForm(request.POST if request.method == 'POST' else None, initial=initial)
+    form = forms.ClassBandsForm(request.POST if request.method == 'POST' else None, initial=initial,
+                                policy=data.scale_of(scale)[0])
     if profile:
         forms.versioned(form)
     status = 200
@@ -757,7 +812,8 @@ def class_bands_edit(request, identity):
         else:
             status = 400
     return render(request, 'student_web/class_bands.html', {'form': form, 'custom': custom,
-                  'defaults': list(zip(CLASS_NAMES, DEFAULT_CLASS_BANDS)),
+                  'defaults': list(zip(CLASS_NAMES, DEFAULT_CLASS_BANDS)) if scale == 'five' else None,
+                  'scale': data.SCALE_TEXT[scale],
                   'reset_form': forms.versioned(forms.StrictForm(initial={'version': profile.record_version}))
                   if profile and custom else None}, status=status)
 
@@ -776,7 +832,8 @@ def class_bands_reset(request, identity):
         except services.RecordConflict:
             return error_page(request, 'Please reload', 'Your profile changed in another tab. Reload the class bands '
                               'page and try again.', 409)
-    messages.success(request, 'Class bands reset to the common guide.')
+    messages.success(request, 'Class bands cleared. Enter your university\'s bands to see where you stand.'
+                     if profile and profile.grading_scale != 'five' else 'Class bands reset to the common guide.')
     return redirect('student_web:settings')
 
 

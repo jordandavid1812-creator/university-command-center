@@ -434,6 +434,29 @@ validation, deeper search/selector scaling and production operations remain defe
 - Tests: `tests/test_class_bands.py`, `security_tests/test_class_bands.py`,
   `web_tests/test_class_bands.py`, `tools/test_class_bands_browser.py`.
 
+## Grade scale: 4-point or 5-point
+
+- **Settings → Grade scale** (`/settings/grade-scale/`, POST only) lets each student choose the
+  5-point scale (A=5, B=4, C=3, D=2, E=1, F=0; the default) or the 4-point scale (A=4, B=3,
+  C=2, D=1, F=0; no E). Both are `grading_policy` policies (`LEGACY_POLICY`,
+  `FOUR_POINT_POLICY`, listed in `grading_policy.SCALES`); no formula changed.
+- **Storage.** `academics_studentprofile.grading_scale` (migration 0025, Supabase 0012/0013),
+  `five` or `four` (CHECK `profile_grading_scale_valid`). The runtime role gets column UPDATE
+  on it. It changes only through `services.profiles.set_scale`, with the usual version check.
+- **No silent conversion.** Saved letters never change; every GPA is recalculated from them.
+  Choosing 4-point is refused (409) while any course is graded E and the page names those
+  courses. A change of scale clears the student's own class bands, which belonged to the old
+  scale. If an E reaches a 4-point record anyway (a tab racing the change), the calculation
+  skips it with the usual "invalid saved grade" warning; it is never counted as 0.
+- **Pages.** Dashboard, GPA & CGPA, printable summary, predictor, planner, class bands and the
+  course form use the student's scale (maximum, letters, chart axis, class bar). 5-point pages
+  are unchanged. The 4-point scale has no built-in class guide: "Where you stand" and the planner
+  shortcuts appear once the student enters their university's bands (each 0–4).
+- The dashboard reads the scale in its existing profile query; the predictor now reads the
+  profile with the grades (`data.standing`). The data export includes `grading_scale`.
+- The CLI and Streamlit app stay on the 5-point scale.
+- Tests: `tests/test_grading_scale_core.py`, `web_tests/test_grading_scale.py`.
+
 ## Deadline reminders
 
 - **Dashboard → Due this week.** Seven day cards from today (Africa/Lagos dates). Each shows how

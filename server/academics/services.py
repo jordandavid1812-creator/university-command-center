@@ -14,7 +14,7 @@ from django.utils import timezone
 import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from .models import (AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
+from .models import (GRADING_SCALES, AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
                      Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial, StudyPlan, StudyTopic)
 from .ownership import database_alias, require_identity, student_transaction
 
@@ -291,12 +291,55 @@ materials = MaterialRecords(StudyMaterial, {"course_id", "title", "original_file
                             ("course_id", Course))
 
 
+class ScaleBlocked(Exception):
+    """4-point has no E: the courses (codes) still graded E must be changed first."""
+
+    def __init__(self, codes):
+        super().__init__("Some courses are graded E.")
+        self.codes = codes
+
+
 class ProfileRecords(StudentRecords):
     """At most one profile per student (unique owner); profiles are edited, never deleted."""
 
     def current(self, identity):
         with student_transaction(identity):
             return self._records(require_identity(identity)).first()
+
+    def set_scale(self, identity, scale, *, version=None):
+        """Choose the 4- or 5-point scale. Refuses 4-point while any course is graded E (nothing is
+        converted). A change clears the student's own class bands, which belonged to the old scale.
+        `version` is the profile's record_version, or None when the student has no profile yet."""
+        if scale not in dict(GRADING_SCALES):
+            raise InvalidRecord()
+        try:
+            with student_transaction(identity):
+                owner = require_identity(identity)
+                alias = database_alias()
+                profile = self._records(owner).select_for_update().first()
+                if (profile.record_version if profile else None) != version:
+                    raise RecordConflict()
+                if profile is not None and profile.grading_scale == scale:
+                    return profile
+                if scale == "four":
+                    codes = sorted(Course.objects.using(alias).filter(owner_id=owner, actual_grade="E")
+                                   .values_list("normalized_code", flat=True))
+                    if codes:
+                        raise ScaleBlocked(codes)
+                if profile is None:
+                    profile = StudentProfile(owner_id=owner, grading_scale=scale)
+                    profile._state.db = alias
+                    self._validate_record(profile)
+                    StudentProfile.objects.using(alias).bulk_create([profile])
+                    return profile
+                changes = {name: None for name in CLASS_BAND_FIELDS}
+                changed = self._records(owner).filter(pk=profile.pk, record_version=version).update(
+                    grading_scale=scale, record_version=F("record_version") + 1, updated_at=timezone.now(), **changes)
+                if changed != 1:
+                    raise RecordConflict()
+                return self._records(owner).get(pk=profile.pk)
+        except IntegrityError:
+            raise InvalidRecord() from None
 
     def delete(self, identity, identifier, *, version):
         raise InvalidRecord()
