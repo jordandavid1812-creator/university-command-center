@@ -3,6 +3,7 @@
 *
 !requirements-django-lock.txt
 !academic_logic.py
+!grading_policy.py
 !server/
 !deploy/start-web.sh
 !deploy/provision.sh

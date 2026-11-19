@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements-django-lock.txt ./
 RUN pip install --require-hashes --only-binary=:all: -r requirements-django-lock.txt
 
-COPY academic_logic.py ./
+COPY academic_logic.py grading_policy.py ./
 COPY server ./server
 COPY deploy/start-web.sh deploy/provision.sh ./deploy/
 RUN chmod 0555 deploy/start-web.sh deploy/provision.sh

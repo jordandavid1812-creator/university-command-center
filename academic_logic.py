@@ -2,7 +2,10 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 
-GRADE_POINTS = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "F": 0}
+from grading_policy import LEGACY_POLICY, checked_policy
+
+# Historical public dictionary for CLI/forms; calculations use the immutable policy.
+GRADE_POINTS = {grade: int(points) for grade, points in LEGACY_POLICY.grade_points.items()}
 MIN_CREDITS = Decimal("0.0001")
 MAX_CREDITS = Decimal("1000000")
 DECIMAL_STEP = Decimal("0.0001")
@@ -37,10 +40,13 @@ def checked_credits(value, allow_zero=False):
     return number
 
 
-def checked_target(value):
+def checked_target(value, *, policy=LEGACY_POLICY):
+    policy = checked_policy(policy)
     number = decimal_input(value)
-    if not 0 <= number <= 5:
-        raise ValueError("Please enter a number from 0.00 to 5.00.")
+    if not 0 <= number <= policy.maximum:
+        if policy is LEGACY_POLICY:
+            raise ValueError("Please enter a number from 0.00 to 5.00.")
+        raise ValueError(f"Please enter a number from 0 to {policy.maximum}.")
     with localcontext() as context:
         context.prec = 50
         if number != number.quantize(DECIMAL_STEP):
@@ -48,16 +54,19 @@ def checked_target(value):
     return number
 
 
-def checked_grade(value, allow_ungraded=True):
+def checked_grade(value, allow_ungraded=True, *, policy=LEGACY_POLICY):
+    policy = checked_policy(policy)
+    message = ("Grades must be letters A to F." if policy is LEGACY_POLICY
+               else "Grade must be included in the selected policy.")
     if value is None and allow_ungraded:
         return None
     if not isinstance(value, str):
-        raise ValueError("Grades must be letters A to F.")
+        raise ValueError(message)
     grade = value.strip().upper()
     if grade == "" and allow_ungraded:
         return None
-    if grade not in GRADE_POINTS:
-        raise ValueError("Grades must be letters A to F.")
+    if grade not in policy.grade_points:
+        raise ValueError(message)
     return grade
 
 
@@ -69,8 +78,9 @@ def weighted_gpa(points, units):
         return points / units
 
 
-def validate_courses(courses, check_saved_grades=True):
+def validate_courses(courses, check_saved_grades=True, *, policy=LEGACY_POLICY):
     """Return normalized course details without changing the saved records."""
+    policy = checked_policy(policy)
     if not isinstance(courses, list):
         raise ValueError("Course data must be a list.")
     warnings = []
@@ -99,7 +109,7 @@ def validate_courses(courses, check_saved_grades=True):
             continue
 
         try:
-            grade = checked_grade(course.get("grade"))
+            grade = checked_grade(course.get("grade"), policy=policy)
         except ValueError:
             if check_saved_grades:
                 warnings.append(f"Skipping {code}: invalid saved grade.")
@@ -118,10 +128,10 @@ def validate_courses(courses, check_saved_grades=True):
     return semesters, warnings
 
 
-def academic_summary(courses):
+def academic_summary(courses, *, policy=LEGACY_POLICY):
     with localcontext() as context:
         context.prec = 50
-        semesters, warnings = validate_courses(courses)
+        semesters, warnings = validate_courses(courses, policy=policy)
         result = {"points": Decimal(0), "units": Decimal(0), "graded": 0,
                   "ungraded": 0, "semesters": [], "warnings": warnings}
         for semester, records in semesters.items():
@@ -132,7 +142,7 @@ def academic_summary(courses):
                     row["ungraded"] += 1
                     continue
                 units = Decimal(str(units))
-                row["points"] += GRADE_POINTS[grade] * units
+                row["points"] += policy.grade_points[grade] * units
                 row["units"] += units
                 row["graded"] += 1
             row["gpa"] = weighted_gpa(row["points"], row["units"])
@@ -143,55 +153,55 @@ def academic_summary(courses):
         return result
 
 
-def predicted_summary(courses, grades):
+def predicted_summary(courses, grades, *, policy=LEGACY_POLICY):
     if not isinstance(grades, dict):
         raise ValueError("Predicted grades must be a mapping of course codes to grades.")
-    semesters, warnings = validate_courses(courses, check_saved_grades=False)
+    semesters, warnings = validate_courses(courses, check_saved_grades=False, policy=policy)
     hypothetical = []
     for semester, records in semesters.items():
         for code, units, actual_grade in records:
             try:
-                grade = checked_grade(grades.get(code), allow_ungraded=False)
+                grade = checked_grade(grades.get(code), allow_ungraded=False, policy=policy)
             except ValueError:
                 raise ValueError(f"Choose a predicted grade for {code}.")
             hypothetical.append({"code": code, "credit_units": units,
                                  "semester": semester, "grade": grade})
-    result = academic_summary(hypothetical)
+    result = academic_summary(hypothetical, policy=policy)
     result["warnings"] = warnings
     return result
 
 
-def target_plan(courses, target, remaining):
-    target = checked_target(target)
+def target_plan(courses, target, remaining, *, policy=LEGACY_POLICY):
+    target = checked_target(target, policy=policy)
     remaining = checked_credits(remaining)
-    current = academic_summary(courses)
+    current = academic_summary(courses, policy=policy)
     with localcontext() as context:
         context.prec = 50
         total = current["units"] + remaining
         # Equivalent to the original formula, with less subtractive cancellation.
         required = target + (target * current["units"] - current["points"]) / remaining
-    status = "impossible" if required > 5 else "guaranteed" if required <= 0 else "achievable"
+    status = "impossible" if required > policy.maximum else "guaranteed" if required <= 0 else "achievable"
     return {"current": current, "total": total, "required": required, "status": status}
 
 
-def course_breakdown(courses):
+def course_breakdown(courses, *, policy=LEGACY_POLICY):
     """Step-by-step working behind academic_summary: each valid course's grade points and
     quality points (points x units), per semester and overall. Same validation and duplicate
     rules as academic_summary; ungraded courses are listed but count towards nothing."""
     with localcontext() as context:
         context.prec = 50
-        semesters, warnings = validate_courses(courses)
+        semesters, warnings = validate_courses(courses, policy=policy)
         result = {"semesters": [], "points": Decimal(0), "units": Decimal(0), "warnings": warnings}
         for semester, records in semesters.items():
             row = {"semester": semester, "courses": [], "points": Decimal(0), "units": Decimal(0)}
             for code, units, grade in records:
                 units = Decimal(str(units))
                 if grade:
-                    quality = GRADE_POINTS[grade] * units
+                    quality = policy.grade_points[grade] * units
                     row["points"] += quality
                     row["units"] += units
                     row["courses"].append({"code": code, "units": units, "grade": grade,
-                                           "grade_points": GRADE_POINTS[grade], "quality_points": quality})
+                                           "grade_points": policy.grade_points[grade], "quality_points": quality})
                 else:
                     row["courses"].append({"code": code, "units": units, "grade": None,
                                            "grade_points": None, "quality_points": None})
@@ -203,12 +213,12 @@ def course_breakdown(courses):
         return result
 
 
-def projected_cgpa(courses, expected, remaining):
-    """Final CGPA if the student averages `expected` (0-5) over `remaining` credits they supply.
+def projected_cgpa(courses, expected, remaining, *, policy=LEGACY_POLICY):
+    """Final CGPA if the student averages `expected` (within the selected scale) over `remaining` credits they supply.
     Read-only planning: actual grades stay fixed and nothing hypothetical is saved."""
-    expected = checked_target(expected)
+    expected = checked_target(expected, policy=policy)
     remaining = checked_credits(remaining)
-    current = academic_summary(courses)
+    current = academic_summary(courses, policy=policy)
     with localcontext() as context:
         context.prec = 50
         total = current["units"] + remaining

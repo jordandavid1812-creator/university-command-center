@@ -47,7 +47,7 @@ class VercelConfigTests(unittest.TestCase):
         def ignored(path):
             return subprocess.run(['git', '-c', 'core.excludesFile=' + str(REPO / '.vercelignore'), 'check-ignore', '--no-index',
                                    '-q', path], cwd=REPO, capture_output=True).returncode == 0
-        for path in ('vercel_app.py', 'pyproject.toml', 'uv.lock', '.python-version', 'academic_logic.py',
+        for path in ('vercel_app.py', 'pyproject.toml', 'uv.lock', '.python-version', 'academic_logic.py', 'grading_policy.py',
                      'server/manage.py', 'server/config/settings/web_vercel.py', 'server/student_web/pdf_text_child.py',
                      'server/student_web/static/student_web/site.css', 'server/accounts/templates/accounts/form.html'):
             with self.subTest(sent=path):
