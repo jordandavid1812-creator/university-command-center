@@ -39,6 +39,12 @@ before serving anything; without the email settings below the site refuses to st
    **Automatic**. Framework preset: **Other** (or Python). Root directory: `./`.
 4. **Redeploy** the latest Production deployment.
 
+## Upload size on Vercel
+
+Vercel Functions refuse request bodies over 4.5 MB, so on Vercel students can upload study
+files up to **4 MB** (4,000,000 bytes). The upload page says so, and a bigger file gets a
+clear message. Files already stored are not affected.
+
 ## How it is protected
 
 - Vercel's edge handles HTTPS and sets the visitor's address (`REMOTE_ADDR`) and the scheme

@@ -66,7 +66,8 @@ from django.conf import settings as s
 print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS", "AUTH_LINK_ORIGIN",
     "SECURE_SSL_REDIRECT", "SECURE_HSTS_SECONDS", "SECURE_HSTS_INCLUDE_SUBDOMAINS", "SECURE_PROXY_SSL_HEADER",
     "SESSION_COOKIE_NAME", "CSRF_COOKIE_NAME", "UCC_TRUSTED_PROXIES", "UCC_PUBLIC_SITE", "UCC_REQUIRE_INVITE",
-    "MIDDLEWARE", "STATIC_ROOT", "WHITENOISE_USE_FINDERS", "DEBUG", "UCC_SECURE_PROFILE")} |
+    "MIDDLEWARE", "STATIC_ROOT", "WHITENOISE_USE_FINDERS", "DEBUG", "UCC_SECURE_PROFILE",
+    "UCC_MAX_UPLOAD_BYTES", "FILE_UPLOAD_MAX_MEMORY_SIZE", "FILE_UPLOAD_HANDLERS")} |
     {"db": {alias: {k: s.DATABASES[alias][k] for k in ("NAME", "USER", "HOST", "PORT", "DISABLE_SERVER_SIDE_CURSORS",
                                                        "CONN_MAX_AGE")} | {"OPTIONS": s.DATABASES[alias]["OPTIONS"]}
             for alias in ("default", "auth")}}))''', {'UCC_RUNTIME_ROLE': 'ucc_runtime', 'UCC_AUTH_ROLE': 'ucc_auth'})
@@ -85,6 +86,11 @@ print(json.dumps({k: getattr(s, k) for k in ("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIG
         self.assertEqual(data['MIDDLEWARE'][:2], ['django.middleware.security.SecurityMiddleware',
                                                   'whitenoise.middleware.WhiteNoiseMiddleware'])
         self.assertIsNone(data['STATIC_ROOT'])
+        # Vercel refuses request bodies over 4.5 MB: files up to 4,000,000 bytes, whole request
+        # at most 4,065,536, still held in memory only.
+        self.assertEqual((data['UCC_MAX_UPLOAD_BYTES'], data['FILE_UPLOAD_MAX_MEMORY_SIZE']), (4_000_000, 4_065_536))
+        self.assertLess(data['FILE_UPLOAD_MAX_MEMORY_SIZE'], 4_500_000)
+        self.assertEqual(data['FILE_UPLOAD_HANDLERS'], ['django.core.files.uploadhandler.MemoryFileUploadHandler'])
         self.assertIs(data['WHITENOISE_USE_FINDERS'], True)
         for alias, role, statement_ms in (('default', 'ucc_runtime', 10000), ('auth', 'ucc_auth', 5000)):
             with self.subTest(alias=alias):
