@@ -59,6 +59,17 @@ def page_context(page, parameters):
     return result
 
 
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def home(request):
+    """The main link: signed-out visitors see the public welcome page; anyone with a signed-in
+    session goes on to the dashboard, which still checks the live session as before. Never cached,
+    because the same address shows a private dashboard."""
+    if not request.session.get('_auth_user_id'):
+        return render(request, 'student_web/landing.html')
+    return dashboard(request)
+
+
 @protected()
 def dashboard(request, identity):
     today = timezone.localdate()

@@ -10,9 +10,11 @@ from .base import WebsiteCase
 
 class WebsiteSecurityTests(WebsiteCase):
     def test_all_student_pages_reject_unauthenticated_sessions(self):
-        for name in ('dashboard', 'semester-list', 'course-list', 'assignment-list', 'overview', 'predictor', 'planner', 'settings',
+        for name in ('semester-list', 'course-list', 'assignment-list', 'overview', 'predictor', 'planner', 'settings',
                      'semester-create', 'course-create', 'assignment-create'):
             self.assertRedirects(self.client.get(reverse('student_web:' + name)), reverse('accounts:login'), fetch_redirect_response=False)
+        # The main link shows the public welcome page instead, with no student data.
+        self.assertContains(self.client.get(reverse('student_web:dashboard')), 'Create a free account')
         self.assertEqual(self.client.post(reverse('student_web:semester-create'), {'label': 'Forged', 'display_order': 0}).status_code, 302)
 
     def test_cross_account_edit_and_delete_have_same_not_found_message(self):
