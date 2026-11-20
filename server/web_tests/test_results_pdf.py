@@ -16,13 +16,13 @@ class ResultsPdfTests(WebsiteCase):
 
     def test_summary_is_named_by_date_and_shows_own_profile_details_only(self):
         services.profiles.create(self.identity_a, display_name='Synthetic Alpha', programme='B.Sc. Synthetic',
-                                 level='300', institution='Synthetic University', matric_number='SYN/2026/0001')
+                                 level='300', institution='Synthetic University')
         page = self.client_a.get(reverse('student_web:standing-print'), {'save': 'pdf'})
         self.assertEqual(page.status_code, 200)
         self.assertRegex(page.content.decode(), r'<title>Academic summary \d{4}-\d{2}-\d{2} - University Command Center</title>')
         for text in ('Synthetic Alpha', 'B.Sc. Synthetic', '300 level', 'Synthetic University', 'Save as PDF'):
             self.assertContains(page, text)
-        self.assertNotContains(page, 'SYN/2026/0001')
+        self.assertNotContains(page, 'Matric / student ID')
         other = self.client_b.get(reverse('student_web:standing-print'))
         self.assertNotContains(other, 'Synthetic Alpha')
         self.assertNotContains(other, 'class="print-details"')

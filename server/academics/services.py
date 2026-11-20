@@ -401,7 +401,7 @@ class SearchTexts:
 search_texts = SearchTexts()
 
 
-PROFILE_FIELDS = {"display_name", "institution", "programme", "level", "matric_number"}
+PROFILE_FIELDS = {"display_name", "institution", "programme", "level"}
 CLASS_BAND_FIELDS = ("first_class_min", "second_upper_min", "second_lower_min", "third_class_min", "pass_min")
 profiles = ProfileRecords(StudentProfile, PROFILE_FIELDS | set(CLASS_BAND_FIELDS))
 

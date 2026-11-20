@@ -1,11 +1,10 @@
-"""Edit profile: owner-only, optional fields, masked matric number, dashboard greeting."""
-import re
+"""Edit profile: owner-only, optional fields, no student ID collection, dashboard greeting."""
 from django.urls import reverse
 from academics import services
 from .base import WebsiteCase
 
 FIELDS = {'display_name': 'Ada', 'institution': 'Synthetic University', 'programme': 'B.Sc. Testing',
-          'level': '200', 'matric_number': 'SYN/2026/123456'}
+          'level': '200'}
 
 
 class ProfilePageTests(WebsiteCase):
@@ -16,7 +15,7 @@ class ProfilePageTests(WebsiteCase):
         self.assertRedirects(self.client.get(reverse('student_web:profile-edit')), reverse('accounts:login'),
                              fetch_redirect_response=False)
 
-    def test_first_save_creates_the_profile_and_settings_masks_the_matric_number(self):
+    def test_first_save_creates_profile_without_collecting_student_id(self):
         self.seed()
         self.assertContains(self.client_a.get(reverse('student_web:settings')), 'Not set')
         self.assertRedirects(self.save(), reverse('student_web:settings'), fetch_redirect_response=False)
@@ -24,13 +23,13 @@ class ProfilePageTests(WebsiteCase):
         self.assertContains(page, 'Profile saved.')
         self.assertContains(page, 'Synthetic University')
         self.assertContains(page, '200 level')
-        self.assertContains(page, '•' * 6 + '3456')
+        self.assertNotContains(page, 'Matric / student ID')
         self.assertNotContains(page, 'SYN/2026/123456')
 
     def test_edit_form_shows_own_values_and_other_students_never_see_them(self):
         self.seed()
         self.save()
-        self.assertContains(self.client_a.get(reverse('student_web:profile-edit')), 'SYN/2026/123456')
+        self.assertContains(self.client_a.get(reverse('student_web:profile-edit')), 'Ada')
         for path in ('student_web:settings', 'student_web:profile-edit', 'student_web:dashboard'):
             page = self.client_b.get(reverse(path))
             self.assertNotContains(page, 'Synthetic University')
@@ -83,18 +82,11 @@ class ProfilePageTests(WebsiteCase):
                          and q['sql'].lstrip().upper().startswith('SELECT UCC_SECURITY')]
         self.assertEqual(len(verifications), 1)
 
-    def test_short_matric_numbers_are_fully_hidden(self):
+    def test_legacy_matric_submissions_are_refused_and_not_stored(self):
         self.seed()
-        for value, shown in (('AB12', '\u2022' * 6), ('ABC12345', '\u2022' * 6 + '2345'),
-                             ('A1234', '\u2022' * 6), ('ABC1234', '\u2022' * 6)):
+        page = self.client_a.get(reverse('student_web:profile-edit'))
+        self.assertNotContains(page, 'name="matric_number"')
+        for value in ('AB12', 'SYN/2026/1234', 'ABC12345'):
             with self.subTest(value=value):
-                profile = services.profiles.current(self.identity_a)
-                changes = {'matric_number': value}
-                if profile:
-                    changes['version'] = profile.record_version
-                self.assertEqual(self.save(**changes).status_code, 302)
-                page = self.client_a.get(reverse('student_web:settings')).content.decode()
-                # The whole matric line is exactly the masked text, so no other characters leak.
-                self.assertIn('<dt>Matric / student ID</dt><dd>' + shown + '</dd>', page)
-                # Ignore random CSRF token values, which could contain short values by chance.
-                self.assertNotIn(value, re.sub(r'value="[^"]*"', '', page))
+                self.assertEqual(self.save(matric_number=value).status_code, 400)
+                self.assertIsNone(services.profiles.current(self.identity_a))

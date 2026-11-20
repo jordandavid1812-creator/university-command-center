@@ -307,7 +307,9 @@ class StudentProfile(ValidatedRecord):
     institution = models.CharField(max_length=150, blank=True)
     programme = models.CharField(max_length=150, blank=True)
     level = models.CharField(max_length=3, blank=True, choices=LEVEL_CHOICES)
-    matric_number = models.CharField(max_length=32, blank=True, validators=[
+    # Transitional legacy column only: no form/service/export collection. Drop in a later
+    # reviewed contract release after old application instances have been retired.
+    matric_number = models.CharField(max_length=32, blank=True, editable=False, db_default="", validators=[
         RegexValidator(MATRIC_PATTERN, "Use letters, digits and / . _ - only.")])
     # The student's own class-of-degree bands (lowest CGPA for each class). All five empty means
     # "use the common guide" (academic_logic.DEFAULT_CLASS_BANDS). A guide only, never a ruling.

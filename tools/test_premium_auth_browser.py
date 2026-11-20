@@ -119,6 +119,60 @@ class PremiumAuthBrowserTests(unittest.TestCase):
                         page.screenshot(path=str(OUTPUT / 'login-1280-text-200.png'), full_page=True)
                     page.close()
 
+    def test_registration_has_optional_name_separate_from_username_without_js(self):
+        page = self.page('register', width=390, javascript=False)
+        self.assertEqual(page.locator('input[name=full_name]').count(), 1)
+        self.assertEqual(page.locator('input[name=username]').count(), 1)
+        self.assertFalse(page.locator('input[name=full_name]').evaluate('(e) => e.required'))
+        self.assertEqual(page.locator('input[name=matric_number]').count(), 0)
+        page.close()
+
+    def test_full_name_edit_reflows_and_submits_with_keyboard_without_js(self):
+        from student_web.forms import FullNameForm
+        from urllib.parse import parse_qs
+        request = RequestFactory().get('/settings/full-name/')
+        request.resolver_match = resolve(request.path)
+        request.user = SimpleNamespace(username='synthetic-preview')
+        request.student_identity = object()  # Static fixture only, never used for authorization.
+        with override_settings(STUDENT_WEBSITE_ENABLED=True):
+            context = foundation.navigation(request)
+        context.update(request=request, csrf_token='synthetic-token', messages=[],
+                       form=FullNameForm(initial={'full_name': 'Synthetic Name', 'previous_name': 'Synthetic Name'}))
+        html = render_to_string('student_web/full_name.html', context)
+        html = html.replace('<link rel="stylesheet" href="/static/student_web/site.css">',
+                            '<style>' + (ROOT / 'server/student_web/static/student_web/site.css').read_text() + '</style>')
+        self.scenes['full-name'] = html
+        for width, text in ((390, 100), (1280, 200), (1440, 200)):
+            with self.subTest(width=width, text=text):
+                page = self.page('full-name', width=width, text=text, javascript=False)
+                self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), width)
+                field = page.locator('input[name=full_name]')
+                field.focus()
+                self.assertEqual(page.evaluate('document.activeElement.name'), 'full_name')
+                self.assertGreaterEqual(field.evaluate('(e) => parseFloat(getComputedStyle(e).outlineWidth)'), 3)
+                self.assertEqual(page.get_by_role('link', name='Back to Settings').get_attribute('href'), '/settings/')
+                if OUTPUT:
+                    page.screenshot(path=str(OUTPUT / f'full-name-{width}-text-{text}.png'), full_page=True)
+                page.close()
+        page = self.page('full-name', width=390, javascript=False)
+        captured = []
+        def respond(route):
+            if route.request.method == 'POST':
+                captured.append(parse_qs(route.request.post_data))
+                route.fulfill(status=200, content_type='text/html', body='<p>Synthetic name POST received</p>')
+            else:
+                route.fulfill(status=200, content_type='text/html', body=html)
+        page.route('https://ucc.example.invalid/**', respond)
+        page.goto('https://ucc.example.invalid/settings/full-name/')
+        page.locator('[name=full_name]').fill('Ọlá O’Connor')
+        page.locator('[name=full_name]').press('Tab')
+        page.keyboard.press('Enter')
+        page.get_by_text('Synthetic name POST received').wait_for()
+        self.assertEqual(captured[0]['full_name'], ['Ọlá O’Connor'])
+        self.assertEqual(captured[0]['previous_name'], ['Synthetic Name'])
+        self.assertNotIn('matric_number', captured[0])
+        page.close()
+
     def test_keyboard_focus_no_javascript_and_native_submission(self):
         page = self.page(javascript=False, width=390)
         page.locator('.skip-link').focus()

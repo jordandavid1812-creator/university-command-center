@@ -163,7 +163,7 @@ Keep synthetic test data separate from personal records. Do not attempt to fix a
 limit by deleting personal data automatically. Before supporting unusually large
 accounts, review selectors, query plans, pagination and calculation limits together.
 
-## Student profile
+## Student profile (historical; see privacy update below)
 
 Account settings shows an optional profile: display name, university or institution,
 programme, current level (100-700 or Postgraduate) and matric / student ID. Students
@@ -617,3 +617,17 @@ form-action 'self'; frame-ancestors 'none'
   and `tools/test_content_security_browser.py` (17 real pages, with motion on and off, show
   zero blocked items; the flashcards, quiz and class bar still work; and a control confirms an
   injected inline script, `<style>` block and outside script are all refused).
+
+## Privacy update: account full name and no matric-number field
+
+[EDITABLE_FULL_NAME.md](EDITABLE_FULL_NAME.md) describes the reviewed rollout requirements.
+Registration optionally collects a separate, self-reported full name on accounts_student.
+Existing users may edit or clear it in Settings; username and credential/session behaviour
+stay unchanged. The existing optional profile display name remains a separate greeting preference.
+The additive privacy migration retains the legacy StudentProfile.matric_number column and CHECK
+with a persistent blank default while removing current input/display/export collection, and
+academics.0027 erases every saved value. Dropping the empty column is deferred to a later reviewed
+contract release after old code is retired. Account full_name
+has its own persistent blank database default. Historical masked-ID descriptions are not current UI.
+No live migration has occurred. See [Editable full name](EDITABLE_FULL_NAME.md) for rollout,
+backup-schema compatibility, explicit test-change approval and the remaining erasure gate.

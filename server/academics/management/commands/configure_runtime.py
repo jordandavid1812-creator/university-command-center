@@ -80,7 +80,7 @@ class Command(BaseCommand):
                 ("academics_course", ("semester_id", "original_code", "normalized_code", "name", "credit_units", "actual_grade", "record_version", "updated_at")),
                 ("academics_assignment", ("course_id", "title", "due_date", "completed", "record_version", "updated_at")),
                 ("academics_studymaterial", ("course_id", "title", "record_version", "updated_at")),
-                ("academics_studentprofile", ("display_name", "institution", "programme", "level", "matric_number",
+                ("academics_studentprofile", ("display_name", "institution", "programme", "level",
                                               "first_class_min", "second_upper_min", "second_lower_min", "third_class_min",
                                               "pass_min", "record_version", "updated_at")),
                 ("academics_studyairequest", ("status", "error_category", "status_class", "updated_at")),
@@ -91,6 +91,12 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT EXECUTE ON FUNCTION ucc_security.current_student() TO {}").format(sql.Identifier(role)))
+            # Keep existing legacy-column grants during the additive rollout. A later
+            # reviewed contract release can drop the column after old code is retired.
+            cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.academics_studentprofile'::regclass
+                              AND attname = 'matric_number' AND NOT attisdropped)""")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("GRANT UPDATE (matric_number) ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
             # Grade scale (academics.0025): the student's 4- or 5-point choice. Granted only once the
             # column exists, so provisioning an older (rolled-back) schema still works.
             cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.academics_studentprofile'::regclass

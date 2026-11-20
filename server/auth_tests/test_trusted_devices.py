@@ -967,10 +967,20 @@ class DeviceRoleTests(DeviceCase):
             self.assertNotIn('accounts_trusteddevice', table_names())
             self.assertNotIn('accounts_loginlimit', table_names())
             self.assertNotIn('accounts_devicegeneration', table_names())
-            provision()  # provisioning an older schema still succeeds
-            require_auth_role()
-            require_runtime_role(connections['runtime'])
-            self.assertEqual(self.login().status_code, 302)
+            # Current login code loads the unrelated name field introduced in accounts.0007.
+            # Supply that field ONLY as a disposable fixture while checking the historical
+            # trusted-device schema; do not make production auth guess at missing columns.
+            field = Student._meta.get_field('full_name')
+            with connections['default'].schema_editor() as editor:
+                editor.add_field(Student, field)
+            try:
+                provision()  # provisioning an older trusted-device schema still succeeds
+                require_auth_role()
+                require_runtime_role(connections['runtime'])
+                self.assertEqual(self.login().status_code, 302)
+            finally:
+                with connections['default'].schema_editor() as editor:
+                    editor.remove_field(Student, field)
             MigrationExecutor(connections['default']).migrate([LATEST])
             self.assertIn('accounts_trusteddevice', table_names())
             with self.assertRaises(ImproperlyConfigured):

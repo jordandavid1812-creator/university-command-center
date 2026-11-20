@@ -3,7 +3,7 @@ import json
 from academics.services import CLASS_BAND_FIELDS
 
 FORMAT = "university-command-center-export"
-VERSION = 1
+VERSION = 2
 
 
 def _when(value):
@@ -16,10 +16,10 @@ def document(records, account, exported_at):
         "format": FORMAT,
         "version": VERSION,
         "exported_at": exported_at.isoformat(),
-        "account": {"username": account["username"], "email": account["email"]},
+        "account": {"username": account["username"], "email": account["email"], "full_name": account.get("full_name", "")},
         "profile": None if profile is None else {
             "display_name": profile.display_name, "institution": profile.institution,
-            "programme": profile.programme, "level": profile.level, "matric_number": profile.matric_number,
+            "programme": profile.programme, "level": profile.level,
             "grading_scale": profile.grading_scale,
             # Own class-of-degree bands as exact decimal strings, or null when the common guide is used.
             "class_bands": None if profile.first_class_min is None else {

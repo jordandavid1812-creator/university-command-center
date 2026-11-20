@@ -9,13 +9,14 @@
 
 <h2>What we keep</h2>
 <ul>
-<li><strong>Your account:</strong> username, email address, when you confirmed your email and when you last signed in. Your password is never stored; only a one-way scrambled form of it (a hash) is kept.</li>
-<li><strong>What you add:</strong> semesters, courses, credit units, grades, assignments, classes in your timetable, study plans, your optional profile (display name, institution, programme, level, matric number, class bands, and whether your results use the 4- or 5-point scale), study files you upload (PDF or text) and the text read from them so you can search them.</li>
+<li><strong>Your account:</strong> username, optional editable full name, email address, when you confirmed your email and when you last signed in. Your password is never stored; only a one-way scrambled form of it (a hash) is kept.</li>
+<li><strong>What you add:</strong> semesters, courses, credit units, grades, assignments, classes in your timetable, study plans, your optional profile (display name, institution, programme, level, class bands, and whether your results use the 4- or 5-point scale), study files you upload (PDF or text) and the text read from them so you can search them.</li>
 <li><strong>AI tools:</strong> a record of each AI request (which tool, when, how much text, and whether it worked), plus the results and questions you choose to keep. The record does not keep your file's text.</li>
 <li><strong>Security records:</strong> counters that slow down password guessing and repeated sign-ups. They store scrambled values (keyed hashes) of your username or network address, not the plain values, and they expire. Sign-up and email-change codes are stored scrambled and deleted a day after they expire; while you change your email, the new address is kept with its code until you confirm it.</li>
 </ul>
 <p>We do not show adverts, sell data, or use tracking or analytics cookies.</p>
 
+<p>We no longer collect matric/student ID numbers. Previously saved matric numbers are erased from the active database by this update; older encrypted backups can still contain them until those backups expire (up to 30 days). A full name is optional, self-reported, editable and separate from your username. Existing display names are not treated as verified full names.</p>
 <h2>Cookies</h2>
 <ul>
 <li><strong>Sign-in session</strong> (<code>__Host-ucc_session</code>): keeps you signed in. It ends when you close your browser, and the server ends it after 30 minutes without activity.</li>
@@ -37,7 +38,7 @@
 <li><strong>Supabase</strong> stores the database, including your study files, in Ireland (EU). Each student's records are locked so other students cannot read them.</li>
 <li><strong>GitHub</strong> (owned by Microsoft) holds our daily backups. Each backup is encrypted before it leaves the database, and only the site owner holds the key that can open it.</li>
 <li><strong>Google (Gmail)</strong> delivers our emails: your email address and the sign-up code, email-change code or reset link. When you change your email, both the old and the new address get a message.</li>
-<li><strong>Google Gemini</strong> receives, only when you press Send, the text of the file you chose (up to 60,000 characters) and your question if you asked one. We do not send your name, username, email address, matric number, file name or title. <strong>We use Gemini's free service, so Google may keep what is sent, use it to improve its products, and people at Google may read it.</strong> Do not send anything you would not want shared, and never send other people's personal information.</li>
+<li><strong>Google Gemini</strong> receives, only when you press Send, the text of the file you chose (up to 60,000 characters) and your question if you asked one. We do not send your name, username, email address, full-name account field, file name or title as separate account fields. However, any personal details inside the file text or your question are included; we do not automatically redact them. <strong>We use Gemini's free service, so Google may keep what is sent, use it to improve its products, and people at Google may read it.</strong> Do not send anything you would not want shared, and never send other people's personal information.</li>
 </ul>
 <p>These companies are outside Nigeria (in the European Union and the United States). We use them because they provide strong security and legal protections for the data they handle.</p>
 

@@ -13,6 +13,7 @@ urlpatterns = [
     path('planner/projection/', views.planner_projection, name='planner-projection'),
     path('performance/print/', views.standing_print, name='standing-print'),
     path('settings/', views.settings, name='settings'),
+    path('settings/full-name/', views.full_name_edit, name='full-name'),
     path('settings/delete-account/', views.account_delete, name='account-delete'),
     path('settings/change-email/', views.email_change, name='email-change'),
     path('settings/change-email/confirm/', views.email_change_confirm, name='email-change-confirm'),

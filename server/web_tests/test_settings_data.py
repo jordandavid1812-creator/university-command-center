@@ -50,8 +50,8 @@ class SettingsDataTests(WebsiteCase):
 
     def test_export_is_an_owner_only_json_attachment(self):
         self.seed()
-        services.profiles.create(self.identity_a, display_name='Ada', matric_number='SYN/2026/1234')
-        services.profiles.create(self.identity_b, display_name='Bravo profile', matric_number='SYN/OTHER/9999')
+        services.profiles.create(self.identity_a, display_name='Ada')
+        services.profiles.create(self.identity_b, display_name='Bravo profile')
         services.courses.create(self.identity_a, semester_id=self.sem_a.pk, original_code='TWO',
                                 name='Synthetic half course', credit_units='2.5', actual_grade='A')
         self.add_material(self.identity_a, self.course_a, 'Week 1')
@@ -63,9 +63,10 @@ class SettingsDataTests(WebsiteCase):
         self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
         self.assertIn('no-store', response['Cache-Control'])
         data = json.loads(response.content)
-        self.assertEqual((data['format'], data['version']), ('university-command-center-export', 1))
+        self.assertEqual((data['format'], data['version']), ('university-command-center-export', 2))
         self.assertEqual(data['account']['username'], 'alpha')
-        self.assertEqual(data['profile']['matric_number'], 'SYN/2026/1234')
+        self.assertNotIn('matric_number', data['profile'])
+        self.assertIn('full_name', data['account'])
         self.assertEqual(response['Content-Security-Policy'], "default-src 'none'; sandbox")
         self.assertEqual(data['semesters'][0]['label'], 'Synthetic A semester')
         self.assertEqual({c['name']: c['credit_units'] for c in data['courses']},

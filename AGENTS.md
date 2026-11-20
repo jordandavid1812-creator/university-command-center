@@ -103,8 +103,8 @@ No AI provider calls or file content leaving the server without a new reviewed t
 Display modes (PR #62): System (default), Light and Dark are saved only in the allowlisted ucc_display
 cookie; never in the database or browser storage. Dark values come from docs/design/DESIGN_SYSTEM.md
 in theme-dark.css (screens only). Keep the dark-mode contrast browser tests passing for new colours.
-Student profile (PR #62): academics_studentprofile keeps forced RLS, no DELETE and a masked matric
-number. Username and email are not editable there; email change needs its own reviewed task.
+Student profile (PR #62): academics_studentprofile keeps forced RLS and no DELETE. Matric/student ID collection
+is removed from current forms/services/export; a non-editable legacy column is retained for the additive rollout. Its erasure needs a separate reviewed contract release. Never reintroduce collection or backfill IDs into names. Username and email are not editable there; email change needs its own reviewed task.
 
 Download my data (PR #65): the export reads only through academics.queries.export_records
 in one signed student_transaction. It never includes file contents or fingerprints, keeps
@@ -180,5 +180,10 @@ is graded E; clear own class bands on a change; 5-point pages stay exactly as be
 has no built-in class guide. Read docs/STUDENT_WEBSITE.md "Grade scale" first.
 Email change (step F, part 2): only through accounts.email_change, after the current password and a
 code sent to the NEW address (accounts_signupcode rows with new_email). The auth role may UPDATE only
-email (plus the existing password/last_login/email_verified_at/updated_at) on accounts_student, never
+email (plus the existing password/last_login/email_verified_at/full_name/updated_at) on accounts_student, never
 username, id or is_active. Never reveal whether another account uses an address; tell the old address.
+
+Self-reported full names: accounts_student.full_name is optional, editable and independent of username.
+Use the existing live-session boundary and auth role; runtime cannot read or update account names.
+Name edits may update only full_name/updated_at and must never rotate credentials or sessions.
+Never infer a verified legal name from a nickname, username, matric number or an AI response.

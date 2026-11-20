@@ -134,14 +134,16 @@ class SendTests(AiCase):
         self.assertEqual(self.usage()["used_today"], 1)
 
     def test_only_the_text_and_question_are_sent(self):
-        services.profiles.create(self.identity_a, display_name="Ada Synthetic", matric_number="SYN/2026/1234")
+        services.profiles.create(self.identity_a, display_name="Ada Synthetic")
+        from accounts.models import Student
+        Student.objects.using("default").filter(pk=self.a.pk).update(full_name="Synthetic Full Name")
         self.replies["grok"] = grok_reply(json.dumps(ANSWER))
         self.send(self.token("answer", "What do mitochondria do?"), "answer", "What do mitochondria do?", "grok")
         [(_, _, body, _)] = FakeConnection.made[0].requests
         sent = json.dumps(body)
         self.assertIn(NOTES.decode()[:40], sent)
         self.assertIn("What do mitochondria do?", sent)
-        for private in ("alpha", "alpha@example.invalid", "secret-name.txt", "Ada Synthetic", "SYN/2026/1234",
+        for private in ("alpha", "alpha@example.invalid", "secret-name.txt", "Ada Synthetic", "Synthetic Full Name",
                         "Week 1 notes"):
             self.assertNotIn(private, sent)
 

@@ -6,6 +6,7 @@ from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils import timezone
 from django.db.models.functions import Lower, Trim
+from .names import validate_full_name
 
 
 class StudentManager(BaseUserManager):
@@ -21,6 +22,7 @@ class Student(AbstractBaseUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = models.CharField(max_length=150, unique=True,
                                 validators=[UnicodeUsernameValidator()])
+    full_name = models.CharField(max_length=150, blank=True, default="", db_default="", validators=[validate_full_name])
     email = models.EmailField(max_length=254, null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -33,6 +35,9 @@ class Student(AbstractBaseUser):
     class Meta:
         constraints = [
             models.CheckConstraint(condition=~models.Q(username=""), name="student_username_nonempty"),
+            models.CheckConstraint(condition=models.Q(full_name=Trim("full_name"))
+                                   & ~models.Q(full_name__regex=r"[\x01-\x1f\x7f-\x9f]"),
+                                   name="student_full_name_safe"),
             models.UniqueConstraint(Lower("email"), condition=models.Q(email__isnull=False),
                                     name="student_email_unique"),
             models.CheckConstraint(condition=models.Q(email__isnull=True) | (
