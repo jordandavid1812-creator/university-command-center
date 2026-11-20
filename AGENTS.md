@@ -181,6 +181,9 @@ ai_providers.CHARACTER_LIMITS["groq"] (free-tier 8K tokens/minute), still as ONE
 it first with services.ai.switch_to (answered_by, answered_by_model only); if that fails, send nothing
 more. Never switch on 4xx, blocked, invalid or truncated answers; never more than one switch; Groq is
 never a Send button. The privacy notice must keep saying texts may go to Groq automatically.
+One Gemini retry (owner's choice): after a quick 5xx or network failure, send() waits
+RETRY_PAUSE_SECONDS (3) and asks the same service exactly once more (never after a timeout,
+never more than once, never for Groq); only then may it switch to Groq. Still one ledger row and one count.
 Grade scale (4- or 5-point): each student's choice is academics_studentprofile.grading_scale, changed
 only through services.profiles.set_scale. Never convert saved letters; refuse 4-point while any course
 is graded E; clear own class bands on a change; 5-point pages stay exactly as before. The 4-point scale

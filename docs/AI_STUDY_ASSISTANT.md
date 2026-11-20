@@ -271,7 +271,8 @@ reservation.
   reply; underlying exceptions are suppressed. The module imports no logging and no
   other HTTP library (a source audit checks this).
 - **One call to one provider:** `ask(provider, tool, text, question)` makes exactly one
-  request, with no retries and no fallback. Asking for a provider that is not
+  request, with no retries and no fallback (the one retry and the Groq switch below live in
+  `ai_views.send`, not here). Asking for a provider that is not
   configured is a `ValueError`, and nothing is contacted. Connections are made only by
   the module's `_connect` (fixed hosts). It is not a parameter; tests replace it with
   `patch`, and application code must never change it.
@@ -515,3 +516,15 @@ what happened in plain words.
 - The ledger accepts provider `groq` and model names with one "/", plus the two `answered_by`
   columns, which hold no text (migration academics.0028). The website may update only those columns
   while a request is in progress.
+
+## One Gemini retry for big files (owner's choice)
+
+- Gemini's "busy" replies (5xx) usually come within a few seconds and pass quickly: the same
+  53,000-character file often worked a minute later. Groq cannot take a file that big.
+- So when Gemini answers with a 5xx or the connection drops, `send` waits `RETRY_PAUSE_SECONDS`
+  (3 seconds) and asks Gemini **once more**, with no transaction open. Only if that also fails
+  does it try Groq (small texts only), then show the "busy" message.
+- Never retried: a timeout (the student has already waited 60 seconds), a 4xx reply, a blocked,
+  cut-off or wrongly shaped answer, or Groq itself. It is still one ledger row and one count.
+- Longest wait: about two minutes (a dropped connection on the retry can use its 60 seconds, then
+  Groq has its own 60 seconds). A quick busy reply adds only the 3-second pause.

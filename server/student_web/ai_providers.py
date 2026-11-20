@@ -125,6 +125,12 @@ def is_busy(failure):
                                                           and failure.status_class == "5xx")
 
 
+def worth_retrying(failure):
+    """A quick "busy" reply (5xx) or a dropped connection: asking the same service once more a few
+    seconds later usually works (owner's choice). Never after a timeout, which would double the wait."""
+    return failure.category == "network" or (failure.category == "http_error" and failure.status_class == "5xx")
+
+
 # --- prompts -----------------------------------------------------------------------------
 
 SHAPES = {
