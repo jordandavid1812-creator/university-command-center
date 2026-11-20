@@ -619,7 +619,9 @@ def full_name_edit(request, identity):
     from accounts.names import clean_full_name
     # Account name uses the auth connection, never runtime access to account records.
     with transaction.atomic(using='auth'):
-        student = Student.objects.using('auth').select_for_update().get(pk=identity.student_id)
+        student = Student.objects.using('auth').select_for_update().filter(pk=identity.student_id).first()
+        if student is None:
+            raise OwnershipRequired()
         require_identity(identity)  # Revalidate the live session/password while the account is locked.
         form = forms.FullNameForm(request.POST if request.method == 'POST' else None,
                                   initial={'full_name': student.full_name, 'previous_name': student.full_name})

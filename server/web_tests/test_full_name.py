@@ -67,6 +67,17 @@ class FullNameTests(WebsiteCase):
         self.assertEqual(self.account().full_name,'')
         self.assertEqual(Student.objects.using('default').get(pk=self.b.pk).full_name,'')
 
+    def test_account_disappearing_after_identity_validation_denies_cleanly(self):
+        from unittest.mock import patch
+        from django.db.models.query import QuerySet
+        # Simulate the row disappearing at the lock read, after the outer session check.
+        # Real authorization/DB paths still run; no other account is substituted.
+        with patch.object(QuerySet, 'select_for_update', lambda records, *a, **kw: records.none()):
+            response = self.client_a.get(self.url)
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(response, 'name="full_name"', status_code=403)
+        self.assertEqual(self.account().full_name, '')
+
     def test_stale_form_does_not_overwrite_changed_name(self):
         self.assertEqual(self.save('First Name').status_code,302)
         self.assertEqual(self.save('Stale Name').status_code,409)
