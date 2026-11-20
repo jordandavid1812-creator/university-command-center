@@ -38,7 +38,7 @@ def _issue_locked(student, purpose):
     name = 'verify' if purpose == 'verify' else 'reset-confirm'
     path = reverse(f'accounts:{name}', args=[token.pk, secret])
     link = settings.AUTH_LINK_ORIGIN.rstrip('/') + path
-    subject = 'Verify your University Command Center email' if purpose == 'verify' else 'Reset your University Command Center password'
+    subject = 'Verify your UniCommand email' if purpose == 'verify' else 'Reset your UniCommand password'
     # Commit the digest before sending. Console/locmem only in this milestone.
     transaction.on_commit(lambda: _deliver(subject, link, student.email, action_url=link), using='auth')
 

@@ -58,7 +58,7 @@ class ResultsPdfTests(unittest.TestCase):
 
     def test_pdf_has_a4_pages_header_page_numbers_and_the_results(self):
         page, reader, pages = self.pdf('short')
-        self.assertEqual(page.title(), 'Academic summary 2026-11-18 - University Command Center')
+        self.assertEqual(page.title(), 'Academic summary 2026-11-18 - UniCommand')
         width, height = float(reader.pages[0].mediabox.width), float(reader.pages[0].mediabox.height)
         self.assertAlmostEqual(width, 595, delta=2)   # A4 in points
         self.assertAlmostEqual(height, 842, delta=2)
@@ -66,7 +66,7 @@ class ResultsPdfTests(unittest.TestCase):
         for expected in ('Synthetic Student', 'B.Sc. Synthetic Studies', '200 level', 'Synthetic University',
                          'Where you stand', 'CGPA', 'not an official transcript'):
             self.assertIn(expected, text)
-        self.assertIn('University Command Center · Academic summary', pages[0])
+        self.assertIn('UniCommand · Academic summary', pages[0])
         self.assertIn(f'Page 1 of {len(pages)}', pages[0])
         # No menu, buttons or links to other pages in the file.
         for absent in ('Dashboard', 'Save as PDF', 'Change class bands', 'Back to GPA', 'Ctrl+P'):

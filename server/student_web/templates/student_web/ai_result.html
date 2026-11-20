@@ -1,5 +1,5 @@
 {% extends 'accounts/base.html' %}
-{% block title %}{{ tool_name }} · {{ material.title }} · University Command Center{% endblock %}
+{% block title %}{{ tool_name }} · {{ material.title }} · UniCommand{% endblock %}
 {% block extra_styles %}{% include 'student_web/components/ai_assets.html' %}{% endblock %}
 {% block content %}<div class="ai-page"><div class="page-heading"><div><p class="eyebrow">{{ tool_name }} · {{ saved.created_at|date:"j M Y, H:i" }}</p><h1>{{ material.title }}</h1><p class="badge soft">AI-generated: check it against your notes</p></div><a class="button secondary" href="{% url 'student_web:ai-tools' material.pk %}">Back to study tools</a></div>
 {% if saved.question %}<blockquote class="ai-asked" data-ai-reveal><span class="eyebrow">You asked</span><p>{{ saved.question }}</p></blockquote>{% endif %}

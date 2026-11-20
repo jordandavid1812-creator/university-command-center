@@ -1,4 +1,5 @@
-University Command Center is a Python app for managing university life. It tracks courses, assignments and GPA.
+University Command Center (shown to students as UniCommand, owner's choice) is a Python app for managing university life.
+Show only "UniCommand" on pages and emails; keep internal ucc_/UCC_ roles, cookies, settings and the repository name. It tracks courses, assignments and GPA.
 
 Files:
 main.py runs the app.

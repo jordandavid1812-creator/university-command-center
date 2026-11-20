@@ -53,10 +53,10 @@ def request_code(student_id, new_email):
         code = f'{secrets.randbelow(10 ** DIGITS):0{DIGITS}d}'
         SignupCode.objects.using('auth').create(student=student, new_email=new_email, created_at=now,
                                                 expires_at=now + LIFETIME, digest=_digest(student.pk, new_email, code))
-        text = (f'Your University Command Center email-change code is {code}\n\n'
+        text = (f'Your UniCommand email-change code is {code}\n\n'
                 f'It works for 10 minutes. Enter it on the Change email page to use this address.\n'
                 f'If you did not ask for this, ignore this email; nothing changes.')
-        transaction.on_commit(lambda: _send(f'{code} is your University Command Center code', text, new_email, code=code),
+        transaction.on_commit(lambda: _send(f'{code} is your UniCommand code', text, new_email, code=code),
                               using='auth')
 
 
@@ -100,8 +100,8 @@ def confirm(student_id, text):
             return False  # another account took the address meanwhile; the code is used up
         if old_email:
             transaction.on_commit(lambda: _send(
-                'Your University Command Center email was changed',
-                'The email address on your University Command Center account was just changed, so '
+                'Your UniCommand email was changed',
+                'The email address on your UniCommand account was just changed, so '
                 'messages now go to the new address.\n\nIf you did not do this, reply to this email '
                 'straight away.', old_email), using='auth')
         return True

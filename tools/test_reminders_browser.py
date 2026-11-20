@@ -107,7 +107,7 @@ class ReminderBrowserTests(unittest.TestCase):
         page = self.open(context, '/')
         page.wait_for_function('window.__shown.length === 1')
         title, body, tag = page.evaluate('window.__shown[0]')
-        self.assertEqual((title, body, tag), ('University Command Center',
+        self.assertEqual((title, body, tag), ('UniCommand',
                                               '1 assignment due today · 2 assignments due tomorrow', 'ucc-deadlines'))
         self.assertNotIn('Synthetic', body)
         storage = page.evaluate('Object.fromEntries(Object.entries(localStorage))')
