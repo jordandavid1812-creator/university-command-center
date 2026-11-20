@@ -91,6 +91,17 @@ Do not use that runner override for database/security suites. Full hosted auth_t
 web_tests and isolation tests retain their existing PostgreSQL 17 separated-role runner.
 No SQLite inference or local database verification is claimed for the nine unit tests.
 
+The Docker journey's console-email fixture now parses complete MIME messages from
+prefix-free Compose logs. It still requires exactly one plain-text sign-up code, and
+additionally requires exactly one email addressed to the synthetic student. The former
+raw-text regex counted the HTML alternative as a second code. Three stdlib-only fixture
+tests cover multipart/legacy plain messages, duplicate emails with identical codes
+(not deduplicated), and incomplete/noisy output. No signup/login assertion is relaxed.
+
+```sh
+python -m unittest tests.test_console_email_fixture -v
+```
+
 Two browser tests join the existing UI1 suite. Native icon decoding uses real loopback-
 only static HTTP, the existing CSP and JavaScript disabled, for public/workspace shells.
 It requires all three images to decode and observes no outside-origin requests. An initial
