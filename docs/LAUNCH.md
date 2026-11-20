@@ -183,13 +183,19 @@ Sign-up and password-reset emails are sent through the website's **own** Gmail a
 personal one), using a Google **app password**.
 
 - `accounts.email_backend.ReviewedSMTPBackend` is the one approved backend (check E105 refuses
-  every other, including Django's own SMTP backend): only `smtp.gmail.com` or
-  `smtp-relay.brevo.com`, port 587 with STARTTLS, verified certificate and host name, TLS 1.2 or
+  every other, including Django's own SMTP backend): only `smtp.gmail.com`,
+  `smtp-relay.brevo.com` or `smtp.resend.com` (owner's choice), port 587 with STARTTLS, verified certificate and host name, TLS 1.2 or
   newer, a 10-second limit, exactly one recipient per message, sent only from the configured
   address. It takes nothing from callers except the empty values `send_mail` passes.
 - `public_site.configure_email` (used by `web_production` and `web_vercel`) needs
   `UCC_EMAIL_ADDRESS` (a `@gmail.com` address) and `UCC_EMAIL_APP_PASSWORD` (16 letters; spaces
   as Google shows them are fine). Missing or malformed values stop the website before it starts.
+- **Resend (owner's choice):** set `UCC_EMAIL_ADDRESS` to an address on the site's own domain
+  (`UCC_SITE_HOST`, e.g. `noreply@unicommand.com.ng`) and `UCC_RESEND_API_KEY` to a Resend API key
+  (`re_...`, Production only, "Sending access" for that domain). The login name is `resend`.
+  Replies go to the public contact address (Reply-To). Verify the domain in Resend first (its DNS
+  records live in Vercel DNS); no mailbox is needed. The privacy notice names Resend automatically
+  when it is the configured service. `UCC_EMAIL_APP_PASSWORD` is then unused and can be removed.
 - A delivery failure is logged as one generic line (no address, link or server reply), and the
   visitor still sees the same generic message (no account enumeration).
 - With email set, `check --deploy` passes with **no issues**, so the public site can start.

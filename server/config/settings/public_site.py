@@ -55,24 +55,42 @@ def configure(namespace, host):
 _ADDRESS = re.compile(r'[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,63}')
 _APP_PASSWORD = re.compile(r'[A-Za-z0-9]{16}')
 EMAIL_HOSTS = {'gmail.com': 'smtp.gmail.com'}
+# Resend (owner's choice): sends from an address on the site's own domain, which the owner
+# verifies in Resend with DNS records. SMTP login name is the literal word "resend" and the
+# password is a Resend API key (re_...). Replies go to the public contact address.
+RESEND_HOST = 'smtp.resend.com'
+_RESEND_KEY = re.compile(r're_[A-Za-z0-9_]{16,128}')
+REPLY_TO = 'unicommand.info@gmail.com'  # the public contact address (accounts.views.LEGAL_CONTACT)
 
 
 def configure_email(namespace, environ):
     """Launch step C: real sign-up and password-reset email through the reviewed backend.
 
-    UCC_EMAIL_ADDRESS is the website's own Gmail address (a new account, never a personal one)
-    and UCC_EMAIL_APP_PASSWORD its 16-character Google app password (spaces allowed, as Google
-    shows it). Anything missing or malformed stops the website before it starts.
+    Either Gmail: UCC_EMAIL_ADDRESS is the website's own Gmail address (a new account, never a
+    personal one) and UCC_EMAIL_APP_PASSWORD its 16-character Google app password (spaces
+    allowed, as Google shows it). Or Resend (owner's choice): UCC_EMAIL_ADDRESS is an address on
+    UCC_SITE_HOST (e.g. noreply@unicommand.com.ng) and UCC_RESEND_API_KEY the Resend API key;
+    replies go to REPLY_TO. Anything missing or malformed stops the website before it starts.
     """
     address = environ.get('UCC_EMAIL_ADDRESS', '').strip().lower()
-    password = ''.join(environ.get('UCC_EMAIL_APP_PASSWORD', '').split())
-    if not _ADDRESS.fullmatch(address) or address.split('@')[1] not in EMAIL_HOSTS:
-        raise ImproperlyConfigured('Set UCC_EMAIL_ADDRESS to the website\'s own Gmail address.')
-    if not _APP_PASSWORD.fullmatch(password):
-        raise ImproperlyConfigured('Set UCC_EMAIL_APP_PASSWORD to its 16-character Google app password.')
+    domain = address.split('@')[1] if _ADDRESS.fullmatch(address) else ''
+    if domain and domain == namespace.get('UCC_SITE_HOST'):
+        # Resend: e.g. noreply@unicommand.com.ng. Only the site's own (verified) domain is accepted.
+        key = environ.get('UCC_RESEND_API_KEY', '').strip()
+        if not _RESEND_KEY.fullmatch(key):
+            raise ImproperlyConfigured('Set UCC_RESEND_API_KEY to the Resend API key (it starts with re_).')
+        host, login, secret, reply_to = RESEND_HOST, 'resend', key, REPLY_TO
+    elif domain in EMAIL_HOSTS:
+        password = ''.join(environ.get('UCC_EMAIL_APP_PASSWORD', '').split())
+        if not _APP_PASSWORD.fullmatch(password):
+            raise ImproperlyConfigured('Set UCC_EMAIL_APP_PASSWORD to its 16-character Google app password.')
+        host, login, secret, reply_to = EMAIL_HOSTS[domain], address, password, ''
+    else:
+        raise ImproperlyConfigured('Set UCC_EMAIL_ADDRESS to the website\'s own Gmail address, or to an address '
+                                   'on the site\'s own domain (for Resend).')
     namespace.update(
         EMAIL_BACKEND='accounts.email_backend.ReviewedSMTPBackend',
-        EMAIL_HOST=EMAIL_HOSTS[address.split('@')[1]], EMAIL_PORT=587, EMAIL_USE_TLS=True, EMAIL_USE_SSL=False,
-        EMAIL_HOST_USER=address, EMAIL_HOST_PASSWORD=password, EMAIL_TIMEOUT=10,
-        DEFAULT_FROM_EMAIL=f'UniCommand <{address}>', SERVER_EMAIL=address,
+        EMAIL_HOST=host, EMAIL_PORT=587, EMAIL_USE_TLS=True, EMAIL_USE_SSL=False,
+        EMAIL_HOST_USER=login, EMAIL_HOST_PASSWORD=secret, EMAIL_TIMEOUT=10,
+        DEFAULT_FROM_EMAIL=f'UniCommand <{address}>', SERVER_EMAIL=address, UCC_EMAIL_REPLY_TO=reply_to,
     )

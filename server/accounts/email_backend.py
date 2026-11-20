@@ -4,7 +4,8 @@ Reviewed limits, so a settings mistake cannot weaken them:
 - only a fixed list of email services, on port 587 with STARTTLS (never plain text, never SSL
   port 465 variants), verified certificates and host name, TLS 1.2 or newer;
 - a 10-second time limit per connection;
-- every message goes to exactly one recipient, from the configured sender address only.
+- every message goes to exactly one recipient, from the configured sender address only;
+- with Resend, replies are directed to the public contact address (UCC_EMAIL_REPLY_TO).
 Errors are raised to the caller (accounts.tokens._deliver), which logs a generic line only.
 """
 import ssl
@@ -13,7 +14,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail.backends import smtp
 
-APPROVED_HOSTS = ('smtp.gmail.com', 'smtp-relay.brevo.com')
+APPROVED_HOSTS = ('smtp.gmail.com', 'smtp-relay.brevo.com', 'smtp.resend.com')  # Resend: owner's choice
 PORT = 587
 TIMEOUT_SECONDS = 10
 
@@ -48,4 +49,8 @@ class ReviewedSMTPBackend(smtp.EmailBackend):
                 raise ValueError('Each email goes to exactly one recipient.')
             if message.from_email != settings.DEFAULT_FROM_EMAIL:
                 raise ValueError('Email is sent only from the configured sender.')
+            # Replies to an automatic (noreply) sender reach the public contact inbox instead.
+            reply_to = getattr(settings, 'UCC_EMAIL_REPLY_TO', '')
+            if reply_to:
+                message.reply_to = [reply_to]
         return super().send_messages(email_messages)
