@@ -42,6 +42,11 @@ FAILURE_MESSAGES = {
 }
 
 
+# A 5xx reply means the service itself was busy or broken: not the student's fault and not a
+# wrong key or model, so the page says so plainly instead of the generic "refused" message.
+BUSY_MESSAGE = ("The AI service was busy or had a problem on its side, so nothing was saved. This happens "
+                "sometimes with large files. Please try again in a few minutes.")
+
 STATUS_HINTS = {
     "4xx": "The service rejected the request itself (a 4xx reply). This usually means the API key or model name "
            "is wrong, or the account has no quota left.",
@@ -223,10 +228,12 @@ def request_status(request, identity, identifier):
         if saved is not None:
             return redirect('student_web:ai-result', saved.pk)
         status = 'deleted'
+    busy = ledger.error_category == 'http_error' and ledger.status_class == '5xx'
     return render(request, 'student_web/ai_request.html', {
         'ledger': ledger, 'status': status, 'tool_name': TOOL_NAMES[ledger.tool],
-        'failure': FAILURE_MESSAGES.get(ledger.error_category, ''),
-        'status_hint': STATUS_HINTS.get(ledger.status_class, '')}, status=200)
+        'failure': BUSY_MESSAGE if busy else FAILURE_MESSAGES.get(ledger.error_category, ''),
+        'status_hint': '' if busy else STATUS_HINTS.get(ledger.status_class, ''),
+        'daily_limit': services.ai_daily_limit()}, status=200)
 
 
 def _checked(saved):
