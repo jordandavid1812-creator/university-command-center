@@ -144,7 +144,7 @@ Run tools/test_server_package.py (Docker) before changing deploy/; never use `do
 Invites (launch step 3): store only code digests; codes are made only by the owner's `invites` command
 with the migrator login. The auth role keeps exactly SELECT + UPDATE(used_at) on accounts_invitecode.
 Open sign-up (owner's choice, replaces invite-only on the public site): the public profiles must keep
-UCC_SIGNUP_CODE (check E106). Codes are 6 digits, 1 minute, 5 tries, stored only as an HMAC keyed with
+UCC_SIGNUP_CODE (check E106). Codes are 6 digits, 5 minutes (owner's choice, was 1), 5 tries, stored only as an HMAC keyed with
 the secret key; a new code retires the old one; replies never reveal whether an account exists. The auth
 role keeps exactly SELECT, INSERT, DELETE + UPDATE(attempts, consumed_at) on accounts_signupcode; the
 runtime role has no access to either table. The code page must work without JavaScript.

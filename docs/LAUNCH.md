@@ -114,7 +114,8 @@ website keeps the original email-link flow, so nothing changes there.
   code from the email → "Email confirmed. You can now log in." The page has one form with two
   buttons, **Confirm email** and **Send me a new code**, so it works without JavaScript. It is
   also at `/accounts/verify/code/`, and "Resend verification" sends a new code.
-- **Limits:** each code works for **1 minute** and allows **5 tries** (the database refuses a
+- **Limits:** each code works for **5 minutes** (owner's choice; it was 1 minute,
+  which expired before late or spam-filed emails were found) and allows **5 tries** (the database refuses a
   sixth). A new code retires the old one. Typing a code is limited to 20 per hour per address
   (`verify-code`), and new codes to 5 per hour (the existing `resend` limit); sign-up keeps its
   limit of 5 per hour.

@@ -60,7 +60,7 @@ before; the formatter does not catch BaseException. Presentation performs no net
   configured sender and one-recipient rule remain in force. No provider/domain/DNS change.
 - Code generation, HMAC storage, expiry, attempts, retirement/replay handling, transaction
   boundaries and send-after-commit scheduling are unchanged. Sign-up remains six digits,
-  one minute and five attempts; email change remains ten minutes and five attempts.
+  five minutes and five attempts; email change remains ten minutes and five attempts.
 - Login, reset/change validation, sessions, generic public responses, throttles, RLS,
   privileges and academic calculations are unchanged. No login OTP or MFA is introduced.
 - No new database field, migration, grant, secret, phone number or messaging credential.

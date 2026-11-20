@@ -1,4 +1,4 @@
-"""Email sign-up codes for the public site (owner's choice: open sign-up, 1-minute codes).
+"""Email sign-up codes for the public site (owner's choice: open sign-up, 5-minute codes).
 
 Registering creates an unverified account and emails a 6-digit code. Entering it within
 LIFETIME verifies the email; a code allows MAX_ATTEMPTS tries, and asking for a new code
@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from .models import SignupCode, Student
 
-LIFETIME = timedelta(minutes=1)
+LIFETIME = timedelta(minutes=5)  # owner's choice: time to find the email, even in Spam
 MAX_ATTEMPTS = 5
 DIGITS = 6
 
@@ -40,7 +40,7 @@ def issue_locked(student):
                                             expires_at=now + LIFETIME)
     origin = settings.AUTH_LINK_ORIGIN.rstrip('/')
     text = (f'Your University Command Center sign-up code is {code}\n\n'
-            f'It works for 1 minute. Enter it on the page that opened after you registered,\n'
+            f'It works for 5 minutes. Enter it on the page that opened after you registered,\n'
             f'or at {origin}/accounts/verify/code/ (you can ask for a new code there).')
     transaction.on_commit(lambda: _deliver(f'{code} is your University Command Center code', text, student.email,
                                            code=code, action_url=f'{origin}/accounts/verify/code/'),

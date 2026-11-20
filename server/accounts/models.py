@@ -171,7 +171,7 @@ class InviteCode(models.Model):
 
 class SignupCode(models.Model):
     """Email sign-up code for the public site: 6 digits, stored only as an HMAC (keyed with the
-    site's secret, so a database copy cannot be used to work codes out), 1 minute, 5 tries.
+    site's secret, so a database copy cannot be used to work codes out), 5 minutes, 5 tries.
 
     A row with new_email is an email-change code instead (accounts.email_change): it was sent to
     new_email and, when entered, replaces the account's email. new_email never changes."""

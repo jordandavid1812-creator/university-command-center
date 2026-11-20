@@ -42,7 +42,7 @@ def configure(namespace, host):
     namespace['MIDDLEWARE'] = middleware
     namespace['UCC_LOCAL_STATIC'] = False
     # Open sign-up (owner's choice): anyone with an email can register, and the account works
-    # only after its 6-digit email code is entered within 1 minute (check accounts.E106).
+    # only after its 6-digit email code is entered within 5 minutes (check accounts.E106).
     namespace['UCC_PUBLIC_SITE'] = True
     namespace['UCC_REQUIRE_INVITE'] = False
     namespace['UCC_SIGNUP_CODE'] = True

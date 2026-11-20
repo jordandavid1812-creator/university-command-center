@@ -1,4 +1,4 @@
-"""Open sign-up with a 6-digit email code (1 minute, 5 tries), on real PostgreSQL with the
+"""Open sign-up with a 6-digit email code (5 minutes, 5 tries), on real PostgreSQL with the
 separate auth and runtime roles. Synthetic identities only."""
 from datetime import timedelta
 import os
@@ -73,7 +73,7 @@ class SignupCodeTests(AuthenticationCase):
         record = SignupCode.objects.using('default').get()
         self.assertNotIn(code, record.digest)
         self.assertRegex(record.digest, r'^[0-9a-f]{64}$')
-        self.assertEqual(record.expires_at - record.created_at, timedelta(minutes=1))
+        self.assertEqual(record.expires_at - record.created_at, timedelta(minutes=5))
 
     def test_code_expires_after_one_minute(self):
         self.register()

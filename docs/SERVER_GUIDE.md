@@ -111,7 +111,7 @@ Open `https://YOUR-DOMAIN`. The first visit can take a minute while Caddy gets t
 ## I. Tell classmates
 
 Anyone with an email address can sign up. The site emails them a 6-digit code that works for
-1 minute; they type it in, and their account is ready. Share your site address.
+5 minutes; they type it in, and their account is ready. Share your site address.
 
 ## Everyday commands (run in `university-command-center` on the server)
 

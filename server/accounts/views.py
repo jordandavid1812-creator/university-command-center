@@ -21,7 +21,7 @@ from .principals import principal_for_request
 from .throttling import rate_limit
 from . import invites, signup_codes, tokens
 
-CODE_SENT = 'If this email needs confirming, we have sent it a 6-digit code. It works for 1 minute.'
+CODE_SENT = 'If this email needs confirming, we have sent it a 6-digit code. It works for 5 minutes.'
 CODE_WRONG = 'That code is wrong or has expired. Check the newest email, or ask for a new code.'
 
 
@@ -133,7 +133,7 @@ def email_request(request, purpose):
 @sensitive_post_parameters('code')
 @require_http_methods(['GET', 'POST'])
 def verify_code(request):
-    """Public site: type the emailed code (1 minute, 5 tries), or press "Send me a new code".
+    """Public site: type the emailed code (5 minutes, 5 tries), or press "Send me a new code".
     One form with two buttons, so it works without JavaScript. Replies never reveal accounts."""
     if not getattr(settings, 'UCC_SIGNUP_CODE', False):
         return HttpResponse('Not found.', status=404)
