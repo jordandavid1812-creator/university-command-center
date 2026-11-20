@@ -50,6 +50,7 @@ as action links. Actual URLs still come only from existing trusted account-link 
 
 If HTML rendering fails with an ordinary Exception, a fixed generic warning is emitted
 without exception details/payloads, and the original plain-text email is still sent.
+An ordinary logger/sink failure cannot suppress that plain-text fallback either.
 Existing SMTP failure handling stays generic. Process-control exceptions propagate as
 before; the formatter does not catch BaseException. Presentation performs no network I/O.
 
@@ -73,10 +74,11 @@ privacy-compliance claim or authorization to deploy or send real test messages.
 
 ## Tests and visual evidence
 
-Eight new database-free SimpleTestCase tests exercise MIME alternatives, exact plain-body/
+Nine new database-free SimpleTestCase tests exercise MIME alternatives, exact plain-body/
 subject/recipient preservation, separate new/old-address messages, leading-zero codes,
 escaped text/URLs, no remote assets, renderer fallback with sentinel-safe logs, unchanged
-SMTP error handling, process-control propagation, shared-template icons and bitmap formats.
+SMTP error handling, compounded renderer/logger failure, process-control propagation,
+shared-template icons and bitmap formats.
 
 For this one DB-free module only, the ordinary Django runner can skip the project's
 database-provisioning runner, with the usual synthetic auth-test settings/environment:
@@ -87,7 +89,7 @@ python server/manage.py test auth_tests.test_email_presentation --settings=confi
 
 Do not use that runner override for database/security suites. Full hosted auth_tests,
 web_tests and isolation tests retain their existing PostgreSQL 17 separated-role runner.
-No SQLite inference or local database verification is claimed for the eight unit tests.
+No SQLite inference or local database verification is claimed for the nine unit tests.
 
 Two browser tests join the existing UI1 suite. Native icon decoding uses real loopback-
 only static HTTP, the existing CSP and JavaScript disabled, for public/workspace shells.

@@ -86,6 +86,21 @@ class EmailPresentationTests(SimpleTestCase):
         for value in (secret, 'private@example.invalid', '012345', 'RuntimeError'):
             self.assertNotIn(value, '\n'.join(captured.output))
 
+    def test_plain_fallback_survives_ordinary_diagnostic_logging_failure(self):
+        for stage in ('lookup', 'write'):
+            mail.outbox = []
+            with self.subTest(stage=stage), \
+                    patch('accounts.email_content.render_to_string', side_effect=RuntimeError('synthetic formatter fault')), \
+                    patch('accounts.email_content.logging.getLogger') as logger:
+                if stage == 'lookup':
+                    logger.side_effect = RuntimeError('synthetic logging lookup fault')
+                else:
+                    logger.return_value.warning.side_effect = OSError('synthetic log stream fault')
+                tokens._deliver('Existing subject', 'Original body.', 'synthetic@example.invalid')
+            self.assertEqual(len(mail.outbox), 1)
+            self.assertEqual(mail.outbox[0].body, 'Original body.\n\nIgnore this email if you did not request it.')
+            self.assertEqual(mail.outbox[0].alternatives, [])
+
     def test_smtp_failure_preserves_existing_handling_and_process_control_propagates(self):
         with patch('accounts.tokens.send_mail', side_effect=RuntimeError('SYNTHETIC_SMTP_SECRET')), \
                 self.assertLogs('accounts.tokens', level='WARNING') as captured:

@@ -23,5 +23,9 @@ def branded_html(body, *, code=None, action_url=None):
     except Exception:
         # Cosmetic failure must not suppress an otherwise valid account email.
         # Never log the exception, message body, URL, code or recipient.
-        logging.getLogger('accounts').warning('Account email formatting unavailable; using plain text.')
+        try:
+            logging.getLogger('accounts').warning('Account email formatting unavailable; using plain text.')
+        except Exception:
+            # An unavailable diagnostic sink must not suppress the plain alternative.
+            pass
         return None
