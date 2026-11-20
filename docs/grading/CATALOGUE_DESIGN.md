@@ -24,18 +24,19 @@ records, academic services, authentication or live database configuration.
 
 | Existing source | Consequence for the design |
 | --- | --- |
-| `grading_policy.py` | Pure immutable rules: one uppercase letter per grade, exact points, zero and maximum endpoints. No institutional verification or persisted identity. |
-| `academic_logic.py` | All existing callers default to legacy five-point calculations. Policy-aware helpers support one policy per call, not mixed-policy transcripts. |
-| `server/academics/models.py` | StudentProfile institution/programme are free text. Course has a fixed A–F CHECK, unique normalized code per student and no score or policy binding. |
+| `grading_policy.py` | Pure immutable rules: one uppercase letter per grade, exact points, zero and maximum endpoints. Since PR #112 it also defines `FOUR_POINT_POLICY` (A=4, B=3, C=2, D=1, F=0, no E) and `SCALES` (`five`, `four`): fixed owner-approved scales, not verified institutional policies. No institutional verification or persisted identity. |
+| `academic_logic.py` | The CLI and Streamlit app always use the legacy five-point scale. Since PR #112 the website passes each student's chosen scale (`five` or `four`); `checked_bands` and `class_standing` also take the policy. Policy-aware helpers support one policy per call, not mixed-policy transcripts. |
+| `server/academics/models.py` | StudentProfile institution/programme are free text. `StudentProfile.grading_scale` (PR #112, CHECK `five`/`four`) is the student's own self-selected scale, changed only through `services.profiles.set_scale`: refused while any course is graded E, and a change clears the student's own class bands. Course has a fixed A–F CHECK, unique normalized code per student and no score or catalogue-policy binding. |
 | `server/academics/ownership.py` | Signed student/session context and forced RLS protect student tables. The runtime boundary has explicit table and privilege checks; new tables are not automatically covered. |
 | `server/accounts/boundary.py` | Separate auth-role allowlists and Supabase API-role denial must remain intact. |
 | `tools/export_supabase_sql.py` | SQL is generated from migrations/provisioning; do not hand-edit numbered SQL files or grant Data API roles access. |
 | `tools/backup_database.py`, `docs/BACKUPS.md` | Backup/restore is allowlisted and encrypted; new reference data needs an explicit restore/export design. |
 | `AGENTS.md` account-deletion rule | Any future FK to Student requires updating the deletion function and its ownership tests in the same implementation PR. |
 
-GP2 must not insert an institution into an existing student's profile, relax Course
-constraints, reinterpret past grades, or pass a four-point definition into existing
-legacy-only forms/class bands. No extra website database reads are proposed now.
+GP2 must not insert an institution into an existing student's profile, change a student's
+`grading_scale` or own class bands, relax Course constraints, or reinterpret past grades.
+Catalogue revisions must never reach existing website forms or calculations in GP2; only the
+two fixed PR #112 scales do. No extra website database reads are proposed now.
 
 ## Proposed records and constraints
 
@@ -204,7 +205,8 @@ publication role require a later reviewed GP3 proposal. No retries after ambiguo
 
 A future resolver must return exactly one eligible revision or a typed missing/ambiguous/
 unsupported outcome. It must never fall back to another university or rescale a transcript.
-GP2 introduces no resolver into live calculations; existing legacy workflows remain as-is.
+GP2 introduces no resolver into live calculations; existing workflows (the five-point default
+and the student-selected four-point scale) remain as-is.
 
 ## Privilege and RLS proposal
 
@@ -307,7 +309,7 @@ returning to operation. Do not fake migrations or reverse a populated migration 
 | GP2a | Schema for draft catalogue, exact constraints, forced RLS and denied website access; synthetic fixtures; migration/provisioning/startup/SQL-export and catalogue backup/restore compatibility | Approve this revised schema/role design first. Separate draft implementation PR. No Student bindings, publisher role, source fetch, real seeds or website reads. |
 | GP2b | Pure canonical snapshot/adapter validation and offline draft inspection using synthetic data | Review supported rule subset and deterministic hash contract. Does not release or select policies. |
 | GP3 | Manual evidence verification, restricted publication operation and append-only review/release history | Approve publisher identity/authority, evidence handling, transaction algorithm and operational access. No AI authority. |
-| GP4 | Student-owned programme/policy bindings, owner FKs/RLS, historical pinning and labelled selection | Separate schema/security/privacy/export/deletion review; resolve mixed-policy and compatibility limits before activating calculations. |
+| GP4 | Student-owned programme/policy bindings, owner FKs/RLS, historical pinning and labelled selection | Separate schema/security/privacy/export/deletion review; resolve mixed-policy and compatibility limits before activating calculations. Decide how a binding relates to the existing self-selected `grading_scale`: exactly one authoritative scale per calculation, never two that disagree, and any move from a self-selected scale to a binding converts no saved letter. |
 | GP5+ | Official-source retrieval, AI-assisted change proposals, then scheduling | Separate provider, source, privacy, cost and job-execution approvals; never automatic publication. |
 
 GP2a is the smallest proposed implementation slice. If complete review/history tables or
@@ -318,7 +320,7 @@ with independent gates; do not expose an incomplete catalogue to website request
 
 | Area | Required evidence before its respective gate |
 | --- | --- |
-| Legacy compatibility | Existing core/CLI/Streamlit, website, auth and browser suites; seven GP1 mutation controls remain effective. No new website query or result change in GP2a. |
+| Legacy compatibility | Existing core/CLI/Streamlit, website, auth and browser suites, including the PR #112 grade-scale tests (`tests/test_grading_scale_core.py`, `web_tests/test_grading_scale.py`); seven GP1 mutation controls remain effective. No new website query or result change in GP2a. |
 | PostgreSQL precision | Raw SQL rejects nonfinite/negative/out-of-range/overprecision points without silent scale rounding; Python validators agree. |
 | Integrity | Unique references/grade rules, protected FKs, mismatched maximum, missing endpoints; draft parent/child version changes; immutable source payload and institutional identity enforced in GP2a; released-parent/child mutation rejected by the GP3 guard. |
 | Applicability | Cohort/session boundaries, unknown scope and variant exceptions; direct university/identity reassignment rejected; display renames preserve resolution; new identities retain historical links; no automatic university inheritance. |
