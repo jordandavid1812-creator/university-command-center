@@ -16,6 +16,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from .models import SignupCode, Student
+from .email_content import branded_html
 from .signup_codes import DIGITS, MAX_ATTEMPTS, clean_code
 
 LIFETIME = timedelta(minutes=10)  # time to open a different inbox
@@ -25,9 +26,10 @@ def _digest(student_id, new_email, code):
     return salted_hmac('accounts.email_change', f'{student_id}:{new_email}:{code}', algorithm='sha256').hexdigest()
 
 
-def _send(subject, text, email):
+def _send(subject, text, email, *, code=None):
     try:
-        send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [email])
+        send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [email],
+                  html_message=branded_html(text, code=code))
     except Exception:
         logging.getLogger(__name__).warning('Email-change message could not be sent.')
 
@@ -54,7 +56,7 @@ def request_code(student_id, new_email):
         text = (f'Your University Command Center email-change code is {code}\n\n'
                 f'It works for 10 minutes. Enter it on the Change email page to use this address.\n'
                 f'If you did not ask for this, ignore this email; nothing changes.')
-        transaction.on_commit(lambda: _send(f'{code} is your University Command Center code', text, new_email),
+        transaction.on_commit(lambda: _send(f'{code} is your University Command Center code', text, new_email, code=code),
                               using='auth')
 
 

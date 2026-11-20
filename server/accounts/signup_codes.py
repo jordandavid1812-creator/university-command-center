@@ -42,7 +42,8 @@ def issue_locked(student):
     text = (f'Your University Command Center sign-up code is {code}\n\n'
             f'It works for 1 minute. Enter it on the page that opened after you registered,\n'
             f'or at {origin}/accounts/verify/code/ (you can ask for a new code there).')
-    transaction.on_commit(lambda: _deliver(f'{code} is your University Command Center code', text, student.email),
+    transaction.on_commit(lambda: _deliver(f'{code} is your University Command Center code', text, student.email,
+                                           code=code, action_url=f'{origin}/accounts/verify/code/'),
                           using='auth')
 
 
