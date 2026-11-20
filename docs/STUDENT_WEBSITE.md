@@ -434,6 +434,19 @@ validation, deeper search/selector scaling and production operations remain defe
 - Tests: `tests/test_class_bands.py`, `security_tests/test_class_bands.py`,
   `web_tests/test_class_bands.py`, `tools/test_class_bands_browser.py`.
 
+## Welcome page (the main link)
+
+- `/` shows the public welcome page (`student_web/landing.html`, `landing.css`) to visitors
+  without a signed-in session: what the site does, how to join, and links to Log in, Register,
+  the privacy notice and terms. With a signed-in session it is the dashboard as before, and the
+  dashboard still checks the live session (a stale one is signed out and sent to login).
+- GET/HEAD only, never cached (the same address shows a private dashboard), no student data,
+  no JavaScript and no forms. It never names the AI provider; the privacy notice does.
+- Owner-approved historical test changes: `web_tests/test_security.py` no longer expects `/` to
+  redirect signed-out visitors (it checks the welcome page instead), and
+  `web_tests/test_account_delete.py` checks sign-out on Settings instead of `/`.
+- Tests: `web_tests/test_landing.py`.
+
 ## Grade scale: 4-point or 5-point
 
 - **Settings → Grade scale** (`/settings/grade-scale/`, POST only) lets each student choose the

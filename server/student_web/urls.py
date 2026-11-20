@@ -3,7 +3,7 @@ from . import ai_views, views
 
 app_name = 'student_web'
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    path('', views.home, name='dashboard'),
     path('semesters/', views.semester_list, name='semester-list'),
     path('courses/', views.course_list, name='course-list'),
     path('assignments/', views.assignment_list, name='assignment-list'),

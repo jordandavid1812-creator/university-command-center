@@ -50,7 +50,7 @@ class AccountDeletePageTests(WebsiteCase):
         self.assertFalse(self.exists('alpha'))
         self.assertTrue(self.exists('bravo'))
         self.assertEqual(len(services.semesters.list(self.identity_b)), bravo_semesters)
-        self.assertEqual(self.client_a.get(reverse('student_web:dashboard')).status_code, 302)  # signed out
+        self.assertEqual(self.client_a.get(reverse('student_web:settings')).status_code, 302)  # signed out
         self.assertEqual(self.login(self.client_a).status_code, 200)  # the account is gone
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['alpha@example.invalid'])
