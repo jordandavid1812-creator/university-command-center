@@ -5,6 +5,7 @@ consent token. The call runs with no database transaction open. Every other page
 reads or deletes the student's own records.
 """
 import logging
+import time
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.db import DatabaseError
@@ -187,11 +188,12 @@ def send(request, identity, identifier):
         return redirect('student_web:ai-request', ledger.pk)
     # 3. Call the provider with no database transaction open. From here on every outcome is
     #    recorded on the ledger row and the response is a redirect to it.
-    #    Owner's choice: if the main service is busy, the same request goes to its backup (Groq)
-    #    automatically, still as this one request; the ledger notes which backup answered.
+    #    Owner's choices: if the main service is busy, it is asked once more after a short pause;
+    #    if it is still busy, the same request goes to its backup (Groq) automatically. It stays
+    #    this one request; the ledger notes which backup answered.
     try:
         try:
-            result = ai_providers.ask(data['provider'], data['tool'], extracted.text, data['question'])
+            result = _ask_with_one_retry(data['provider'], data['tool'], extracted.text, data['question'])
         except ai_providers.ProviderError as failure:
             backup = ai_providers.fallback_for(data['provider'], extracted.characters)
             if backup is None or not ai_providers.is_busy(failure):
@@ -217,6 +219,20 @@ def send(request, identity, identifier):
     except (services.InvalidRecord, services.RecordNotFound, DatabaseError):
         _close_failed(request, identity, ledger.pk, 'save')
     return redirect('student_web:ai-request', ledger.pk)
+
+
+RETRY_PAUSE_SECONDS = 3
+
+
+def _ask_with_one_retry(provider, tool, text, question):
+    """Ask once; after a quick "busy" reply, wait a moment and ask the same service once more."""
+    try:
+        return ai_providers.ask(provider, tool, text, question)
+    except ai_providers.ProviderError as failure:
+        if not ai_providers.worth_retrying(failure):
+            raise
+    time.sleep(RETRY_PAUSE_SECONDS)
+    return ai_providers.ask(provider, tool, text, question)
 
 
 def _close_failed(request, identity, request_id, category, status_class=''):

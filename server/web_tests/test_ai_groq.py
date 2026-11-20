@@ -25,6 +25,9 @@ class GroqAutomaticBackupTests(AiCase):
             os.environ.pop(name, None)  # restored by the outer patch.dict
         self.replies["groq"] = grok_reply(json.dumps(SUMMARY))
         self.statuses = {}
+        pause = patch("student_web.ai_views.RETRY_PAUSE_SECONDS", 0)
+        pause.start()
+        self.addCleanup(pause.stop)
 
     def fake_connect(self, provider):
         self.during_call.append(connections["default"].in_atomic_block)
@@ -49,7 +52,7 @@ class GroqAutomaticBackupTests(AiCase):
     def test_busy_gemini_switches_to_groq_and_shows_the_result(self):
         self.statuses["gemini"] = 503
         response = self.send(self.token())
-        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "groq"])
+        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "gemini", "groq"])
         page = self.client_a.get(response["Location"], follow=True)
         self.assertContains(page, "Cells are the basic unit of life.")
         self.assertNotContains(page, "Request failed")
@@ -58,8 +61,8 @@ class GroqAutomaticBackupTests(AiCase):
         self.assertEqual((ledger.provider, ledger.status, ledger.answered_by, ledger.answered_by_model),
                          ("gemini", "succeeded", "groq", "openai/gpt-oss-120b"))
         self.assertEqual(self.usage()["used_today"], 1)  # one click, counted once
-        self.assertEqual(self.during_call, [False, False])  # no database transaction open on the network
-        sent = FakeConnection.made[1].requests[0]
+        self.assertEqual(self.during_call, [False, False, False])  # no database transaction open on the network
+        sent = FakeConnection.made[2].requests[0]
         self.assertEqual(sent[1], "/openai/v1/chat/completions")
         self.assertEqual(sent[2]["model"], "openai/gpt-oss-120b")
 
@@ -92,14 +95,14 @@ class GroqAutomaticBackupTests(AiCase):
         self.statuses["gemini"] = 503
         page = self.client_a.get(self.send(self.token())["Location"])
         self.assertContains(page, "The AI service was busy")
-        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini"])
+        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "gemini"])
 
     def test_if_the_backup_also_fails_the_student_sees_one_failure_and_it_counts_once(self):
         self.statuses["gemini"] = 503
         self.statuses["groq"] = 503
         page = self.client_a.get(self.send(self.token())["Location"])
         self.assertContains(page, "The AI service was busy")
-        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "groq"])  # never a third call
+        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "gemini", "groq"])  # never a third call
         self.assertEqual(self.usage()["used_today"], 1)
 
     def test_groq_cannot_be_chosen_directly(self):
@@ -113,7 +116,7 @@ class GroqAutomaticBackupTests(AiCase):
         with patch.object(services.ai, "switch_to", side_effect=DatabaseError("synthetic")):
             page = self.client_a.get(self.send(self.token())["Location"])
         self.assertContains(page, "The AI service was busy")
-        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini"])
+        self.assertEqual([c.provider for c in FakeConnection.made], ["gemini", "gemini"])
 
 
 class SwitchRecordTests(AiCase):
