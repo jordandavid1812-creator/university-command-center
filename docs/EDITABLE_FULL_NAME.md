@@ -1,6 +1,10 @@
 # Editable full name and staged student-ID removal
 
-Implementation base: `5b0a01a5a0371886f61206aefb48585caff6f6f8`.
+Original implementation base: `5b0a01a5a0371886f61206aefb48585caff6f6f8`.
+Current integration baseline: `4fd614206ef3eb1243d00bf6f98c59b66404be7e` (merged
+PR #116 restores the reviewed dependency stack). Another actor merged #116 and
+closed the equivalent draft repair #115; this task performed neither action.
+Passing candidate CI is not a substitute for the master push run or final PR-head CI.
 The owner requested a separate registration full name, editing for existing users and removal
 of matric-number collection. No dedicated NIN/BVN fields existed; none are introduced.
 A full name is optional, self-reported personal data, not verified identity.
@@ -81,7 +85,7 @@ The reviewer requested changes at `7be90fd58e96c7c70c08bb8d87f2adb779fdd74e`:
 
 | Finding | Disposition |
 | --- | --- |
-| Current-master CI | The old green run covered merge base e4042dd, not subsequent dependency merges. PR #115 separately proposes baseline repair. Fresh PR #114 integration CI must pass after master is repaired; no green master is assumed. |
+| Current-master CI | The old green run covered e4042dd. Merged PR #116 restores the baseline at 4fd6142; equivalent draft repair #115 was closed by another actor. Verify master push run 44688693905 and fresh final PR #114 integration CI; do not substitute historical candidate results. |
 | Nine existing-test changes | Owner explicitly answered "Approve the listed test changes for re-review" in this conversation on 20 November 2026. This is not merge/deploy approval. The follow-up commit lists every file; earlier commits are preserved rather than rewritten. |
 | Settings text | Remove the stale claim that a matric number is partly hidden. |
 | Rollout incompatibility | Persistent blank DB defaults, retained legacy column, additive-first rollout, deferred contract. |
