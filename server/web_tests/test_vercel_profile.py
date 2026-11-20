@@ -58,7 +58,7 @@ print(json.dumps([s.EMAIL_BACKEND, s.EMAIL_HOST, s.EMAIL_PORT, s.EMAIL_USE_TLS, 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), ['accounts.email_backend.ReviewedSMTPBackend', 'smtp.gmail.com', 587, True,
                                                      False, 'ucc.synthetic.site@gmail.com', True,
-                                                     'University Command Center <ucc.synthetic.site@gmail.com>'])
+                                                     'UniCommand <ucc.synthetic.site@gmail.com>'])
 
     def test_public_site_rules_and_supabase_pooler_connections(self):
         result = run('''import json

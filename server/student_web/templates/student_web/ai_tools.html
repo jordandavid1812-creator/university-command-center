@@ -1,5 +1,5 @@
 {% extends 'accounts/base.html' %}
-{% block title %}Study tools · {{ material.title }} · University Command Center{% endblock %}
+{% block title %}Study tools · {{ material.title }} · UniCommand{% endblock %}
 {% block extra_styles %}{% include 'student_web/components/ai_assets.html' %}{% endblock %}
 {% block content %}<div class="ai-page">
 <div class="page-heading"><div><p class="eyebrow">AI study tools</p><h1>{{ material.title }}</h1><p>Pick a tool. You will see exactly what is sent, and nothing is sent until you confirm.</p></div><a class="button secondary" href="{% url 'student_web:material-list' %}">Back to study materials</a></div>

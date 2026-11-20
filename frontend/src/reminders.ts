@@ -79,7 +79,7 @@ function remind(): void {
   const parts = [];
   if (due.today) parts.push(`${plural(due.today)} due today`);
   if (due.tomorrow) parts.push(`${plural(due.tomorrow)} due tomorrow`);
-  new Notification('University Command Center', { body: parts.join(' · '), tag: 'ucc-deadlines' });
+  new Notification('UniCommand', { body: parts.join(' · '), tag: 'ucc-deadlines' });
   write(LAST_SHOWN, due.date);
 }
 

@@ -1,5 +1,5 @@
 {% extends 'accounts/base.html' %}
-{% block title %}Search study files · University Command Center{% endblock %}
+{% block title %}Search study files · UniCommand{% endblock %}
 {% block extra_styles %}{% load static %}<link rel="stylesheet" href="{% static 'student_web/search.css' %}">{% endblock %}
 {% block content %}<div class="page-heading"><div><p class="eyebrow">Your study materials</p><h1>Search study files</h1><p>Find words in every file you have uploaded. Only your own files are searched, and nothing is sent anywhere.</p></div><a class="button secondary" href="{% url 'student_web:material-list' %}">Back to study materials</a></div>
 <section class="panel"><form method="get" class="stacked-form search-form" role="search">{% include 'student_web/components/form_fields.html' %}<button class="button" type="submit">Search</button></form></section>

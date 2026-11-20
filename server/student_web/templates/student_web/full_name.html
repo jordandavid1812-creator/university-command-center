@@ -1,3 +1,3 @@
 {% extends 'accounts/base.html' %}
-{% block title %}Edit full name · University Command Center{% endblock %}
+{% block title %}Edit full name · UniCommand{% endblock %}
 {% block content %}<section class="panel form-panel" aria-labelledby="name-heading"><h1 id="name-heading">Edit full name</h1><p>Your name is self-reported, optional and editable. It does not verify your identity or change your username.</p><form method="post" class="stacked-form">{% csrf_token %}{% include 'student_web/components/form_fields.html' %}<div class="action-row"><button class="button" type="submit">Save full name</button><a class="button secondary" href="{% url 'student_web:settings' %}">Back to Settings</a></div></form></section>{% endblock %}

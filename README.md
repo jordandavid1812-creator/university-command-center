@@ -1,4 +1,7 @@
-# University Command Center
+# UniCommand (formerly University Command Center)
+
+Students see the name **UniCommand**. Internal names (the `ucc_` database roles, cookies,
+`UCC_*` settings and this repository) keep the old abbreviation on purpose.
 
 A Python app for managing university life, with a terminal interface and a local Streamlit web interface.
 

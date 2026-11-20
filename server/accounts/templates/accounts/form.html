@@ -1,5 +1,5 @@
 {% extends 'accounts/auth_base.html' %}
-{% block title %}{{ title }} · University Command Center{% endblock %}
+{% block title %}{{ title }} · UniCommand{% endblock %}
 {% block auth_content %}
 {% with auth_page=request.resolver_match.view_name %}
 <section class="panel auth-panel auth-card">
@@ -32,7 +32,7 @@
       {% if auth_page == 'accounts:password-change' %}
         <a class="button secondary" href="{% url 'student_web:settings' %}">Back to Account Settings</a>
       {% elif auth_page == 'accounts:login' %}
-        <p>New to University Command Center?</p>
+        <p>New to UniCommand?</p>
         <a class="button secondary" href="{% url 'accounts:register' %}">Create an account</a>
         <div class="auth-link-pair">
           <a href="{% url 'accounts:reset' %}">Forgot password?</a>

@@ -761,8 +761,8 @@ def account_delete(request, identity):
                 auth_logout(request)
                 if email:
                     try:
-                        send_mail('Your University Command Center account was deleted',
-                                  'Your University Command Center account and all its records were deleted at your '
+                        send_mail('Your UniCommand account was deleted',
+                                  'Your UniCommand account and all its records were deleted at your '
                                   'request.\n\nIf you did not do this, reply to this email straight away.',
                                   django_settings.DEFAULT_FROM_EMAIL, [email])
                     except Exception:

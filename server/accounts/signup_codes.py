@@ -39,10 +39,10 @@ def issue_locked(student):
     SignupCode.objects.using('auth').create(student=student, digest=_digest(student.pk, code), created_at=now,
                                             expires_at=now + LIFETIME)
     origin = settings.AUTH_LINK_ORIGIN.rstrip('/')
-    text = (f'Your University Command Center sign-up code is {code}\n\n'
+    text = (f'Your UniCommand sign-up code is {code}\n\n'
             f'It works for 5 minutes. Enter it on the page that opened after you registered,\n'
             f'or at {origin}/accounts/verify/code/ (you can ask for a new code there).')
-    transaction.on_commit(lambda: _deliver(f'{code} is your University Command Center code', text, student.email,
+    transaction.on_commit(lambda: _deliver(f'{code} is your UniCommand code', text, student.email,
                                            code=code, action_url=f'{origin}/accounts/verify/code/'),
                           using='auth')
 

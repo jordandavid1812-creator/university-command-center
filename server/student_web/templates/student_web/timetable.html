@@ -1,5 +1,5 @@
 {% extends 'accounts/base.html' %}
-{% block title %}Timetable · University Command Center{% endblock %}
+{% block title %}Timetable · UniCommand{% endblock %}
 {% block extra_styles %}{% load static %}<link rel="stylesheet" href="{% static 'student_web/timetable.css' %}">{% endblock %}
 {% block content %}<div class="page-heading"><div><p class="eyebrow">Your week</p><h1>Timetable</h1><p>Your weekly classes. Times use the Africa/Lagos clock.</p></div><a class="button" href="{% url 'student_web:session-create' %}">Add class</a></div>
 {% if clashes %}<p class="notice warning" role="status">{{ clashes }} class{{ clashes|pluralize:"es" }} overlap{{ clashes|pluralize:"s," }} another class on the same day. Overlapping classes are marked below.</p>{% endif %}

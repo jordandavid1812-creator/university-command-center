@@ -25,7 +25,7 @@
 .standing-result { font-size:2.25rem; font-weight:800; margin:var(--space-2) 0; }
 /* PDF pages: A4, a header and "Page 1 of 3" (Chrome and Edge draw these page margin boxes). */
 @page { size:A4; margin:16mm 14mm 18mm;
-  @top-left { content:"University Command Center \00B7  Academic summary"; font:9pt system-ui, sans-serif; color:#555; }
+  @top-left { content:"UniCommand \00B7  Academic summary"; font:9pt system-ui, sans-serif; color:#555; }
   @bottom-center { content:"Page " counter(page) " of " counter(pages); font:9pt system-ui, sans-serif; color:#555; } }
 .print-details { display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:0 0 var(--space-2); }
 @media print {

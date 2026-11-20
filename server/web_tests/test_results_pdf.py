@@ -19,7 +19,7 @@ class ResultsPdfTests(WebsiteCase):
                                  level='300', institution='Synthetic University')
         page = self.client_a.get(reverse('student_web:standing-print'), {'save': 'pdf'})
         self.assertEqual(page.status_code, 200)
-        self.assertRegex(page.content.decode(), r'<title>Academic summary \d{4}-\d{2}-\d{2} - University Command Center</title>')
+        self.assertRegex(page.content.decode(), r'<title>Academic summary \d{4}-\d{2}-\d{2} - UniCommand</title>')
         for text in ('Synthetic Alpha', 'B.Sc. Synthetic', '300 level', 'Synthetic University', 'Save as PDF'):
             self.assertContains(page, text)
         self.assertNotContains(page, 'Matric / student ID')

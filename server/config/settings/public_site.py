@@ -74,5 +74,5 @@ def configure_email(namespace, environ):
         EMAIL_BACKEND='accounts.email_backend.ReviewedSMTPBackend',
         EMAIL_HOST=EMAIL_HOSTS[address.split('@')[1]], EMAIL_PORT=587, EMAIL_USE_TLS=True, EMAIL_USE_SSL=False,
         EMAIL_HOST_USER=address, EMAIL_HOST_PASSWORD=password, EMAIL_TIMEOUT=10,
-        DEFAULT_FROM_EMAIL=f'University Command Center <{address}>', SERVER_EMAIL=address,
+        DEFAULT_FROM_EMAIL=f'UniCommand <{address}>', SERVER_EMAIL=address,
     )
