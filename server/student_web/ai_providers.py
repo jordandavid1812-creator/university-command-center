@@ -1,4 +1,4 @@
-"""AI study assistant, stage 3a: the Gemini and Grok client, prompts and strict answer checks.
+"""AI study assistant, stage 3a: the Gemini, Grok and Groq client, prompts and strict answer checks.
 
 Nothing here touches the database or decides whether a request may be sent; the website
 pages (stage 3b) call `ask` only after the student's confirm-page POST and a ledger
@@ -17,13 +17,25 @@ import ssl
 import threading
 import time
 
-# Fixed hosts in code, never settings: a key header can only ever go to these two.
-HOSTS = {"gemini": "generativelanguage.googleapis.com", "grok": "api.x.ai"}
-KEY_VARIABLES = {"gemini": "UCC_GEMINI_API_KEY", "grok": "UCC_GROK_API_KEY"}
-MODEL_VARIABLES = {"gemini": "UCC_GEMINI_MODEL", "grok": "UCC_GROK_MODEL"}
-PROVIDER_NAMES = {"gemini": "Gemini (Google)", "grok": "Grok (xAI)"}  # setup and docs only, never shown on pages
+# Fixed hosts in code, never settings: a key header can only ever go to these three.
+# Groq (owner's choice) runs open models such as openai/gpt-oss-120b. It is never a button: it
+# answers automatically when Gemini is busy (see FALLBACKS), for texts it can take.
+HOSTS = {"gemini": "generativelanguage.googleapis.com", "grok": "api.x.ai", "groq": "api.groq.com"}
+KEY_VARIABLES = {"gemini": "UCC_GEMINI_API_KEY", "grok": "UCC_GROK_API_KEY", "groq": "UCC_GROQ_API_KEY"}
+MODEL_VARIABLES = {"gemini": "UCC_GEMINI_MODEL", "grok": "UCC_GROK_MODEL", "groq": "UCC_GROQ_MODEL"}
+PROVIDER_NAMES = {"gemini": "Gemini (Google)", "grok": "Grok (xAI)",
+                  "groq": "Groq"}  # setup and docs only, never shown on pages
 # Pages never name the AI company or model (owner decision). Buttons post these neutral codes.
-PUBLIC_CODES = {"gemini": "main", "grok": "backup"}
+PUBLIC_CODES = {"gemini": "main", "grok": "backup", "groq": "backup2"}
+# Groq's free tier allows 8,000 tokens a minute for openai/gpt-oss-120b, and one request must fit
+# inside it: about 12,000 characters of text (about 3,000 tokens) plus the instructions and up to
+# 4,096 tokens of answer. Bigger texts are never sent to Groq.
+CHARACTER_LIMITS = {"groq": 12000}
+# Owner's choice: when the main service is busy (a 5xx reply, a timeout or a network failure), the
+# same request goes to its backup automatically and counts once. A wrong key or model (4xx), a
+# refusal, or an answer in the wrong shape is not switched.
+FALLBACKS = {"gemini": "groq"}
+BACKUP_ONLY = frozenset(FALLBACKS.values())
 INTERNAL_CODES = {public: internal for internal, public in PUBLIC_CODES.items()}
 if set(PUBLIC_CODES) != set(HOSTS):  # a new provider needs a neutral code, or every send page would fail
     raise RuntimeError("Every AI provider needs an entry in PUBLIC_CODES.")
@@ -48,6 +60,9 @@ MAX_OUTPUT_TOKENS = {"summary": 2048, "answer": 2048, "quiz": 4096, "flashcards"
 SHAPE_VERSION = 1
 MAX_RESULT_BYTES = 64 * 1024
 MODEL_PATTERN = r"[a-z0-9][a-z0-9.\-]{0,63}"
+# Groq model names have one "/" (openai/gpt-oss-120b). It is allowed only for Groq, whose model
+# name goes in the JSON body; Gemini's goes in the URL path, where "/" would change the address.
+MODEL_PATTERNS = {"groq": r"(?=.{1,64}\Z)[a-z0-9][a-z0-9.\-]*(?:/[a-z0-9][a-z0-9.\-]*)?"}
 KEY_PATTERN = r"[\x21-\x7e]{8,512}"  # printable ASCII, no spaces or control characters
 
 CATEGORIES = ("network", "timeout", "redirect", "http_error", "too_large", "invalid_response", "blocked",
@@ -77,13 +92,37 @@ def configured(provider):
     if provider not in HOSTS:
         return None
     key = _setting(KEY_VARIABLES[provider], KEY_PATTERN)
-    model = _setting(MODEL_VARIABLES[provider], MODEL_PATTERN)
+    model = _setting(MODEL_VARIABLES[provider], MODEL_PATTERNS.get(provider, MODEL_PATTERN))
     return (key, model) if key and model else None
 
 
 def available_providers():
     """Providers the student may choose: only those with a valid key and model."""
     return [provider for provider in HOSTS if configured(provider)]
+
+
+def button_providers():
+    """Providers the student can press Send for. An automatic backup (Groq) is never a button,
+    unless it is the only service set up."""
+    available = available_providers()
+    chosen = [provider for provider in available if provider not in BACKUP_ONLY]
+    return chosen or available
+
+
+def fits(provider, characters):
+    return characters <= CHARACTER_LIMITS.get(provider, characters)
+
+
+def fallback_for(provider, characters):
+    """The backup to try when `provider` was busy, or None (not set up, or the text is too long)."""
+    backup = FALLBACKS.get(provider)
+    return backup if backup in available_providers() and fits(backup, characters) else None
+
+
+def is_busy(failure):
+    """A failure on the service's side, where the backup may well answer."""
+    return failure.category in ("timeout", "network") or (failure.category == "http_error"
+                                                          and failure.status_class == "5xx")
 
 
 # --- prompts -----------------------------------------------------------------------------
@@ -275,7 +314,22 @@ def grok_text(data):
     return message["content"]
 
 
-FORMATS = {"gemini": (gemini_request, gemini_text), "grok": (grok_request, grok_text)}
+def groq_request(model, key, system, user, tool):
+    """Groq's OpenAI-style chat API. gpt-oss models reason before answering; "low" keeps that short,
+    so the answer fits in max_completion_tokens (which also covers the reasoning)."""
+    path = "/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "max_completion_tokens": MAX_OUTPUT_TOKENS[tool], "temperature": 0.2,
+            "response_format": {"type": "json_object"}}
+    if model.startswith("openai/gpt-oss"):
+        body["reasoning_effort"] = "low"
+    return path, headers, body
+
+
+# Groq replies in the same shape as xAI (OpenAI-style choices), so the same strict reader applies.
+FORMATS = {"gemini": (gemini_request, gemini_text), "grok": (grok_request, grok_text),
+           "groq": (groq_request, grok_text)}
 
 
 # --- HTTPS -------------------------------------------------------------------------------

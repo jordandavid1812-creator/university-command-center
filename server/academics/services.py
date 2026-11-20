@@ -4,6 +4,7 @@ Each operation requires a trusted capability, filters by owner and runs under RL
 Return evaluated records/lists; never return a lazy queryset outside the transaction.
 """
 import hashlib
+import re
 import uuid
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connections
@@ -14,7 +15,7 @@ from django.utils import timezone
 import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
-from .models import (GRADING_SCALES, AI_ERROR_CATEGORIES, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
+from .models import (GRADING_SCALES, AI_ERROR_CATEGORIES, AI_MODEL_PATTERN, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
                      Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial, StudyPlan, StudyTopic)
 from .ownership import database_alias, require_identity, student_transaction
 
@@ -554,6 +555,21 @@ class AiRecords:
             if not self._requests(owner).filter(pk=identifier).exists():
                 raise RecordNotFound()
             raise AiRequestClosed()
+
+    def switch_to(self, identity, request_id, provider, model):
+        """Record that the backup is answering an in-progress request (the main service was busy).
+        It stays one request: nothing new is counted. RecordNotFound / AiRequestClosed as in _close."""
+        if provider != "groq" or not isinstance(model, str) or not re.fullmatch(AI_MODEL_PATTERN, model):
+            raise InvalidRecord()
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            identifier = record_id(request_id)
+            changed = self._requests(owner).filter(pk=identifier, status="sent", answered_by="").update(
+                answered_by=provider, answered_by_model=model, updated_at=timezone.now())
+            if changed != 1:
+                if not self._requests(owner).filter(pk=identifier).exists():
+                    raise RecordNotFound()
+                raise AiRequestClosed()
 
     def fail(self, identity, request_id, category, status_class=""):
         """Mark an in-progress request failed (RecordNotFound / AiRequestClosed as in _close)."""

@@ -109,7 +109,8 @@ class ConfigurationTests(NoNetwork):
                 self.assertIsNone(ai.configured("gemini"))
 
     def test_hosts_are_fixed_in_code_and_connections_are_verified_https(self):
-        self.assertEqual(ai.HOSTS, {"gemini": "generativelanguage.googleapis.com", "grok": "api.x.ai"})
+        self.assertEqual(ai.HOSTS, {"gemini": "generativelanguage.googleapis.com", "grok": "api.x.ai",
+                                    "groq": "api.groq.com"})
         for provider, host in ai.HOSTS.items():
             connection = ai.https_connection(provider)
             self.assertIsInstance(connection, http.client.HTTPSConnection)

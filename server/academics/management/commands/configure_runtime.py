@@ -97,6 +97,13 @@ class Command(BaseCommand):
                               AND attname = 'matric_number' AND NOT attisdropped)""")
             if cursor.fetchone()[0]:
                 cursor.execute(sql.SQL("GRANT UPDATE (matric_number) ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
+            # Automatic backup (academics.0028): which backup answered an in-progress request.
+            # Granted only once the columns exist, so provisioning a rolled-back schema still works.
+            cursor.execute("""SELECT count(*) = 2 FROM pg_attribute WHERE attrelid = 'public.academics_studyairequest'::regclass
+                              AND attname IN ('answered_by', 'answered_by_model') AND NOT attisdropped""")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("GRANT UPDATE (answered_by, answered_by_model) ON public.academics_studyairequest TO {}")
+                               .format(sql.Identifier(role)))
             # Grade scale (academics.0025): the student's 4- or 5-point choice. Granted only once the
             # column exists, so provisioning an older (rolled-back) schema still works.
             cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.academics_studentprofile'::regclass

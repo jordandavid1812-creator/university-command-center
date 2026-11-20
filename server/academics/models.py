@@ -356,14 +356,15 @@ class StudentProfile(ValidatedRecord):
 # AI study assistant records (docs/AI_STUDY_ASSISTANT_PLAN.md, stage 1). Fixed value lists:
 # adding a value later needs a migration, so keep these in step with the plan.
 AI_TOOLS = [("summary", "Summary"), ("quiz", "Quiz"), ("flashcards", "Flashcards"), ("answer", "Ask a question")]
-AI_PROVIDERS = [("gemini", "Gemini"), ("grok", "Grok")]
+AI_PROVIDERS = [("gemini", "Gemini"), ("grok", "Grok"), ("groq", "Groq")]
 AI_STATUSES = [("sent", "In progress"), ("succeeded", "Succeeded"), ("failed", "Failed"),
                ("interrupted", "Interrupted")]
 AI_ERROR_CATEGORIES = [("network", "Network"), ("timeout", "Timeout"), ("redirect", "Redirect"),
                        ("http_error", "Provider error"), ("too_large", "Response too large"),
                        ("invalid_response", "Invalid response"), ("blocked", "Blocked by provider"),
                        ("truncated", "Response cut off"), ("save", "Could not save")]
-AI_MODEL_PATTERN = r"^[a-z0-9][a-z0-9.\-]{0,63}$"
+# One "/" is allowed for Groq model names such as openai/gpt-oss-120b (the column holds at most 64).
+AI_MODEL_PATTERN = r"^[a-z0-9][a-z0-9.\-]{0,63}(/[a-z0-9][a-z0-9.\-]{0,62})?$"
 MAX_AI_TEXT_CHARACTERS = 60000
 MAX_AI_QUESTION_CHARACTERS = 500
 MAX_AI_RESULT_BYTES = 64 * 1024
@@ -387,6 +388,12 @@ class StudyAiRequest(ValidatedRecord):
     # For a failed reply: "4xx" usually means a wrong key or model, "5xx" a provider problem.
     status_class = models.CharField(max_length=3, blank=True, default="", db_default="",
                                     choices=[("3xx", "3xx"), ("4xx", "4xx"), ("5xx", "5xx")])
+    # Set only when the main service was busy and the backup answered instead (owner's choice:
+    # automatic switch, counted once). The provider and model only, never any text.
+    answered_by = models.CharField(max_length=6, blank=True, default="", db_default="",
+                                   choices=[("groq", "Groq")])
+    answered_by_model = models.CharField(max_length=64, blank=True, default="", db_default="",
+                                         validators=[RegexValidator(AI_MODEL_PATTERN)])
 
     class Meta:
         indexes = [models.Index(fields=["owner", "created_at"], name="airequest_owner_created")]
@@ -406,6 +413,10 @@ class StudyAiRequest(ValidatedRecord):
                                    name="airequest_status_valid"),
             models.CheckConstraint(condition=models.Q(model__regex=AI_MODEL_PATTERN),
                                    name="airequest_model_valid"),
+            # The backup that answered: both empty, or a known backup with a valid model name.
+            models.CheckConstraint(condition=models.Q(answered_by="", answered_by_model="")
+                                   | models.Q(answered_by="groq", answered_by_model__regex=AI_MODEL_PATTERN),
+                                   name="airequest_answered_by_valid"),
             models.CheckConstraint(condition=models.Q(consent_token_hash__regex=r"^[0-9a-f]{64}$"),
                                    name="airequest_token_hash_hex"),
             models.CheckConstraint(condition=models.Q(characters_sent__gte=1,
