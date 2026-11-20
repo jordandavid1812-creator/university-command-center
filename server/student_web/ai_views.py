@@ -42,6 +42,11 @@ FAILURE_MESSAGES = {
 }
 
 
+# A 5xx reply means the service itself was busy or broken: not the student's fault and not a
+# wrong key or model, so the page says so plainly instead of the generic "refused" message.
+BUSY_MESSAGE = ("The AI service was busy or had a problem on its side, so nothing was saved. This happens "
+                "sometimes with large files. Please try again in a few minutes.")
+
 STATUS_HINTS = {
     "4xx": "The service rejected the request itself (a 4xx reply). This usually means the API key or model name "
            "is wrong, or the account has no quota left.",
@@ -105,7 +110,7 @@ def confirm(request, identity, identifier):
                                           503 if failure.reason == 'busy' else 422), choice)
     tool, question = form.cleaned_data['tool'], form.cleaned_data['question']
     token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters)
-    providers = ai_providers.available_providers()
+    providers = ai_providers.button_providers()
     send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers,
                                  auto_id=False)
     notes_hidden = choice == 'hide' or (choice != 'show' and request.COOKIES.get(AI_NOTES_COOKIE) == 'hidden')
@@ -161,6 +166,10 @@ def send(request, identity, identifier):
     if extracted.characters != characters:
         return error_page(request, 'Request not sent', 'The text no longer matches what you confirmed, so nothing '
                           'was sent. Start again from the study tools.', 409)
+    if data['provider'] not in ai_providers.button_providers() or not ai_providers.fits(data['provider'],
+                                                                                      extracted.characters):
+        return error_page(request, 'Request not sent', 'That AI service cannot take this request, so nothing '
+                          'was sent. Start again from the study tools.', 400)
     # 2. Reserve under the per-student lock (its own short transactions).
     _, model = ai_providers.configured(data['provider'])
     try:
@@ -178,8 +187,21 @@ def send(request, identity, identifier):
         return redirect('student_web:ai-request', ledger.pk)
     # 3. Call the provider with no database transaction open. From here on every outcome is
     #    recorded on the ledger row and the response is a redirect to it.
+    #    Owner's choice: if the main service is busy, the same request goes to its backup (Groq)
+    #    automatically, still as this one request; the ledger notes which backup answered.
     try:
-        result = ai_providers.ask(data['provider'], data['tool'], extracted.text, data['question'])
+        try:
+            result = ai_providers.ask(data['provider'], data['tool'], extracted.text, data['question'])
+        except ai_providers.ProviderError as failure:
+            backup = ai_providers.fallback_for(data['provider'], extracted.characters)
+            if backup is None or not ai_providers.is_busy(failure):
+                raise
+            try:
+                services.ai.switch_to(identity, ledger.pk, backup, ai_providers.configured(backup)[1])
+            except (AiRequestClosed, services.RecordNotFound, services.InvalidRecord, DatabaseError,
+                    OwnershipRequired):
+                raise failure from None  # cannot record the switch: do not send anywhere else
+            result = ai_providers.ask(backup, data['tool'], extracted.text, data['question'])
     except ai_providers.ProviderError as failure:
         _close_failed(request, identity, ledger.pk, failure.category, failure.status_class or '')
         return redirect('student_web:ai-request', ledger.pk)
@@ -223,10 +245,12 @@ def request_status(request, identity, identifier):
         if saved is not None:
             return redirect('student_web:ai-result', saved.pk)
         status = 'deleted'
+    busy = ledger.error_category == 'http_error' and ledger.status_class == '5xx'
     return render(request, 'student_web/ai_request.html', {
         'ledger': ledger, 'status': status, 'tool_name': TOOL_NAMES[ledger.tool],
-        'failure': FAILURE_MESSAGES.get(ledger.error_category, ''),
-        'status_hint': STATUS_HINTS.get(ledger.status_class, '')}, status=200)
+        'failure': BUSY_MESSAGE if busy else FAILURE_MESSAGES.get(ledger.error_category, ''),
+        'status_hint': '' if busy else STATUS_HINTS.get(ledger.status_class, ''),
+        'daily_limit': services.ai_daily_limit()}, status=200)
 
 
 def _checked(saved):

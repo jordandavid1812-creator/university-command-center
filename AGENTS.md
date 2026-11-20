@@ -119,7 +119,7 @@ PDF text (AI stage 2): pypdf runs only in student_web/pdf_text_child.py, a child
 an empty environment, a time limit, an output cap and lowered pypdf limits (jbig2dec_binary=None).
 Never import pypdf in the website process or pass the website's environment to the child.
 The child must limit its own memory (RLIMIT_AS; Windows Job Object) before reading and stop if it cannot.
-AI providers (stage 3a): only student_web/ai_providers.py talks to Gemini/Grok, on fixed hosts with
+AI providers (stage 3a): only student_web/ai_providers.py talks to Gemini/Grok/Groq, on fixed hosts with
 keys in headers only, no redirects, one 60 s deadline and a 1 MiB cap. Never add default model names,
 retries, fallbacks, logging of prompts/replies/keys, or tests that reach the network.
 Never pass or patch ai_providers._connect outside tests; AI tests use tests/network_guard.NoNetworkMixin.
@@ -174,6 +174,13 @@ and add new student tables to BACKUP_TABLES, backup_role.sql and the privacy not
 Account deletion (launch step F): only through ucc_security.delete_my_account() in a signed student
 transaction; it takes no arguments. Any new table referring to accounts_student must be added to the
 function (new migration) and to security_tests.test_account_deletion.OWNED in the same PR.
+Groq backup (owner's choice, replaces "no fallback" for this one case): api.groq.com is the third
+fixed host; a "/" in the model name is allowed only for Groq (Gemini's model goes in the URL path).
+When Gemini is busy (5xx, timeout, network) send() tries Groq automatically for texts up to
+ai_providers.CHARACTER_LIMITS["groq"] (free-tier 8K tokens/minute), still as ONE ledger row: record
+it first with services.ai.switch_to (answered_by, answered_by_model only); if that fails, send nothing
+more. Never switch on 4xx, blocked, invalid or truncated answers; never more than one switch; Groq is
+never a Send button. The privacy notice must keep saying texts may go to Groq automatically.
 Grade scale (4- or 5-point): each student's choice is academics_studentprofile.grading_scale, changed
 only through services.profiles.set_scale. Never convert saved letters; refuse 4-point while any course
 is graded E; clear own class bands on a change; 5-point pages stay exactly as before. The 4-point scale

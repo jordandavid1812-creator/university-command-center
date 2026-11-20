@@ -123,7 +123,8 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_attribute a
                        WHERE a.attrelid = to_regclass('public.academics_studyairequest')
                          AND a.attnum > 0 AND NOT a.attisdropped
-                         AND a.attname NOT IN ('status', 'error_category', 'status_class', 'updated_at')
+                         AND a.attname NOT IN ('status', 'error_category', 'status_class', 'updated_at',
+                                               'answered_by', 'answered_by_model')
                          AND has_column_privilege(current_user, a.attrelid, a.attnum, 'UPDATE'))
                    OR has_any_column_privilege(current_user, 'public.accounts_student', 'SELECT')
                    -- Launch step E: the site-wide AI counter is never deleted, truncated or

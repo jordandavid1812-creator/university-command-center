@@ -12,7 +12,7 @@ with its own PR and review.
 | 3b. Pages, consent token, export, `prune_ai_ledger`, plus owner-requested quiz, flashcards, copy/download and dashboard panel | **Built (this PR)** |
 | 4. Manual check on the owner's PC with the owner's keys | Not started |
 
-From stage 3b the website can send a file's text to Gemini or Grok, but only after the
+From stage 3b the website can send a file's text to Gemini, Grok or Groq, but only after the
 student's Send click on the confirm page, and only when the owner has set a key and a
 model (stage 4). With no key set, nothing can be sent.
 
@@ -489,3 +489,29 @@ unchanged. On the owner's PC the model mattered most (see `docs/LOCAL_WEBSITE.md
 fast model").
 The pages now say a request usually takes 5 to 20 seconds, and the timeout message explains
 what happened in plain words.
+
+
+## Groq: automatic backup for small files (owner's choice)
+
+- Groq (`api.groq.com`, OpenAI-style chat API at `/openai/v1/chat/completions`) is a third
+  provider. Set `UCC_GROQ_API_KEY` and `UCC_GROQ_MODEL` (`openai/gpt-oss-120b`) in Vercel, for
+  Production only. It is never a Send button. Pages never name it; the privacy notice does.
+- **Owner's choice:** this replaces the earlier "no fallback" rule in this one case. When Gemini is
+  busy (a 5xx reply, a timeout or a network failure), `send` sends the same request to Groq
+  automatically, so the student gets the result instead of an error.
+  - It is still **one** request: one ledger row and one count.
+  - Before calling Groq, `services.ai.switch_to` records `answered_by`/`answered_by_model` on that
+    row; if that cannot be recorded, nothing more is sent.
+  - A 4xx reply (wrong key, model or quota), a blocked answer, or an answer in the wrong shape is
+    never switched. There is at most one switch.
+- Groq's free tier allows 8,000 tokens per minute for that model, and one request must fit inside
+  it. Texts over `CHARACTER_LIMITS["groq"]` (12,000 characters) are never sent to Groq: a big file
+  still shows "busy, try again in a few minutes" when Gemini is busy.
+- gpt-oss models reason first. Requests use `reasoning_effort: "low"` and
+  `max_completion_tokens` (which also covers the reasoning). Replies are read by the same strict
+  OpenAI-style reader as Grok.
+- A "/" in the model name is allowed only for Groq, whose model goes in the JSON body. Gemini's
+  model is part of the URL path, so it keeps the old pattern.
+- The ledger accepts provider `groq` and model names with one "/", plus the two `answered_by`
+  columns, which hold no text (migration academics.0028). The website may update only those columns
+  while a request is in progress.
