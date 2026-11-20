@@ -6,7 +6,8 @@
     <p class="eyebrow">Your student account</p>
     <h1>{{ title }}</h1>
     {% if notice %}<p class="muted" role="status">{{ notice }}</p>{% endif %}
-    <p class="muted">Each code works for 1 minute and allows 5 tries. A new code replaces the old one.</p>
+    <p class="muted">Each code works for 5 minutes and allows 5 tries. A new code replaces the old one.</p>
+    <p class="muted">Not there? Check your Spam or Promotions folder for an email from University Command Center, and mark it &ldquo;Not spam&rdquo;.</p>
   </header>
   <form method="post" action="{% url 'accounts:verify-code' %}" class="stacked-form auth-form">
     {% csrf_token %}
