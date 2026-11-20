@@ -8,6 +8,8 @@ passwords in a temporary folder and synthetic data only. Everything is removed a
 """
 import http.client
 import http.cookies
+from email import policy
+from email.parser import Parser
 import json
 import os
 from pathlib import Path
@@ -37,6 +39,16 @@ SMOKE = '''services:
     command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000",
               "--worker-class", "gthread", "--workers", "2", "--threads", "4", "--worker-tmp-dir", "/tmp"]
 '''
+
+
+def console_email_messages(output):
+    """Read complete Django console messages, not duplicated text in MIME alternatives.
+
+    Call Compose logs with --no-log-prefix/--no-color. Only synthetic smoke email uses
+    this console channel; production keeps the approved real backend and privacy checks.
+    """
+    blocks = re.findall(r'(?ms)^(Content-Type:.*?)\n-{79}(?:\n|$)', output.replace('\r\n', '\n'))
+    return [Parser(policy=policy.default).parsestr(block) for block in blocks]
 
 
 class ServerPackageTests(unittest.TestCase):
@@ -166,7 +178,12 @@ class ServerPackageTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('Enter your code', page)
         # The smoke run uses the console email backend, so the code is in the website's output.
-        codes = re.findall(r'sign-up code is (\d{6})', self.compose('logs', 'web').stdout)
+        messages = console_email_messages(self.compose('logs', '--no-log-prefix', '--no-color', 'web').stdout)
+        self.assertEqual(len(messages), 1, 'exactly one sign-up email expected')
+        self.assertEqual(str(messages[0]['To']), details['email'])
+        plain = messages[0].get_body(preferencelist=('plain',))
+        self.assertIsNotNone(plain, 'the sign-up email must retain its plain-text alternative')
+        codes = re.findall(r'sign-up code is (\d{6})', plain.get_content())
         self.assertEqual(len(codes), 1, 'one sign-up code expected')
         status, _, page = self.browse(jar, 'POST', '/accounts/verify/code/', {
             'email': details['email'], 'code': codes[0], 'action': 'verify'})

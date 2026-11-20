@@ -1,6 +1,7 @@
-"""UI1 browser regression tests on real templates, with no DB/server or real students.
+"""UI1 browser regression tests on real templates, with no DB or real students.
 
 Requires test-only Playwright. Use --screenshots-dir to retain synthetic visual evidence.
+Native favicon loading uses a loopback-only static fixture with the existing CSP.
 This is CSS/HTML evidence; real PostgreSQL workflow tests run separately in web_tests.
 """
 import argparse
@@ -127,6 +128,110 @@ class FoundationBrowserTests(unittest.TestCase):
         html = html.replace("</head>", f"<style>html {{font-size:{text_percent}%}}</style></head>")
         page.set_content(html)
         return page
+
+    def test_brand_icons_decode_without_javascript_from_same_origin(self):
+        import mimetypes
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from urllib.parse import urlsplit
+        from django.contrib.staticfiles import finders
+        from accounts.middleware import CONTENT_SECURITY_POLICY
+
+        assets = ('favicon.svg', 'favicon.ico', 'apple-touch-icon.png')
+        images = ''.join(f'<img data-brand-fixture="{name}" alt="Synthetic icon decoding fixture" '
+                         f'src="/static/accounts/brand/{name}">' for name in assets)
+        pages = {}
+        for public in (False, True):
+            html = render_to_string('accounts/message.html', {
+                'website_enabled': True, 'workspace_authenticated': not public,
+                'navigation': [], 'message': 'Synthetic icon fixture.', 'csrf_token': 'synthetic',
+            })
+            pages[f'/synthetic-{public}/'] = html.replace('</body>', images + '</body>').encode()
+
+        served = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                path = urlsplit(self.path).path
+                body, mime, status = b'', 'text/plain', 404
+                if path in pages:
+                    body, mime, status = pages[path], 'text/html; charset=utf-8', 200
+                elif path.startswith('/static/'):
+                    local = finders.find(path[len('/static/'):])
+                    if local:
+                        body, mime, status = Path(local).read_bytes(), mimetypes.guess_type(local)[0], 200
+                served.append((path, status, mime, len(body)))
+                self.send_response(status)
+                self.send_header('Content-Type', mime or 'application/octet-stream')
+                self.send_header('Content-Length', str(len(body)))
+                self.send_header('Content-Security-Policy', CONTENT_SECURITY_POLICY)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass  # Synthetic local fixture; do not add URL/header logging.
+
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = f'http://127.0.0.1:{server.server_port}'
+            for public in (False, True):
+                with self.subTest(public=public):
+                    context = self.browser.new_context(viewport={'width': 390, 'height': 900},
+                                                       java_script_enabled=False)
+                    self.addCleanup(context.close)
+                    outside = []
+
+                    # Chromium/Playwright interception special-cases favicon.ico. Use
+                    # genuine loopback HTTP with the real same-origin CSP, not Fetch routing.
+                    context.on('request', lambda request, observed=outside:
+                               observed.append(request.url) if not request.url.startswith(origin + '/') else None)
+                    page = context.new_page()
+                    response = page.goto(f'{origin}/synthetic-{public}/', wait_until='networkidle')
+                    self.assertEqual(response.headers['content-security-policy'], CONTENT_SECURITY_POLICY)
+                    links = page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]')
+                    self.assertEqual(links.count(), 3)
+                    for i in range(links.count()):
+                        self.assertTrue(links.nth(i).get_attribute('href').startswith('/static/accounts/brand/'))
+                    for name in assets:
+                        image = page.locator(f'img[data-brand-fixture="{name}"]')
+                        state = image.evaluate('(image) => ({complete:image.complete, width:image.naturalWidth, height:image.naturalHeight})')
+                        self.assertTrue(state['complete'] and state['width'] > 0 and state['height'] > 0,
+                                        json.dumps({'asset': name, 'image': state, 'served': served}))
+                    self.assertEqual(outside, [])
+                    context.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_branded_email_reflows_and_needs_no_external_assets(self):
+        from accounts.email_content import branded_html
+
+        body = ('Your University Command Center sign-up code is 012345\n\n'
+                'It works for 1 minute. Enter it on the page that opened after you registered.\n\n'
+                'Ignore this email if you did not request it.')
+        original = branded_html(body, code='012345', action_url='https://ucc.example.invalid/accounts/verify/code/')
+        self.assertIsNotNone(original)
+        for width, scale in ((320, 100), (320, 200), (390, 100), (390, 200), (1280, 100)):
+            with self.subTest(width=width, text_percent=scale):
+                context = self.browser.new_context(viewport={'width': width, 'height': 1000},
+                                                   java_script_enabled=False)
+                self.addCleanup(context.close)
+                requests = []
+                context.route('**/*', lambda route: (requests.append(route.request.url), route.abort()))
+                page = context.new_page()
+                html = original.replace('</head>',
+                    f'<style>body {{font-size:{16 * scale / 100}px !important;}}</style></head>')
+                page.set_content(html)
+                self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), width)
+                self.assertIn('012345', page.locator('body').inner_text())
+                self.assertIn('It works for 1 minute.', page.locator('body').inner_text())
+                self.assertEqual(requests, [])
+                self.assertEqual(page.locator('img,script,iframe,form').count(), 0)
+                if SCREENSHOTS and (width, scale) in ((390, 100), (320, 200)):
+                    page.screenshot(path=str(SCREENSHOTS / f'otp-email-{width}-text-{scale}.png'), full_page=True)
 
     def test_reflow_and_shared_auth_shell(self):
         for width, height in [(320, 800), (360, 800), (390, 844), (768, 1024),

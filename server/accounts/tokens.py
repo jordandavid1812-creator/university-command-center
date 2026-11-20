@@ -10,15 +10,17 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 from .models import AccountToken, Student
+from .email_content import branded_html
 
 
 GENERIC_EMAIL_MESSAGE = 'If these details are eligible, an email with the next steps will be sent.'
 
 
-def _deliver(subject, link, email):
+def _deliver(subject, link, email, *, code=None, action_url=None):
     try:
-        send_mail(subject, f'{link}\n\nIgnore this email if you did not request it.',
-                  settings.DEFAULT_FROM_EMAIL, [email])
+        body = f'{link}\n\nIgnore this email if you did not request it.'
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email],
+                  html_message=branded_html(body, code=code, action_url=action_url))
     except Exception:
         # Keep account existence and link secrets out of failure responses/logs.
         logging.getLogger(__name__).warning('Account email delivery failed; retry through the recovery form.')
@@ -38,7 +40,7 @@ def _issue_locked(student, purpose):
     link = settings.AUTH_LINK_ORIGIN.rstrip('/') + path
     subject = 'Verify your University Command Center email' if purpose == 'verify' else 'Reset your University Command Center password'
     # Commit the digest before sending. Console/locmem only in this milestone.
-    transaction.on_commit(lambda: _deliver(subject, link, student.email), using='auth')
+    transaction.on_commit(lambda: _deliver(subject, link, student.email, action_url=link), using='auth')
 
 
 def _issue_verification(student):
