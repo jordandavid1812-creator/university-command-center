@@ -40,7 +40,11 @@ class PrivacyMigrationTests(TransactionTestCase):
             self.assertEqual(Student.objects.get(pk=legacy_signup.pk).full_name, '')
             old_profile = OldProfile.objects.get(pk=profile.pk)
             old_profile.display_name = 'Old code still works';old_profile.save()
-            self.assertEqual(Profile.objects.get(pk=profile.pk).matric_number, 'SYNTHETIC-LEGACY-ID')
+            # Owner decision: saved IDs are erased by academics.0027; the empty column stays for now.
+            self.assertEqual(Profile.objects.get(pk=profile.pk).matric_number, '')
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT relforcerowsecurity FROM pg_class WHERE oid='academics_studentprofile'::regclass")
+                self.assertEqual(cursor.fetchone(), (True,))  # forced RLS restored after the erasure
             # New profile creation need not collect an ID; the retained column defaults blank.
             new_student = Student.objects.create(username='synthetic.new.signup', password='!synthetic', full_name='Self Reported Name')
             new_profile = Profile.objects.create(owner_id=new_student.pk)
@@ -53,7 +57,7 @@ class PrivacyMigrationTests(TransactionTestCase):
             self.assertEqual((saved.actual_grade, saved.credit_units), ('B', 3))
             # Reverse only on this disposable database, never a proposed production action.
             MigrationExecutor(connection).migrate(previous)
-            self.assertEqual(OldProfile.objects.get(pk=profile.pk).matric_number, 'SYNTHETIC-LEGACY-ID')
+            self.assertEqual(OldProfile.objects.get(pk=profile.pk).matric_number, '')  # erasure is one-way
             self.assertTrue(OldStudent.objects.filter(pk=new_student.pk).exists())
         finally:
             MigrationExecutor(connection).migrate(latest)

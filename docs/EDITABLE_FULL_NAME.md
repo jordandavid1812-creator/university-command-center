@@ -29,12 +29,13 @@ A full name is optional, self-reported personal data, not verified identity.
 - The previous-name comparison rejects a currently different value in stale tabs. It is a
   cosmetic value guard, not a version-history token: A→B→A changes remain undetected.
 
-## Expansion first; erasure in a later contract release
+## Two-step removal: erase values now, drop the empty column later (owner decision)
 
 The current form/service rejects matric-number input, Settings does not display it, and
-exports omit it. **This PR no longer drops or erases the legacy database column.** Existing
-stored IDs therefore remain private in the active database until a later reviewed contract
-release. Do not report physical erasure as complete after this PR.
+exports omit it. **`academics.0027_erase_legacy_matric_numbers` erases every saved value**
+(sets it to `''`) when the migration is applied. The now-empty column stays until a later
+reviewed release drops it, so old application code keeps working during the switch. Older
+encrypted backups can still contain IDs until they expire (up to 30 days).
 
 - `accounts.0007` adds `full_name` with persistent database default `''` (`db_default`) as
   well as the Python default. Old signup inserts that omit the column continue to work.
@@ -42,6 +43,12 @@ release. Do not report physical erasure as complete after this PR.
   adds persistent blank database default, and marks the model field non-editable. It does
   not collect IDs through any current form/service. Existing grants needed by old code
   remain during the overlap; no new role gains access to existing private IDs.
+- `academics.0027_erase_legacy_matric_numbers` sets every stored ID to `''`. Forced RLS
+  also binds the table owner on plain PostgreSQL, so the migration lifts the forcing only
+  inside its own transaction and restores it before commit (the migration test checks it).
+  It cannot be undone: reversing it leaves the values empty. Old code that writes an ID
+  between the migration and the new deployment could store one again; the later contract
+  release removes the column entirely.
 - `0014_schema.sql` and `0015_security.sql` are generated from those migrations/grants.
   Previously published DROP-column SQL from the earlier review head is superseded. Neither
   version was applied by this task. Inspect real migration history before any future action;
@@ -106,7 +113,6 @@ historical-schema fixture only; academic/security assertions are retained):
 - `server/web_tests/test_profile.py`: no matric collection/display; old posted ID is rejected.
 - `server/web_tests/test_results_pdf.py`: no removed ID label; retain existing PDF assertions.
 - `server/web_tests/test_settings_data.py`: export version 2, own name, omitted matric key.
-- `tools/test_redesign_browser.py`: remove unused old masked-matric fixture argument.
 
 The historical test-column accommodation is test scaffolding, not a production missing-column
 fallback. No credential, isolation, academic, query-budget or rate-limit assertion is relaxed.

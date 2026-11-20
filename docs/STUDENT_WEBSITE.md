@@ -625,8 +625,9 @@ Registration optionally collects a separate, self-reported full name on accounts
 Existing users may edit or clear it in Settings; username and credential/session behaviour
 stay unchanged. The existing optional profile display name remains a separate greeting preference.
 The additive privacy migration retains the legacy StudentProfile.matric_number column and CHECK
-with a persistent blank default while removing current input/display/export collection. Permanent
-erasure is deferred to a later reviewed contract release after old code is retired. Account full_name
+with a persistent blank default while removing current input/display/export collection, and
+academics.0027 erases every saved value. Dropping the empty column is deferred to a later reviewed
+contract release after old code is retired. Account full_name
 has its own persistent blank database default. Historical masked-ID descriptions are not current UI.
 No live migration has occurred. See [Editable full name](EDITABLE_FULL_NAME.md) for rollout,
 backup-schema compatibility, explicit test-change approval and the remaining erasure gate.

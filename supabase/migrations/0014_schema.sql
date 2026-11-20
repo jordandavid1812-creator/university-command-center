@@ -4,6 +4,7 @@
 -- Run the files in number order. Do not save this query as a snippet.
 
 -- migration: academics.0026_legacy_matric_database_default
+-- migration: academics.0027_erase_legacy_matric_numbers
 -- migration: accounts.0007_student_full_name_student_student_full_name_safe
 
 BEGIN;
@@ -12,6 +13,14 @@ BEGIN;
 -- Alter field matric_number on studentprofile
 --
 ALTER TABLE "academics_studentprofile" ALTER COLUMN "matric_number" SET DEFAULT '';
+--
+-- Raw SQL operation
+--
+
+ALTER TABLE academics_studentprofile NO FORCE ROW LEVEL SECURITY;
+UPDATE academics_studentprofile SET matric_number = '' WHERE matric_number <> '';
+ALTER TABLE academics_studentprofile FORCE ROW LEVEL SECURITY;
+
 --
 -- Add field full_name to student
 --
@@ -22,6 +31,7 @@ ALTER TABLE "accounts_student" ADD COLUMN "full_name" varchar(150) DEFAULT '' NO
 ALTER TABLE "accounts_student" ADD CONSTRAINT "student_full_name_safe" CHECK (("full_name" = (TRIM("full_name")) AND NOT ("full_name"::text ~  E'[\\x01-\\x1f\\x7f-\\x9f]')));
 INSERT INTO "django_migrations" ("app", "name", "applied") VALUES
     ('academics', '0026_legacy_matric_database_default', now()),
+    ('academics', '0027_erase_legacy_matric_numbers', now()),
     ('accounts', '0007_student_full_name_student_student_full_name_safe', now());
 
 COMMIT;
