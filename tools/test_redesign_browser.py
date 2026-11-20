@@ -83,7 +83,7 @@ def settings_html():
         context = foundation.navigation(request)
     profile = NS(display_name='Synthetic Student', institution='Synthetic University', programme='Synthetic Studies',
                  level='100', get_level_display=lambda: '100 level')
-    context.update(request=request, csrf_token='synthetic-token', messages=[], profile=profile, masked_matric='••••••0000',
+    context.update(request=request, csrf_token='synthetic-token', messages=[], profile=profile,
                    display_form=DisplayForm(initial={'theme': 'system'}),
                    storage={'files': 1, 'max_files': 50, 'bytes': 2_900_000, 'max_mib': 200})
     return render_to_string('student_web/settings.html', context)

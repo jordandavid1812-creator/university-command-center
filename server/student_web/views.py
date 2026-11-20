@@ -1,6 +1,6 @@
 from functools import wraps
 from django.contrib import messages
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.conf import settings as django_settings
@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
+from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods
 from decimal import ROUND_CEILING, Decimal
 from grading_policy import LEGACY_POLICY
@@ -62,6 +63,8 @@ def page_context(page, parameters):
 def dashboard(request, identity):
     today = timezone.localdate()
     workspace = data.snapshot(identity, today)
+    if not workspace.get('greeting_name'):
+        workspace['greeting_name'] = request.user.full_name
     selector = forms.SemesterFilter(request.GET, semesters=workspace['semesters'])
     if not selector.is_valid():
         return error_page(request, 'Choose a semester', 'Choose one of your semesters from the dashboard selector.', 400)
@@ -599,16 +602,40 @@ def standing_print(request, identity):
 def settings(request, identity):
     form = forms.DisplayForm(initial={'theme': display_theme(request)})
     profile = services.profiles.current(identity)
-    matric = profile.matric_number if profile else ''
-    # Show the last four characters only when at least half of the value stays hidden.
-    masked = ('\u2022' * 6 + matric[-4:]) if len(matric) >= 8 else ('\u2022' * 6 if matric else '')
     bands, custom = _bands_of(profile)
     scale = profile.grading_scale if profile else 'five'
     return render(request, 'student_web/settings.html', {'display_form': form, 'profile': profile,
-                  'masked_matric': masked, 'storage': services.materials.storage(identity),
+                  'storage': services.materials.storage(identity),
                   'class_bands': list(zip(CLASS_NAMES, bands)) if bands else [], 'class_bands_custom': custom,
                   'scale': data.SCALE_TEXT[scale], 'scale_form': forms.GradingScaleForm(initial={
                       'scale': scale, 'version': profile.record_version if profile else None})})
+
+
+@protected(('GET', 'POST'))
+@sensitive_post_parameters()
+def full_name_edit(request, identity):
+    from academics.ownership import require_identity
+    from accounts.models import Student
+    from accounts.names import clean_full_name
+    # Account name uses the auth connection, never runtime access to account records.
+    with transaction.atomic(using='auth'):
+        student = Student.objects.using('auth').select_for_update().get(pk=identity.student_id)
+        require_identity(identity)  # Revalidate the live session/password while the account is locked.
+        form = forms.FullNameForm(request.POST if request.method == 'POST' else None,
+                                  initial={'full_name': student.full_name, 'previous_name': student.full_name})
+        status = 200
+        if request.method == 'POST' and form.is_valid():
+            if form.cleaned_data['previous_name'] != student.full_name:
+                form.add_error(None, 'Your name changed in another tab. Reload before saving again.')
+                status = 409
+            else:
+                student.full_name = clean_full_name(form.cleaned_data['full_name'])
+                student.save(using='auth', update_fields=['full_name', 'updated_at'])
+                messages.success(request, 'Full name saved. Your username and sign-in details are unchanged.')
+                return redirect('student_web:settings')
+        elif request.method == 'POST':
+            status = 400
+    return render(request, 'student_web/full_name.html', {'form': form}, status=status)
 
 
 @protected(('POST',))
@@ -737,7 +764,7 @@ def account_delete(request, identity):
 def data_export(request, identity):
     records = queries.export_records(identity)
     now = timezone.now()
-    body = export.document(records, {'username': request.user.username, 'email': request.user.email}, now)
+    body = export.document(records, {'username': request.user.username, 'email': request.user.email, 'full_name': request.user.full_name}, now)
     response = HttpResponse(body, content_type='application/json; charset=utf-8')
     response['Content-Disposition'] = content_disposition_header(True, f'ucc-my-data-{timezone.localdate(now):%Y-%m-%d}.json')
     response['X-Content-Type-Options'] = 'nosniff'

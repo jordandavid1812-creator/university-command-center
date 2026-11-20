@@ -9,7 +9,7 @@ from academics.services import InvalidRecord, RecordConflict, profiles
 from .base import StudentSecurityCase
 
 DETAILS = {"display_name": "Synthetic A", "institution": "Synthetic University", "programme": "B.Sc. Testing",
-           "level": "200", "matric_number": "SYN/2026/0001"}
+           "level": "200"}
 
 
 class StudentProfileSecurityTests(StudentSecurityCase):
@@ -24,13 +24,13 @@ class StudentProfileSecurityTests(StudentSecurityCase):
 
     def insert(self, owner):
         return ("""INSERT INTO academics_studentprofile (id, owner_id, display_name, institution, programme, level,
-                   matric_number, record_version, created_at, updated_at)
-                   VALUES (%s, %s, 'X', '', '', '', '', 1, now(), now())""", [uuid.uuid4(), owner])
+                   grading_scale, record_version, created_at, updated_at)
+                   VALUES (%s, %s, 'X', '', '', '', 'five', 1, now(), now())""", [uuid.uuid4(), owner])
 
     def setUp(self):
         super().setUp()
         self.profile_a = profiles.create(self.a, **DETAILS)
-        self.profile_b = profiles.create(self.b, **dict(DETAILS, display_name="Synthetic B", matric_number="SYN/B/9"))
+        self.profile_b = profiles.create(self.b, **dict(DETAILS, display_name="Synthetic B"))
 
     def test_rls_is_enabled_forced_and_covers_all_commands(self):
         rows = self.sql("""SELECT c.relrowsecurity, c.relforcerowsecurity, p.polcmd,
@@ -45,7 +45,7 @@ class StudentProfileSecurityTests(StudentSecurityCase):
 
     def test_each_student_reads_and_changes_only_their_own_profile(self):
         with student_transaction(self.a):
-            self.assertEqual(self.sql("SELECT matric_number FROM academics_studentprofile"), [("SYN/2026/0001",)])
+            self.assertEqual(self.sql("SELECT display_name FROM academics_studentprofile"), [("Synthetic A",)])
             self.assertEqual(self.sql("UPDATE academics_studentprofile SET display_name='Changed' WHERE id=%s",
                                       [self.profile_b.pk]), 0)
             self.denied(*self.insert(self.b.student_id))

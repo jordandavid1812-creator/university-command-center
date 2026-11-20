@@ -295,7 +295,6 @@ class MaterialText(ValidatedRecord):
 LEVEL_CHOICES = [("100", "100 level"), ("200", "200 level"), ("300", "300 level"), ("400", "400 level"),
                  ("500", "500 level"), ("600", "600 level"), ("700", "700 level"), ("PG", "Postgraduate")]
 GRADING_SCALES = [("five", "5-point (A=5 to F=0)"), ("four", "4-point (A=4 to F=0, no E)")]
-MATRIC_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9/._-]{0,31}$"
 NO_EDGE_SPACE = r"^\s|\s$"
 
 
@@ -307,8 +306,6 @@ class StudentProfile(ValidatedRecord):
     institution = models.CharField(max_length=150, blank=True)
     programme = models.CharField(max_length=150, blank=True)
     level = models.CharField(max_length=3, blank=True, choices=LEVEL_CHOICES)
-    matric_number = models.CharField(max_length=32, blank=True, validators=[
-        RegexValidator(MATRIC_PATTERN, "Use letters, digits and / . _ - only.")])
     # The student's own class-of-degree bands (lowest CGPA for each class). All five empty means
     # "use the common guide" (academic_logic.DEFAULT_CLASS_BANDS). A guide only, never a ruling.
     first_class_min = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
@@ -325,8 +322,6 @@ class StudentProfile(ValidatedRecord):
         constraints = [
             models.CheckConstraint(condition=models.Q(level__in=[""] + [code for code, _ in LEVEL_CHOICES]),
                                    name="profile_level_valid"),
-            models.CheckConstraint(condition=models.Q(matric_number="") | models.Q(matric_number__regex=MATRIC_PATTERN),
-                                   name="profile_matric_format"),
             models.CheckConstraint(condition=~models.Q(display_name__regex=NO_EDGE_SPACE)
                                    & ~models.Q(institution__regex=NO_EDGE_SPACE)
                                    & ~models.Q(programme__regex=NO_EDGE_SPACE),

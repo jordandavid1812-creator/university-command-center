@@ -46,6 +46,11 @@ class Command(BaseCommand):
             # email: only accounts.email_change, after the student's password and a code sent to the
             # new address. Username, active status and IDs stay unchangeable.
             cursor.execute(sql.SQL('GRANT UPDATE (password, last_login, email, email_verified_at, updated_at) ON accounts_student TO {}').format(sql.Identifier(role)))
+            # Full-name column is absent when historical migration tests roll back accounts.
+            cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.accounts_student'::regclass
+                              AND attname = 'full_name' AND NOT attisdropped)""")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL('GRANT UPDATE (full_name) ON accounts_student TO {}').format(sql.Identifier(role)))
             cursor.execute(sql.SQL('GRANT SELECT, INSERT, DELETE ON accounts_accounttoken, accounts_auththrottle, django_session TO {}').format(sql.Identifier(role)))
             for table, fields in (
                 ('accounts_accounttoken', ['consumed_at']),

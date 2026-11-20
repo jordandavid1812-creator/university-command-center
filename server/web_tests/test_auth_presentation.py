@@ -34,7 +34,7 @@ class AuthPresentationTests(WebsiteCase):
     def test_public_forms_keep_native_fields_and_existing_destinations(self):
         for path, fields in (
             ('/accounts/login/', {'username', 'password'}),
-            ('/accounts/register/', {'username', 'email', 'password1', 'password2'}),
+            ('/accounts/register/', {'full_name', 'username', 'email', 'password1', 'password2'}),
             ('/accounts/reset/', {'email'}),
             ('/accounts/verify/request/', {'email'}),
         ):

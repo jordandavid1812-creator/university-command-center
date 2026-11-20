@@ -5,7 +5,20 @@ from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, Se
 from .models import Student
 
 
+class FullNameField(forms.CharField):
+    def __init__(self, *args, **kwargs):
+        kwargs.update(max_length=150, required=False, strip=False, label="Full name (optional)",
+                      help_text="Your self-reported name, separate from your username. You can edit or clear it in Settings.",
+                      widget=forms.TextInput(attrs={"autocomplete": "name"}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value):
+        from .names import clean_full_name
+        return super().clean(clean_full_name(value or ""))
+
+
 class RegistrationForm(forms.Form):
+    full_name = FullNameField()
     username = forms.RegexField(r"\A[A-Za-z0-9][A-Za-z0-9_.-]{2,29}\Z", max_length=30,
                                help_text="3–30 ASCII characters; usernames are case-sensitive.")
     email = forms.EmailField(max_length=254)

@@ -3,9 +3,10 @@ import uuid
 from decimal import Decimal
 from django import forms
 from django.conf import settings
+from accounts.forms import FullNameField
 from grading_policy import LEGACY_POLICY
 from academic_logic import CLASS_NAMES, checked_bands, checked_credits, checked_target, checked_grade, GRADE_POINTS
-from academics.models import CLASS_KINDS, GRADING_SCALES, LEVEL_CHOICES, MATRIC_PATTERN, WEEKDAYS, Course
+from academics.models import CLASS_KINDS, GRADING_SCALES, LEVEL_CHOICES, WEEKDAYS, Course
 from academics.queries import MAX_PREDICTION_COURSES, WorkspaceLimit
 from .upload_validation import (MAX_UPLOAD_BYTES, describe_size, validate_pdf_content, validate_text_content,
                                 validate_upload_metadata)
@@ -264,9 +265,7 @@ class ProfileForm(StrictForm):
     programme = forms.CharField(max_length=150, required=False, label='Programme',
                                 help_text='For example, B.Sc. Computer Science.')
     level = forms.ChoiceField(required=False, label='Current level', choices=[('', 'Not set')] + LEVEL_CHOICES)
-    matric_number = forms.RegexField(MATRIC_PATTERN, max_length=32, required=False, label='Matric / student ID number',
-                                     help_text='Only you can see this. Letters, digits and / . _ - only.',
-                                     error_messages={'invalid': 'Use letters, digits and / . _ - only.'})
+
 
     def clean(self):
         values = super().clean()
@@ -484,3 +483,8 @@ class AiSendForm(AiToolForm):
 class ConfirmDeleteForm(StrictForm):
     confirm = forms.BooleanField(label='I confirm I want to delete this result')
 
+
+
+class FullNameForm(StrictForm):
+    full_name = FullNameField()
+    previous_name = forms.CharField(required=False, max_length=150, widget=forms.HiddenInput())

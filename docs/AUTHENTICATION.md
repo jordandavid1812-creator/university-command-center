@@ -28,7 +28,7 @@ application database. It has no migration/DBA connection or credentials:
 | Connection/role | Allowed | Not allowed |
 | --- | --- | --- |
 | `default`, academic runtime | Existing academic DML, column-limited updates and signed-context verifier | Account/session/token/throttle reads; private signing key; DDL, TRUNCATE, role membership/bypass |
-| `auth`, authentication role | Account SELECT/INSERT; UPDATE only password, last_login, email, email_verified_at and updated_at (email only through accounts.email_change). Token/throttle/session DML limited to needed columns | Academic records; private schemas/key/verifier; migration history; account deletion; changing account IDs, usernames or active status; DDL/TRUNCATE/bypass |
+| `auth`, authentication role | Account SELECT/INSERT; UPDATE only password, last_login, email, email_verified_at, full_name and updated_at (email only through accounts.email_change). Token/throttle/session DML limited to needed columns | Academic records; private schemas/key/verifier; migration history; account deletion; changing account IDs, usernames or active status; DDL/TRUNCATE/bypass |
 | Offline migrator | Schema ownership, migrations, role grant/key provisioning | Must NEVER serve web requests or be configured in the application process |
 
 `AuthenticationRouter` sends account/session ORM reads and writes to `auth`.
@@ -495,3 +495,13 @@ restore their original logging/hooks. No migration reversal, grants, password or
 session rewrites are needed. Rollback restores less-private diagnostics; it is not
 permission to serve real data. Blocked/partial stream writes and diagnostic loss
 remain accepted development limitations. See [B1b evidence](security/B1B_IMPLEMENTATION_EVIDENCE.md).
+
+## Optional account name and student-ID removal
+
+See [EDITABLE_FULL_NAME.md](EDITABLE_FULL_NAME.md). Registration optionally stores a self-reported
+Unicode full_name independently of username. Existing accounts start blank; authenticated owners
+can edit or clear it without changing credentials, verified email or session hashes. The auth role
+gets only the additional column-limited UPDATE(full_name); academic runtime still has no account
+read/write rights. StudentProfile.matric_number is removed by a forward erasure migration.
+Review the maintenance/grant/Supabase sequence before any separately authorized rollout. Older
+backups are not purged by that migration; reversal cannot recover erased values.

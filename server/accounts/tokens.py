@@ -53,7 +53,9 @@ def _issue_verification(student):
 def register(values):
     try:
         with transaction.atomic(using='auth'):
-            student = Student(username=values['username'], email=values['email'])
+            from .names import clean_full_name
+            student = Student(username=values['username'], email=values['email'],
+                              full_name=clean_full_name(values.get('full_name', '')))
             student.set_password(values['password1'])
             student.save(using='auth', force_insert=True)
             _issue_verification(student)
