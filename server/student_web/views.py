@@ -617,9 +617,11 @@ def full_name_edit(request, identity):
     from academics.ownership import require_identity
     from accounts.models import Student
     from accounts.names import clean_full_name
+    # Validate before reading the capability ID, then revalidate under the account lock.
+    student_id = require_identity(identity)
     # Account name uses the auth connection, never runtime access to account records.
     with transaction.atomic(using='auth'):
-        student = Student.objects.using('auth').select_for_update().filter(pk=identity.student_id).first()
+        student = Student.objects.using('auth').select_for_update().filter(pk=student_id).first()
         if student is None:
             raise OwnershipRequired()
         require_identity(identity)  # Revalidate the live session/password while the account is locked.

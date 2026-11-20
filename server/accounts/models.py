@@ -22,7 +22,7 @@ class Student(AbstractBaseUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = models.CharField(max_length=150, unique=True,
                                 validators=[UnicodeUsernameValidator()])
-    full_name = models.CharField(max_length=150, blank=True, default="", validators=[validate_full_name])
+    full_name = models.CharField(max_length=150, blank=True, default="", db_default="", validators=[validate_full_name])
     email = models.EmailField(max_length=254, null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)

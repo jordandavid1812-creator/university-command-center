@@ -91,7 +91,8 @@ class Command(BaseCommand):
                 cursor.execute(sql.SQL("GRANT UPDATE ({}) ON public.{} TO {}").format(
                     sql.SQL(", ").join(map(sql.Identifier, columns)), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT EXECUTE ON FUNCTION ucc_security.current_student() TO {}").format(sql.Identifier(role)))
-            # Historical-schema provisioning only: the privacy migration drops this column.
+            # Keep existing legacy-column grants during the additive rollout. A later
+            # reviewed contract release can drop the column after old code is retired.
             cursor.execute("""SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.academics_studentprofile'::regclass
                               AND attname = 'matric_number' AND NOT attisdropped)""")
             if cursor.fetchone()[0]:

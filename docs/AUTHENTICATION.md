@@ -502,6 +502,6 @@ See [EDITABLE_FULL_NAME.md](EDITABLE_FULL_NAME.md). Registration optionally stor
 Unicode full_name independently of username. Existing accounts start blank; authenticated owners
 can edit or clear it without changing credentials, verified email or session hashes. The auth role
 gets only the additional column-limited UPDATE(full_name); academic runtime still has no account
-read/write rights. StudentProfile.matric_number is removed by a forward erasure migration.
+read/write rights. Matric input/display/export are removed; the legacy column is retained temporarily for old-code compatibility, with erasure deferred to a separate contract release.
 Review the maintenance/grant/Supabase sequence before any separately authorized rollout. Older
-backups are not purged by that migration; reversal cannot recover erased values.
+backups are not purged automatically; an incompatible-schema restore can fail, and a future column drop cannot recover erased values by reversal.

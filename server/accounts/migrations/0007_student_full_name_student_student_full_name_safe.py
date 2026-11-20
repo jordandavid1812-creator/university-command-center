@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='student',
             name='full_name',
-            field=models.CharField(blank=True, default='', max_length=150, validators=[accounts.names.validate_full_name]),
+            field=models.CharField(blank=True, db_default='', default='', max_length=150, validators=[accounts.names.validate_full_name]),
         ),
         migrations.AddConstraint(
             model_name='student',

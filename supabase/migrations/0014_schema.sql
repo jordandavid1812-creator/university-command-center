@@ -3,30 +3,25 @@
 -- Supabase dashboard > SQL Editor > New query: paste ALL of this file and press Run.
 -- Run the files in number order. Do not save this query as a snippet.
 
--- migration: academics.0026_remove_studentprofile_profile_matric_format_and_more
+-- migration: academics.0026_legacy_matric_database_default
 -- migration: accounts.0007_student_full_name_student_student_full_name_safe
 
 BEGIN;
 
 --
--- Remove constraint profile_matric_format from model studentprofile
+-- Alter field matric_number on studentprofile
 --
-ALTER TABLE "academics_studentprofile" DROP CONSTRAINT "profile_matric_format";
---
--- Remove field matric_number from studentprofile
---
-ALTER TABLE "academics_studentprofile" DROP COLUMN "matric_number" CASCADE;
+ALTER TABLE "academics_studentprofile" ALTER COLUMN "matric_number" SET DEFAULT '';
 --
 -- Add field full_name to student
 --
 ALTER TABLE "accounts_student" ADD COLUMN "full_name" varchar(150) DEFAULT '' NOT NULL;
-ALTER TABLE "accounts_student" ALTER COLUMN "full_name" DROP DEFAULT;
 --
 -- Create constraint student_full_name_safe on model student
 --
 ALTER TABLE "accounts_student" ADD CONSTRAINT "student_full_name_safe" CHECK (("full_name" = (TRIM("full_name")) AND NOT ("full_name"::text ~  E'[\\x01-\\x1f\\x7f-\\x9f]')));
 INSERT INTO "django_migrations" ("app", "name", "applied") VALUES
-    ('academics', '0026_remove_studentprofile_profile_matric_format_and_more', now()),
+    ('academics', '0026_legacy_matric_database_default', now()),
     ('accounts', '0007_student_full_name_student_student_full_name_safe', now());
 
 COMMIT;

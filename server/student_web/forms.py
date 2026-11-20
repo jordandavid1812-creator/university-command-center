@@ -260,12 +260,11 @@ class DeleteForm(StrictForm):
 
 class ProfileForm(StrictForm):
     display_name = forms.CharField(max_length=80, required=False, label='Display name',
-                                   help_text='How the app greets you. Leave blank to use your username.')
+                                   help_text='How the app greets you. Leave blank to use your full name, or username if no full name is set.')
     institution = forms.CharField(max_length=150, required=False, label='University or institution')
     programme = forms.CharField(max_length=150, required=False, label='Programme',
                                 help_text='For example, B.Sc. Computer Science.')
     level = forms.ChoiceField(required=False, label='Current level', choices=[('', 'Not set')] + LEVEL_CHOICES)
-
 
     def clean(self):
         values = super().clean()
@@ -482,7 +481,6 @@ class AiSendForm(AiToolForm):
 
 class ConfirmDeleteForm(StrictForm):
     confirm = forms.BooleanField(label='I confirm I want to delete this result')
-
 
 
 class FullNameForm(StrictForm):

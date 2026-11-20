@@ -66,7 +66,7 @@ REVOKE ALL ("id", "created_at", "updated_at", "original_code", "normalized_code"
 REVOKE ALL ("id", "created_at", "updated_at", "content", "sha256", "material_id", "owner_id") ON "public"."academics_materialfile" FROM "ucc_auth";
 REVOKE ALL ("id", "created_at", "updated_at", "text", "truncated", "problem", "material_id", "owner_id") ON "public"."academics_materialtext" FROM "ucc_auth";
 REVOKE ALL ("id", "created_at", "updated_at", "label", "display_order", "owner_id", "record_version") ON "public"."academics_semester" FROM "ucc_auth";
-REVOKE ALL ("id", "created_at", "updated_at", "display_name", "institution", "programme", "level", "record_version", "owner_id", "first_class_min", "pass_min", "second_lower_min", "second_upper_min", "third_class_min", "grading_scale") ON "public"."academics_studentprofile" FROM "ucc_auth";
+REVOKE ALL ("id", "created_at", "updated_at", "display_name", "institution", "programme", "level", "matric_number", "record_version", "owner_id", "first_class_min", "pass_min", "second_lower_min", "second_upper_min", "third_class_min", "grading_scale") ON "public"."academics_studentprofile" FROM "ucc_auth";
 REVOKE ALL ("id", "created_at", "updated_at", "tool", "provider", "model", "status", "characters_sent", "truncated", "consent_token_hash", "error_category", "owner_id", "status_class") ON "public"."academics_studyairequest" FROM "ucc_auth";
 REVOKE ALL ("id", "created_at", "updated_at", "tool", "question", "result", "shape_version", "material_id", "owner_id", "request_id") ON "public"."academics_studyairesult" FROM "ucc_auth";
 REVOKE ALL ("id", "created_at", "updated_at", "title", "original_filename", "file_type", "size_bytes", "record_version", "course_id", "owner_id") ON "public"."academics_studymaterial" FROM "ucc_auth";
@@ -123,7 +123,7 @@ REVOKE ALL ("id", "created_at", "updated_at", "original_code", "normalized_code"
 REVOKE ALL ("id", "created_at", "updated_at", "content", "sha256", "material_id", "owner_id") ON "public"."academics_materialfile" FROM PUBLIC, "ucc_runtime";
 REVOKE ALL ("id", "created_at", "updated_at", "text", "truncated", "problem", "material_id", "owner_id") ON "public"."academics_materialtext" FROM PUBLIC, "ucc_runtime";
 REVOKE ALL ("id", "created_at", "updated_at", "label", "display_order", "owner_id", "record_version") ON "public"."academics_semester" FROM PUBLIC, "ucc_runtime";
-REVOKE ALL ("id", "created_at", "updated_at", "display_name", "institution", "programme", "level", "record_version", "owner_id", "first_class_min", "pass_min", "second_lower_min", "second_upper_min", "third_class_min", "grading_scale") ON "public"."academics_studentprofile" FROM PUBLIC, "ucc_runtime";
+REVOKE ALL ("id", "created_at", "updated_at", "display_name", "institution", "programme", "level", "matric_number", "record_version", "owner_id", "first_class_min", "pass_min", "second_lower_min", "second_upper_min", "third_class_min", "grading_scale") ON "public"."academics_studentprofile" FROM PUBLIC, "ucc_runtime";
 REVOKE ALL ("id", "created_at", "updated_at", "tool", "provider", "model", "status", "characters_sent", "truncated", "consent_token_hash", "error_category", "owner_id", "status_class") ON "public"."academics_studyairequest" FROM PUBLIC, "ucc_runtime";
 REVOKE ALL ("id", "created_at", "updated_at", "tool", "question", "result", "shape_version", "material_id", "owner_id", "request_id") ON "public"."academics_studyairesult" FROM PUBLIC, "ucc_runtime";
 REVOKE ALL ("id", "created_at", "updated_at", "title", "original_filename", "file_type", "size_bytes", "record_version", "course_id", "owner_id") ON "public"."academics_studymaterial" FROM PUBLIC, "ucc_runtime";
@@ -160,6 +160,7 @@ GRANT UPDATE ("course_id", "weekday", "start_time", "end_time", "kind", "venue",
 GRANT UPDATE ("exam_date", "review_days", "record_version", "updated_at") ON public."academics_studyplan" TO "ucc_runtime";
 GRANT UPDATE ("title", "position", "planned_date", "done", "record_version", "updated_at") ON public."academics_studytopic" TO "ucc_runtime";
 GRANT EXECUTE ON FUNCTION ucc_security.current_student() TO "ucc_runtime";
+GRANT UPDATE (matric_number) ON public.academics_studentprofile TO "ucc_runtime";
 GRANT UPDATE (grading_scale) ON public.academics_studentprofile TO "ucc_runtime";
 REVOKE ALL ON FUNCTION ucc_security.delete_my_account() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ucc_security.delete_my_account() TO "ucc_runtime";

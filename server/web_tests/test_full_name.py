@@ -55,7 +55,9 @@ class FullNameTests(WebsiteCase):
         for field in ('id','username','email','email_verified_at','password','is_active'):
             self.assertEqual(getattr(before,field),getattr(after,field))
         self.assertEqual(self.client_a.session.session_key, key)
-        self.assertContains(self.client_a.get(reverse('student_web:settings')), 'Ada Ọlá')
+        page = self.client_a.get(reverse('student_web:settings'))
+        self.assertContains(page, 'Ada Ọlá')
+        self.assertNotContains(page, 'Your matric number is partly hidden here.')
         self.assertEqual(self.save('', previous='Ada Ọlá').status_code, 302)
         self.assertEqual(self.account().full_name, '')
 
@@ -144,10 +146,10 @@ class FullNameTests(WebsiteCase):
         self.assertNotContains(response, 'Existing Private Name')
         self.assertEqual(self.account().full_name, 'Existing Private Name')
 
-    def test_database_has_no_matric_column(self):
+    def test_legacy_column_retained_but_matric_collection_is_rejected(self):
         with connections['default'].cursor() as cursor:
             cursor.execute("SELECT count(*) FROM pg_attribute WHERE attrelid='academics_studentprofile'::regclass AND attname='matric_number' AND NOT attisdropped")
-            self.assertEqual(cursor.fetchone(),(0,))
+            self.assertEqual(cursor.fetchone(),(1,))
         with self.assertRaises(services.InvalidRecord):
             services.profiles.create(self.identity_a,matric_number='NO-LONGER-ACCEPTED')
 

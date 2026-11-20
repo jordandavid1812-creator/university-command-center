@@ -1,84 +1,123 @@
-# Editable full name and student-ID removal
+# Editable full name and staged student-ID removal
 
 Implementation base: `5b0a01a5a0371886f61206aefb48585caff6f6f8`.
-The owner requested a separate registration full name, editing for existing users, and
-removal of matric-number collection after the privacy assessment. No dedicated NIN/BVN
-fields existed; none are introduced. A name is personal data, not verified identity.
+The owner requested a separate registration full name, editing for existing users and removal
+of matric-number collection. No dedicated NIN/BVN fields existed; none are introduced.
+A full name is optional, self-reported personal data, not verified identity.
 
 ## Behaviour
 
-- Signup adds optional `full_name`, independent of the unchanged username/email/password
-  fields. It permits Unicode names and mononyms; no forced Western first/last-name split.
-- Existing accounts start with a blank full name. No ID, nickname or username is copied
-  into it. The existing optional display-name preference remains separate and unchanged.
-- Settings shows the self-reported full name and links to a native HTML editing form.
-  Users may correct or clear it. Name changes do not change username, verified email,
-  password, session hash/key, ownership or academic results.
-- Dashboard prefers the existing display-name preference; otherwise it uses the account
-  full name, with the existing username fallback. It adds no academic query or account join.
-- Own-data export uses format version 2 because the matric key is removed and the account
-  full_name key is added. Historical downloaded version-1 files remain unchanged. Export includes full name. It never exposes another student's account name.
-- Names are NFC-normalised, surrounding/repeated whitespace is cleaned, and inputs are
-  bounded to 150 characters. Control/surrogate characters are rejected; output is escaped.
-  A PostgreSQL CHECK also rejects edge spaces/control characters. No identity verification
-  or protection against all visually confusable Unicode names is claimed.
-- Editing is owner-scoped through the existing live-session capability. The account row
-  is locked and the live identity is revalidated before any write. The auth role gets UPDATE
-  of `full_name` only in addition to its established columns; runtime still cannot read or
-  write account names. Extra owner/username/email parameters are rejected.
-- An expected previous-name field rejects overwriting a currently different value from a
-  stale tab. It is a cosmetic value comparison, not a complete change-history/version token:
-  an intervening A→B→A sequence is not detected. No broader concurrency guarantee is claimed.
+- Signup adds optional `full_name`, independently of username/email/password. Unicode names
+  and mononyms are supported. Existing accounts start blank; no ID/nickname/username backfill.
+- Settings offers a native HTML editing form; students can correct or clear their name.
+  Password, verified email, username, session key/hash, ownership and results are unchanged.
+- The separate optional display-name preference remains unchanged. Dashboard prefers it,
+  otherwise account full name, then the existing username fallback. No new dashboard query.
+- Export format version 2 adds `account.full_name` and omits `profile.matric_number`.
+  Old downloaded version-1 files are not changed. Export remains owner-only.
+- Names are NFC-normalised, whitespace collapsed, limited to 150 characters, and escaped.
+  Control/surrogate characters are rejected; a database CHECK also rejects edge spaces and
+  control characters. Not all Unicode formatting/confusable characters are rejected: some
+  joining marks are needed in legitimate names. This is not name/identity verification.
+- Identity is validated before its UUID is read and revalidated under the account row lock.
+  Auth gains only UPDATE(full_name) in addition to its established columns. Runtime still
+  cannot read/write account names. Unknown account/owner fields are rejected.
+- The previous-name comparison rejects a currently different value in stale tabs. It is a
+  cosmetic value guard, not a version-history token: A→B→A changes remain undetected.
 
-## Matric-number removal and deployment impact
+## Expansion first; erasure in a later contract release
 
-The current profile form/service no longer accepts `matric_number`, Settings does not show
-it, and export no longer includes it. A forward migration drops its CHECK and column from
-StudentProfile, erasing active stored values. Historical migrations remain intact as history.
-The new full-name column is on accounts_student, not a renamed/reused student-ID column.
-Dropping matric numbers does not delete profiles, grades, courses or accounts.
+The current form/service rejects matric-number input, Settings does not display it, and
+exports omit it. **This PR no longer drops or erases the legacy database column.** Existing
+stored IDs therefore remain private in the active database until a later reviewed contract
+release. Do not report physical erasure as complete after this PR.
 
-No live migration or deployment was performed. Before any separate owner-authorized rollout:
+- `accounts.0007` adds `full_name` with persistent database default `''` (`db_default`) as
+  well as the Python default. Old signup inserts that omit the column continue to work.
+- `academics.0026_legacy_matric_database_default` retains the legacy column and CHECK,
+  adds persistent blank database default, and marks the model field non-editable. It does
+  not collect IDs through any current form/service. Existing grants needed by old code
+  remain during the overlap; no new role gains access to existing private IDs.
+- `0014_schema.sql` and `0015_security.sql` are generated from those migrations/grants.
+  Previously published DROP-column SQL from the earlier review head is superseded. Neither
+  version was applied by this task. Inspect real migration history before any future action;
+  if anyone has already applied the old unmerged variant, stop for a separately reviewed
+  reconciliation. Never overwrite/fake a persistent migration history.
 
-1. Inspect the real migration history and approve the erasure/maintenance plan. Ensure the
-   new code, migrations and generated SQL are reviewed together; old code references the
-   removed column and cannot safely serve requests after it is dropped.
-2. Stop website requests. Apply the two new Django migrations through the authorized migrator,
-   or the generated Supabase files `0014_schema.sql` then `0015_security.sql` in their correct
-   complete numbered history. Never mix/fake migration histories or edit previous SQL files.
-3. Re-provision the reviewed runtime/auth grants and verify RLS, exact allowed columns and
-   Data API denial. The name edit fails closed if its new auth UPDATE grant is absent.
-4. Deploy/start the reviewed application version and verify registration/verification, name
-   editing, owner export, sessions, academic results and the absence of ID collection.
+The proposed sequence, requiring separate deployment authorization:
 
-Reversal recreates an empty matric column; it cannot recover erased values. Do not advertise
-an application-only rollback after dropping a column. Persistent rollback/recovery requires
-an approved plan and compatible schema/code/grants. Restoring an older backup can also restore
-IDs and deleted accounts; the separate privacy restoration/reconciliation issue remains open.
+1. Review the real migration history, backups, DDL-lock exposure and operational recovery plan.
+2. Apply the additive schema through the authorized migrator, then provision/verify the
+   reviewed auth/runtime grants. On Supabase apply generated numbered files in order; do not
+   mix migration histories. Do this **before** deploying code that selects `full_name`.
+3. Old code can still read profiles and insert accounts against the expanded schema. Deploy
+   the new code, verify registration/verification, own-name editing/export and isolation,
+   then retire old instances/deployment URLs. No Vercel maintenance switch is assumed.
+4. Review a separate contract migration that removes the legacy CHECK/column and its grants
+   only after old code cannot serve requests. That later destructive release needs its own
+   tests, current-master CI and owner authorization. It is not included or approved here.
 
-Older encrypted backups, manually downloaded copies and provider copies are not erased by this
-migration. Their retention and controlled disposal must be verified separately. No real student
-records were read, copied or deleted during development. Only synthetic fixtures were used.
+This avoids the previously proposed incompatible old-code/new-schema window. It does not
+promise zero downtime: DDL can take locks; provisioning failures can still deny operations.
+The name editor returns the existing safe failure response if its UPDATE grant is absent.
+Before the contract stage, application rollback can use old code against the expanded schema;
+leave the additive columns/defaults in place. Reversing the name migration would lose names
+and break new code, so it is not an application rollback procedure.
 
-## Privacy and remaining work
+After any future column drop, rollback cannot restore erased IDs. Restoring old backups into
+an incompatible new schema can fail and roll back the restore transaction; it is not a way
+to bypass schema compatibility. Create an isolated target at the backup's recorded schema
+first (for a pre-change backup, accounts 0006 / academics 0025, Supabase files through 0013),
+restore there, then apply the reviewed forward migration sequence. Verify all data, grants,
+RLS and schema before any separate owner-approved cutover. Do not run an old backup against
+an arbitrary latest schema or reverse a persistent database to accommodate it.
+Older backups/downloads/provider copies can retain IDs and deleted accounts: their retention,
+disposal and deletion-aware restore reconciliation remain separate unresolved privacy work.
+No live database or real student records were accessed, migrated or erased.
 
-Privacy notice and LEGAL_UPDATED change together. Full-name collection is optional and editable;
-it is not described as anonymous or risk-free. AI text is not automatically de-identified: the
-notice and confirmation now distinguish omitted account fields from personal data embedded in
-a document/question. No AI provider/age policy, limits, keys or activation were changed here.
-The earlier audit's under-18/free-provider, cleanup scheduling, deletion-aware restore, diagnostic
-redaction, transfer/processor documentation and legal/controller obligations remain separate work.
-Do not treat this field change as legal-compliance certification or approval of GP2a.
+## Review corrections and owner authorization
 
-## Verification and evidence
+The reviewer requested changes at `7be90fd58e96c7c70c08bb8d87f2adb779fdd74e`:
 
-Use current hashed dependencies with Python 3.12 and disposable PostgreSQL 17:
+| Finding | Disposition |
+| --- | --- |
+| Current-master CI | The old green run covered merge base e4042dd, not subsequent dependency merges. PR #115 separately proposes baseline repair. Fresh PR #114 integration CI must pass after master is repaired; no green master is assumed. |
+| Nine existing-test changes | Owner explicitly answered "Approve the listed test changes for re-review" in this conversation on 20 November 2026. This is not merge/deploy approval. The follow-up commit lists every file; earlier commits are preserved rather than rewritten. |
+| Settings text | Remove the stale claim that a matric number is partly hidden. |
+| Rollout incompatibility | Persistent blank DB defaults, retained legacy column, additive-first rollout, deferred contract. |
+| Restore compatibility | Match the backup's schema in an isolated target, restore, then migrate forward. No direct incompatible-schema restore promise. |
+
+Owner-approved existing-test files (scope: name/matric/privacy presentation and the necessary
+historical-schema fixture only; academic/security assertions are retained):
+
+- `server/auth_tests/test_trusted_devices.py`: while the disposable schema is at accounts
+  0002, temporarily add/remove a blank full_name fixture column so the current login model
+  can exercise the historical rollback assertions; restore all real migration leaves.
+- `server/security_tests/test_student_profile.py`: check private display-name isolation in
+  place of removed ID presentation; preserve owner/version/grant/RLS checks.
+- `server/web_tests/test_ai_pages.py`: use actual account full-name sentinel; it is not
+  automatically attached to provider requests.
+- `server/web_tests/test_auth_presentation.py`: registration field set includes optional name.
+- `server/web_tests/test_legal_pages.py`: revised notice date.
+- `server/web_tests/test_profile.py`: no matric collection/display; old posted ID is rejected.
+- `server/web_tests/test_results_pdf.py`: no removed ID label; retain existing PDF assertions.
+- `server/web_tests/test_settings_data.py`: export version 2, own name, omitted matric key.
+- `tools/test_redesign_browser.py`: remove unused old masked-matric fixture argument.
+
+The historical test-column accommodation is test scaffolding, not a production missing-column
+fallback. No credential, isolation, academic, query-budget or rate-limit assertion is relaxed.
+
+## Tests and remaining privacy work
+
+Use the hashed dependencies with Python 3.12 and real disposable PostgreSQL 17; see the PR
+for exact local/hosted versions, counts, skips and current-source limitations:
 
 ```sh
 python server/manage.py makemigrations --check --dry-run
-python server/manage.py test academics.tests.test_privacy_migrations --settings=config.settings.test
-python server/manage.py test web_tests.test_full_name web_tests.test_profile web_tests.test_settings_data --settings=config.settings.web_test
-python server/manage.py test security_tests.test_student_profile --settings=config.settings.security_test
+python server/manage.py test accounts academics --settings=config.settings.test
+python server/manage.py test web_tests --settings=config.settings.web_test
+python server/manage.py test security_tests --settings=config.settings.security_test
+python server/manage.py test auth_tests --settings=config.settings.auth_test
 python tools/export_supabase_sql.py --check
 python tools/test_premium_auth_browser.py -v
 python -m unittest discover -v
@@ -86,23 +125,16 @@ python tools/check_repository_safety.py
 git diff --check
 ```
 
-Each test settings profile needs its documented dedicated roles/secrets. Do not run standalone
-security_tests under web_test; the historical fixtures deliberately use a different capability
-adapter. This wrong-profile invocation failed during development and was corrected, without
-relaxing isolation or changing the fixtures' database permissions.
+The migration rehearsal tests old ORM signup/profile access after expansion, new account/profile
+creation, actual DB defaults (including a rolled-back missing-default negative control), preserved legacy IDs and academic data, and disposable reversal.
+The name suite covers optional signup, bounds/escaping, session/verification preservation,
+CSRF/no-JS, stale tabs, missing account at lock time, owner-only export, runtime denial,
+missing UPDATE grant and rejection of new ID collection. Each settings profile needs its
+own documented roles/secrets; never relax fixture database permissions to fix a wrong-profile run.
 
-New tests cover optional registration, Unicode/invalid names, unchanged verification/session/
-credentials, editing/clearing, forged account fields, stale tabs, escaped markup, CSRF, no-JS,
-owner-only export, runtime-role denial, direct database validation, missing ID column and
-migration erasure/reverse behaviour preserving academic data. Existing matric-display tests
-were updated because the owner explicitly requested removal; mathematical, ownership, session
-and query-budget assertions were not weakened.
-
-Two browser tests join the existing premium-auth suite: optional signup name vs username,
-and responsive/keyboard/native POST for authenticated editing, including 390 px and 1280/1440 px
-with 200% text. They run with dummy DB settings and synthetic fixtures. Real workflows use PG17.
-Local evidence used Chromium 156.0.8078.79 with Playwright 1.65.0 via /usr/bin/chromium because
-the Playwright-managed binary was absent; hosted CI uses the current hashed browser lock.
+Two new tests join premium-auth browser coverage for registration and editing at 390 px and
+1280/1440 px with 200% text, native POST and visible focus. Historical local evidence used
+Chromium 156.0.8078.79 / Playwright 1.65.0; hosted CI uses the current hashed browser lock.
 
 Synthetic screenshots:
 
@@ -110,12 +142,9 @@ Synthetic screenshots:
 - [Edit name, 390 px](design/evidence/editable-full-name/full-name-390-text-100.png)
 - [Edit name, 1280 px, 200% text](design/evidence/editable-full-name/full-name-1280-text-200.png)
 
-See the implementation PR for exact-head local/hosted results, counts, failures and skips. CI
-passing does not authorize merge or applying this destructive migration to a persistent DB.
-Independent review and separate owner merge/deployment authorization remain required.
-
-Historical trusted-device rollback coverage retains all existing assertions. While its accounts
-schema is at 0002, it adds/removes an unrelated blank full_name fixture column for the current
-login model, then restores the full migration graph. This is disposable-test scaffolding only;
-production does not guess missing columns or gain a schema-bypass fallback. The fixed-label
-logging route allowlist adds only student_web:full-name, preserving its closed vocabulary.
+Privacy notice and LEGAL_UPDATED change together. AI document/question text is not automatically
+redacted; embedded personal data can be sent even though account fields are not separately
+attached. Provider/age policy, limits and keys are unchanged. Under-18/free-provider policy,
+cleanup scheduling, restore reconciliation, diagnostic redaction, processor/transfer paperwork
+and legal/controller obligations remain separate work. No legal-compliance certification,
+GP2a approval, production migration, deployment or merge is implied by tests or this document.

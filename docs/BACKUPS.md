@@ -83,10 +83,21 @@ paused).
 Restore only into an **empty** project (for example a new or the paused staging project), check
 it, and only then point the website at it. Claude can walk you through it; in short:
 
-1. Create the structure: run every numbered file in `supabase/migrations` and a NEW private setup
-   file (`tools/supabase_secrets.py` with a different `UCC_LOCAL_HOME`).
+1. Create the structure **at the backup's schema version**, not automatically the newest
+   schema. Run that version's numbered Supabase files and a NEW private setup file
+   (`tools/supabase_secrets.py` with a different `UCC_LOCAL_HOME`). If the source schema
+   cannot be established, stop and resolve compatibility before loading data. A backup from
+   the baseline immediately before the full-name expansion uses files through 0013
+   (accounts 0006 / academics 0025). Earlier backups may require an earlier schema.
 2. Run `tools/restore_database.py --backup <file> --key <your key file>` with the target's address
    in `UCC_RESTORE_HOST` and its `postgres` password in `PGPASSWORD`.
-3. Update the website's Vercel settings to the new database and passwords, and redeploy.
+3. Apply the reviewed forward migrations/security provisioning to the restored isolated
+   target, then verify schema, RLS, grants, academic data and account/deletion reconciliation.
+   A backup containing a dropped column may fail and roll back if loaded directly into an
+   incompatible latest schema. Never reverse a persistent database or fake migrations just
+   to load an older backup. The full-name expansion retains the legacy matric column;
+   its future removal requires a separate reviewed contract release.
+4. Only after separate owner authorization, update the website's Vercel settings to the
+   verified target and redeploy. Nothing in these instructions authorizes a live cutover.
 
 Practise a restore into the staging project about once a month, so you know it works.
