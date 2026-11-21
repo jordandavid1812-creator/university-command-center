@@ -5,7 +5,8 @@ also asks AI training crawlers to stay away (the Vercel firewall's AI-bot rule i
 No database access, no cookies, nothing personal.
 """
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
+from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
@@ -34,6 +35,10 @@ def robots(request):
         lines += [f'User-agent: {bot}', 'Disallow: /', '']
     lines += ['User-agent: *']
     lines += ['Allow: /$'] + [f'Allow: {page}$' for page in public_pages()[1:]]
+    # The crawler must be able to fetch these files themselves, or Google reports the sitemap
+    # as "blocked by robots.txt".
+    lines += [f'Allow: {reverse("student_web:sitemap")}$', f'Allow: {reverse("student_web:robots")}$',
+              f'Allow: {reverse("student_web:favicon")}$']
     lines += ['Allow: /static/', 'Disallow: /', '', f'Sitemap: {_origin()}{reverse("student_web:sitemap")}', '']
     return _cached(HttpResponse('\n'.join(lines), content_type='text/plain; charset=utf-8'))
 
@@ -44,3 +49,9 @@ def sitemap(request):
     body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>\n')
     return _cached(HttpResponse(body, content_type='application/xml; charset=utf-8'))
+
+
+@require_http_methods(['GET', 'HEAD'])
+def favicon(request):
+    """Browsers and Google ask for /favicon.ico at the top level; send them to the real icon."""
+    return _cached(HttpResponseRedirect(static('accounts/brand/favicon.ico')))

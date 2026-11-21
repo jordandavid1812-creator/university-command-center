@@ -4,6 +4,26 @@ from xml.etree import ElementTree
 from django.test import override_settings
 from .base import WebsiteCase
 
+def google_allows(group, path):
+    """Google's robots.txt rule: the longest matching pattern wins; Allow wins a tie; $ anchors."""
+    import re
+    best = (-1, True)
+    for line in group.splitlines():
+        if ':' not in line:
+            continue
+        kind, pattern = (part.strip() for part in line.split(':', 1))
+        if kind not in ('Allow', 'Disallow') or not pattern:
+            continue
+        regex = re.escape(pattern).replace('\\*', '.*')
+        if regex.endswith('\\$'):
+            regex = regex[:-2] + '$'
+        if re.match(regex, path):
+            candidate = (len(pattern), kind == 'Allow')
+            if candidate[0] > best[0] or (candidate[0] == best[0] and candidate[1]):
+                best = candidate
+    return best[1]
+
+
 PUBLIC = ['/', '/accounts/register/', '/accounts/login/', '/accounts/privacy/', '/accounts/terms/']
 
 
@@ -30,6 +50,21 @@ class SeoTests(WebsiteCase):
         root = ElementTree.fromstring(response.content)
         locs = [e.text for e in root.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
         self.assertEqual(locs, ['https://unicommand.example.ng' + page for page in PUBLIC])
+
+    def test_crawlers_may_fetch_the_sitemap_robots_and_icon_themselves(self):
+        # Regression: Google reported the sitemap "blocked by robots.txt" when it was not allowed.
+        text = self.client.get('/robots.txt').content.decode().split('User-agent: *\n', 1)[1]
+        for path in ('/sitemap.xml', '/robots.txt', '/favicon.ico', '/static/student_web/site.css'):
+            with self.subTest(path=path):
+                self.assertTrue(google_allows(text, path), path)
+        for path in ('/courses/', '/materials/', '/settings/', '/accounts/verify/code/', '/ai-results/x/'):
+            with self.subTest(path=path):
+                self.assertFalse(google_allows(text, path), path)
+
+    def test_favicon_redirects_to_the_real_icon(self):
+        response = self.client.get('/favicon.ico')
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response['Location'].startswith('/static/accounts/brand/favicon.ico'))
 
     def test_only_get_and_head(self):
         for url in ('/robots.txt', '/sitemap.xml'):

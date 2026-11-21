@@ -44,7 +44,7 @@ class FailureEvent:
 LEVELS = {10: 'DEBUG', 20: 'INFO', 30: 'WARNING', 40: 'ERROR', 50: 'CRITICAL'}
 METHODS = ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT')
 ROUTES = (
-    'student_web:robots', 'student_web:sitemap',
+    'student_web:robots', 'student_web:sitemap', 'student_web:favicon',
     'accounts:register', 'accounts:privacy', 'accounts:terms', 'accounts:login', 'accounts:logout', 'accounts:resend',
     'accounts:verify', 'accounts:verify-code', 'accounts:reset', 'accounts:reset-confirm', 'accounts:password-change',
     'accounts:academic', 'accounts:course', 'accounts:delete-assignment',
