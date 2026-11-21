@@ -36,21 +36,27 @@ class QuizTimerBrowserTests(unittest.TestCase):
         timer = page.get_by_label('Timer')
         self.assertEqual(timer.input_value(), '0')
         self.assertEqual([o.strip() for o in timer.locator('option').all_inner_texts()],
-                         ['Off', '30 seconds a question', '1 minute a question', '2 minutes a question'])
+                         ['Off', '10 minutes', '20 minutes', '30 minutes'])
         self.assertEqual(page.locator('.ai-clock').text_content(), '')
-        page.clock.run_for(600_000)
+        page.clock.run_for(3_600_000)
         self.assertTrue(page.locator('.ai-final').is_hidden())
+
+    def test_the_time_is_for_the_whole_quiz_not_each_question(self):
+        page = self.page()
+        for value, shown in (('10', '10:00'), ('20', '20:00'), ('30', '30:00')):
+            page.get_by_label('Timer').select_option(value)
+            self.assertEqual(page.locator('.ai-clock').text_content(), f'Time left {shown}')
 
     def test_time_running_out_marks_unanswered_questions_and_ends_the_quiz(self):
         page = self.page()
-        page.get_by_label('Timer').select_option('30')
-        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 2:30')  # 5 questions x 30 s
+        page.get_by_label('Timer').select_option('10')
+        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 10:00')  # the whole quiz
         questions = page.locator('.ai-question')
         questions.nth(0).locator('.ai-option').nth(0).click()  # right
         questions.nth(1).locator('.ai-option').nth(0).click()  # wrong (answer B)
         page.clock.run_for(60_000)
-        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 1:30')
-        page.clock.run_for(91_000)
+        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 9:00')
+        page.clock.run_for(541_000)
         page.wait_for_selector('.ai-final:not([hidden])')
         self.assertIn("Time's up", page.locator('.ai-final').text_content())
         self.assertIn('1 / 5', page.locator('.ai-final strong').text_content())
@@ -61,7 +67,7 @@ class QuizTimerBrowserTests(unittest.TestCase):
 
     def test_finishing_early_stops_the_clock_and_try_again_restarts_it(self):
         page = self.page()
-        page.get_by_label('Timer').select_option('60')
+        page.get_by_label('Timer').select_option('30')
         questions = page.locator('.ai-question')
         for index in range(5):
             questions.nth(index).locator('.ai-option').nth(index % 4).click()
@@ -70,7 +76,7 @@ class QuizTimerBrowserTests(unittest.TestCase):
         self.assertIn('Quiz complete', page.locator('.ai-final').text_content())
         self.assertEqual(page.locator('.ai-clock').text_content(), '')
         page.get_by_role('button', name='Try again').click()
-        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 5:00')
+        self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 30:00')
         self.assertIn('Score 0 / 5', page.locator('.ai-score').text_content())
 
 

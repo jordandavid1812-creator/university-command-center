@@ -103,10 +103,10 @@
     progress.appendChild(fill);
     bar.append(label, progress);
     root.prepend(bar);
-    // Optional timer (owner's choice): seconds per question, chosen here, never saved.
+    // Optional timer (owner's choice): minutes for the whole quiz, chosen here, never saved.
     const timer = el('div', { class: 'ai-timer' });
     const choice = el('select');
-    [['0', 'Off'], ['30', '30 seconds a question'], ['60', '1 minute a question'], ['120', '2 minutes a question']]
+    [['0', 'Off'], ['10', '10 minutes'], ['20', '20 minutes'], ['30', '30 minutes']]
       .forEach(([value, text]) => choice.appendChild(el('option', { value }, text)));
     const timerLabel = el('label', {}, 'Timer');
     timerLabel.appendChild(choice);
@@ -123,7 +123,7 @@
     const stopTimer = () => { window.clearInterval(tick); tick = 0; clock.textContent = ''; };
     const startTimer = () => {
       stopTimer();
-      const seconds = Number(choice.value) * questions.length;
+      const seconds = Number(choice.value) * 60;
       if (!seconds || answered === questions.length) return;
       deadline = Date.now() + seconds * 1000;
       const show = () => {
