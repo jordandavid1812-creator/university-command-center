@@ -16,6 +16,9 @@ from .models import SignupCode, Student
 
 LIFETIME = timedelta(minutes=5)  # owner's choice: time to find the email, even in Spam
 MAX_ATTEMPTS = 5
+# Owner's choice: at most this many code emails per ACCOUNT per hour (sign-up and email-change codes
+# together), on top of the per-network limits, so nobody can flood one student's inbox.
+ACCOUNT_CODES_PER_HOUR = 5
 DIGITS = 6
 
 
@@ -29,11 +32,20 @@ def clean_code(text):
     return value if len(value) == DIGITS and value.isascii() and value.isdigit() else None
 
 
+def account_codes_exhausted(student, now):
+    """True once this account has been sent ACCOUNT_CODES_PER_HOUR codes in the last hour."""
+    recent = SignupCode.objects.using('auth').filter(student=student, created_at__gt=now - timedelta(hours=1))
+    return recent.count() >= ACCOUNT_CODES_PER_HOUR
+
+
 def issue_locked(student):
     """Inside transaction.atomic(using='auth') with the Student row locked: retire earlier codes,
-    store a new one and email it after commit."""
+    store a new one and email it after commit. Silently does nothing over the per-account limit
+    (the caller's reply is the same either way)."""
     from .tokens import _deliver
     now = timezone.now()
+    if account_codes_exhausted(student, now):
+        return
     SignupCode.objects.using('auth').filter(student=student, consumed_at__isnull=True).update(consumed_at=now)
     code = f'{secrets.randbelow(10 ** DIGITS):0{DIGITS}d}'
     SignupCode.objects.using('auth').create(student=student, digest=_digest(student.pk, code), created_at=now,

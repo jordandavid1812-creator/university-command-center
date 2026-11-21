@@ -1,9 +1,11 @@
 from django.urls import path
-from . import ai_views, views
+from . import ai_views, seo, views
 
 app_name = 'student_web'
 urlpatterns = [
     path('', views.home, name='dashboard'),
+    path('robots.txt', seo.robots, name='robots'),
+    path('sitemap.xml', seo.sitemap, name='sitemap'),
     path('semesters/', views.semester_list, name='semester-list'),
     path('courses/', views.course_list, name='course-list'),
     path('assignments/', views.assignment_list, name='assignment-list'),
