@@ -63,7 +63,8 @@ class RegistrationForm(forms.Form):
 
 class SignupCodeForm(forms.Form):
     """Public site: confirm a new account with the 6-digit emailed code, or ask for a new one."""
-    email = forms.EmailField(max_length=254)
+    email = forms.EmailField(max_length=254, widget=forms.EmailInput(attrs={'autocomplete': 'email'}),
+                             help_text='The email you signed up with.')
     code = forms.CharField(label='6-digit code', max_length=12, required=False,
                            help_text='From the email we just sent. It works for 5 minutes.',
                            widget=forms.TextInput(attrs={'autocomplete': 'one-time-code', 'inputmode': 'numeric',

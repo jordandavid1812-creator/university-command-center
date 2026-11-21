@@ -18,7 +18,8 @@
       {% for field in form %}<div class="form-field">{{ field.as_field_group }}</div>{% endfor %}
     {% endif %}
     <button class="button auth-submit" type="submit" name="action" value="verify">Confirm email</button>
-    <button class="button secondary" type="submit" name="action" value="resend">Send me a new code</button>
+    <p class="muted">Code expired? Just enter it anyway, or press the button below: we will email you a new one.</p>
+    <button class="button secondary" type="submit" name="action" value="resend">Didn&rsquo;t get it? Send me a new code</button>
   </form>
   <nav class="auth-secondary" aria-label="Account options">
     <a class="button secondary" href="{% url 'accounts:login' %}">Back to login</a>
