@@ -65,7 +65,11 @@ LEGAL_CONTACT = 'unicommand.info@gmail.com'
 @require_http_methods(['GET', 'HEAD'])
 def privacy(request):
     """Public privacy notice (launch step G). Keep it in step with what the site stores and sends."""
-    return render(request, 'accounts/privacy.html', {'updated': LEGAL_UPDATED, 'contact': LEGAL_CONTACT})
+    # Names the email service actually configured, so the notice stays true before and after
+    # the owner switches from Gmail to Resend.
+    resend = getattr(settings, 'EMAIL_HOST', '') == 'smtp.resend.com'
+    return render(request, 'accounts/privacy.html', {'updated': LEGAL_UPDATED, 'contact': LEGAL_CONTACT,
+                                                     'email_via_resend': resend})
 
 
 @require_http_methods(['GET', 'HEAD'])

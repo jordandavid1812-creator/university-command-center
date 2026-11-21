@@ -159,7 +159,10 @@ Keep .vercelignore sending only the website; Vercel env vars go to Production on
 The PDF child may only append a folder that really holds pypdf; never import pypdf in the website.
 Real email (step C): ReviewedSMTPBackend is the ONLY approved backend (E105 refuses all others); keep
 its fixed hosts, port 587 STARTTLS with verified TLS 1.2+, one recipient per message and generic failure
-logs. Email credentials come only from the private env (UCC_EMAIL_ADDRESS, UCC_EMAIL_APP_PASSWORD).
+logs. Email credentials come only from the private env (UCC_EMAIL_ADDRESS, UCC_EMAIL_APP_PASSWORD,
+UCC_RESEND_API_KEY). Resend (owner's choice) is approved only as smtp.resend.com:587, sending from an
+address on UCC_SITE_HOST (never a gmail.com or other domain) with Reply-To the public contact address;
+the privacy notice names whichever service EMAIL_HOST selects.
 AI limits (launch step E): the public profiles keep UCC_AI_REQUESTS_PER_DAY = 10 and
 UCC_AI_SITE_REQUESTS_PER_DAY = 200. Count the site total only through academics_aisiteusage in
 the same signed transaction as the ledger row; never give the runtime DELETE, TRUNCATE or
