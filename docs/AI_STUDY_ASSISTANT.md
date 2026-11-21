@@ -528,3 +528,21 @@ what happened in plain words.
   cut-off or wrongly shaped answer, or Groq itself. It is still one ledger row and one count.
 - Longest wait: about two minutes (a dropped connection on the retry can use its 60 seconds, then
   Groq has its own 60 seconds). A quick busy reply adds only the 3-second pause.
+
+## Quiz options: size, difficulty and timer (owner's choice)
+
+- Before sending, the quiz card offers **5, 10, 15 or 20 questions** and **Easy, Normal, Hard or
+  Exam** (defaults 10 and Normal). The confirm page shows the choice ("15 questions · Hard").
+- The choice travels as `count:level` (for example `15:hard`). The consent token binds it (key
+  `o`, only present for quizzes with options), so changing it after confirming is refused. Without
+  options the original 5-10 question prompt is used unchanged.
+- The prompt asks for exactly that many questions and adds the difficulty description from
+  `ai_providers.QUIZ_LEVELS`. The checked result keeps at most the chosen number (at least 5, as
+  always); saved quizzes may hold up to 20 questions.
+- 15 and 20 question quizzes ask for a longer reply (`BIG_QUIZ_OUTPUT_TOKENS`, 8192) and never switch
+  to the Groq backup, whose free tier counts the reply size; Groq replies stay at 4096 tokens.
+- The **timer** is chosen on the quiz page (Off, 30 s, 1 min or 2 min per question). It runs only in
+  the browser and is never saved; when time runs out, unanswered questions are marked and the quiz
+  ends. Without JavaScript the quiz works as before, without a timer.
+- Still one request and one count per quiz.
+

@@ -2,7 +2,8 @@
 
 The confirm page issues a token; only a Send POST that carries it can call a provider.
 The token is signed with Django's signing (SECRET_KEY, its own salt) and binds the signed-in
-student, the material, the tool, the question and the number of characters shown. It expires
+student, the material, the tool, the question, the quiz options (if any) and the number of
+characters shown. It expires
 after 10 minutes. The ledger stores only its SHA-256 hash, so a repeated Send finds the request
 already made with it and never sends twice.
 """
@@ -26,9 +27,11 @@ def _question_hash(question):
     return hashlib.sha256(question.encode("utf-8")).hexdigest()
 
 
-def issue(user_id, material_id, tool, question, characters):
+def issue(user_id, material_id, tool, question, characters, options=""):
     payload = {"u": str(user_id), "m": str(material_id), "t": tool, "q": _question_hash(question),
                "c": characters, "n": secrets.token_hex(16)}
+    if options:  # only quizzes with chosen options carry this, so other tokens keep their shape
+        payload["o"] = options
     return signing.dumps(payload, salt=SALT, compress=False)
 
 
@@ -36,7 +39,7 @@ def token_hash(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def check(token, user_id, material_id, tool, question):
+def check(token, user_id, material_id, tool, question, options=""):
     """Return (hash, characters) for a genuine token matching this request, ignoring its age.
 
     Age is checked separately (`check_fresh`), after the caller has looked for a request already
@@ -47,7 +50,8 @@ def check(token, user_id, material_id, tool, question):
     except signing.BadSignature:
         raise ConsentInvalid() from None
     expected = {"u": str(user_id), "m": str(material_id), "t": tool, "q": _question_hash(question)}
-    if (not isinstance(payload, dict) or set(payload) != {"u", "m", "t", "q", "c", "n"}
+    keys = {"u", "m", "t", "q", "c", "n"} | ({"o"} if options else set())
+    if (not isinstance(payload, dict) or set(payload) != keys or payload.get("o", "") != options
             or any(payload[key] != value for key, value in expected.items())
             or type(payload["c"]) is not int or payload["c"] < 1):
         raise ConsentInvalid()

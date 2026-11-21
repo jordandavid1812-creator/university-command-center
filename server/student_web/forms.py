@@ -441,6 +441,11 @@ class AiToolForm(StrictForm):
     question = forms.CharField(max_length=500, required=False, label='Your question',
                                widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 500}),
                                help_text='Only for "Ask a question". Up to 500 characters.')
+    # Quiz only (owner's choice): how many questions and how hard. Missing means the original quiz.
+    quiz_count = forms.ChoiceField(choices=[('', '')] + [(str(n), f'{n} questions') for n in (5, 10, 15, 20)],
+                                   required=False, label='Number of questions')
+    quiz_level = forms.ChoiceField(choices=[('', ''), ('easy', 'Easy'), ('normal', 'Normal'), ('hard', 'Hard'),
+                                            ('exam', 'Exam')], required=False, label='Difficulty')
     # Sent only by the buttons on the confirm page that hide or show the "Before you send" notes.
     notes = forms.ChoiceField(choices=[('', ''), ('hide', 'Hide'), ('show', 'Show')], required=False,
                               widget=forms.HiddenInput())
@@ -456,6 +461,11 @@ class AiToolForm(StrictForm):
             self.add_error('question', 'Questions are only used with "Ask a question". Clear this box or '
                                        'choose that tool.')
         values['question'] = question
+        count, level = values.get('quiz_count') or '', values.get('quiz_level') or ''
+        if tool != 'quiz' or not (count or level):
+            values['options'] = ''
+        else:
+            values['options'] = f"{count or '10'}:{level or 'normal'}"
         return values
 
 
@@ -470,7 +480,7 @@ class AiSendForm(AiToolForm):
         # The page posts a neutral code ("main" or "backup"); the internal name is also accepted.
         self.fields['provider'].choices = ([(PUBLIC_CODES[code], code) for code in providers]
                                            + [(code, code) for code in providers])
-        for name in ('tool', 'question'):
+        for name in ('tool', 'question', 'quiz_count', 'quiz_level'):
             self.fields[name].widget = forms.HiddenInput()
 
     def clean_provider(self):
