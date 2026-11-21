@@ -73,6 +73,53 @@ class QuizOptionTests(NoNetwork):
                 body = FakeConnection.made[0].requests[0][2]
                 self.assertEqual(body["generationConfig"]["maxOutputTokens"], tokens)
 
+class ExactCountTests(NoNetwork):
+    """Owner's report: choosing 10 gave 7 questions and 15 gave 9. Gemini is now given a JSON Schema
+    with minItems = maxItems = the chosen count, so it must return exactly that many."""
+
+    def body_for(self, options, n):
+        from tests.test_ai_providers import FakeConnection, gemini_reply
+        env = {"UCC_GEMINI_API_KEY": KEY, "UCC_GEMINI_MODEL": "synthetic-model-1"}
+        with patch.dict(os.environ, env, clear=True):
+            FakeConnection.made = []
+            with patch.object(ai, "_connect", lambda p: FakeConnection(p, 200, gemini_reply(json.dumps(quiz(n))))):
+                result = ai.ask("gemini", "quiz", "Notes.", "", options)
+        return FakeConnection.made[0].requests[0][2], result
+
+    def test_gemini_must_return_exactly_the_chosen_number(self):
+        for count in ai.QUIZ_COUNTS:
+            with self.subTest(count=count):
+                body, result = self.body_for(f"{count}:normal", count)
+                schema = body["generationConfig"]["responseJsonSchema"]
+                questions = schema["properties"]["questions"]
+                self.assertEqual((questions["minItems"], questions["maxItems"]), (count, count))
+                self.assertEqual(schema["required"], ["questions"])
+                item = questions["items"]
+                self.assertEqual(item["required"], ["question", "options", "correct", "reason"])
+                self.assertEqual((item["properties"]["options"]["minItems"], item["properties"]["options"]["maxItems"]), (4, 4))
+                self.assertEqual((item["properties"]["correct"]["minimum"], item["properties"]["correct"]["maximum"]), (0, 3))
+                self.assertEqual(body["generationConfig"]["responseMimeType"], "application/json")
+                self.assertEqual(len(result["questions"]), count)
+                self.assertIn(f"exactly {count} questions, never fewer", body["systemInstruction"]["parts"][0]["text"])
+
+    def test_without_a_chosen_size_or_for_other_tools_nothing_changes(self):
+        body, _ = self.body_for("", 7)
+        self.assertNotIn("responseJsonSchema", body["generationConfig"])
+        for tool in ("summary", "flashcards", "answer"):
+            _, _, other = ai.gemini_request("synthetic-model-1", KEY, "s", "u", tool, None, 10)
+            self.assertNotIn("responseJsonSchema", other["generationConfig"])
+
+    def test_other_services_get_the_firm_instruction_and_no_new_fields(self):
+        system, _ = ai.build_prompt("quiz", "Notes.", "", "10:easy")
+        self.assertIn("exactly 10 questions, never fewer", system)
+        for build in (ai.grok_request, ai.groq_request):
+            _, _, body = build("synthetic-model-1", KEY, "s", "u", "quiz", None, 10)
+            self.assertEqual(body["response_format"], {"type": "json_object"})
+            self.assertNotIn("response_json_schema", body)
+
+    def test_a_longer_reply_is_trimmed_to_the_chosen_number(self):
+        self.assertEqual(len(ai.parse_result("quiz", json.dumps(quiz(12)), "10:normal")["questions"]), 10)
+
 
 if __name__ == "__main__":
     unittest.main()

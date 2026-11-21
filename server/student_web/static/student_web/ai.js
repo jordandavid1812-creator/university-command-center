@@ -120,7 +120,7 @@
     let answered = 0;
     let score = 0;
 
-    const stopTimer = () => { window.clearInterval(tick); tick = 0; clock.textContent = ''; };
+    const stopTimer = () => { window.clearInterval(tick); tick = 0; clock.textContent = ''; clock.removeAttribute('data-low'); };
     const startTimer = () => {
       stopTimer();
       const seconds = Number(choice.value) * 60;
@@ -129,6 +129,7 @@
       const show = () => {
         const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
         clock.textContent = `Time left ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        clock.toggleAttribute('data-low', left <= 60); // the last minute turns red
         if (!left) timeUp();
       };
       show();

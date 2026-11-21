@@ -544,5 +544,12 @@ what happened in plain words.
 - The **timer** is chosen on the quiz page (Off, 10, 20 or 30 minutes for the whole quiz, the same whatever the number of questions). It runs only in
   the browser and is never saved; when time runs out, unanswered questions are marked and the quiz
   ends. Without JavaScript the quiz works as before, without a timer.
+- **Exact number of questions.** Asking in words for "exactly 10" was not enough: real quizzes came
+  back with 7 or 9. Gemini now also gets a JSON Schema (`responseJsonSchema`, from
+  `ai_providers.quiz_schema`) whose `questions` list has `minItems` = `maxItems` = the chosen count, so
+  it must return exactly that many. The prompt also says "never fewer" (for Grok and the Groq backup,
+  which get the same firm instruction but no schema), and a longer reply is trimmed to the count.
+- The quiz choices and the timer are styled drop-downs (`ai_choices.css`, AI pages only, no images,
+  calmer with reduced motion); the timer shows as a pill that turns red in the last minute.
 - Still one request and one count per quiz.
 
