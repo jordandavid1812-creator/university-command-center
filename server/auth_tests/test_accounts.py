@@ -60,12 +60,14 @@ class AccountFlowTests(AuthenticationCase):
         self.assertEqual(mail.outbox[0].to, ['new@example.invalid'])
 
     def test_duplicate_username_and_email_get_same_generic_response(self):
+        # Owner's choice: a taken username is now reported on the form; a taken email still gets
+        # the same generic response as success.
         one = self.registration()
         mail.outbox.clear()
-        for changes in ({'username': 'new-student', 'email': 'different@example.invalid'},
-                        {'username': 'different', 'email': 'NEW@example.invalid'}):
-            response = self.registration(**changes)
-            self.assertEqual((response.status_code, response.content), (one.status_code, one.content))
+        taken = self.registration(username='new-student', email='different@example.invalid')
+        self.assertContains(taken, 'That username is already taken')
+        response = self.registration(username='different', email='NEW@example.invalid')
+        self.assertEqual((response.status_code, response.content), (one.status_code, one.content))
         self.assertEqual(mail.outbox, [])
         self.assertEqual(Student.objects.using('auth').count(), 3)
 

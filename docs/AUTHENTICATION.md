@@ -109,7 +109,7 @@ All state-changing account/academic actions require POST and Django CSRF checks.
 
 | Route | Behavior |
 | --- | --- |
-| `/accounts/register/` | Validates form/passwords and creates an unverified account. Duplicate username/email gets the same confirmation as successful submission. Client verification/owner flags are ignored. |
+| `/accounts/register/` | Validates form/passwords and creates an unverified account. A duplicate email gets the same confirmation as successful submission. On open sign-up a taken username is reported on the form ("That username is already taken", owner's choice); invite-only sign-up keeps the same generic confirmation for both. Client verification/owner flags are ignored. |
 | `/accounts/verify/request/` | Generic resend response. Active unverified accounts receive a fresh link; the previous link is revoked. |
 | `/accounts/verify/<selector>/<secret>/` | GET shows confirmation without consuming. CSRF-protected POST verifies the email once. Link expires after 24 hours. |
 | `/accounts/verify/code/` | Public site only (`UCC_SIGNUP_CODE`; 404 elsewhere). One form, two buttons: **Confirm email** checks the newest 6-digit code (5 minutes, 5 tries, HMAC-stored) and verifies the account once; **Send me a new code** retires the old code and emails another. Replies are the same for every email. Rate-limited (`verify-code`, `resend`). On the public site, register and resend open this page instead of sending a link. See docs/LAUNCH.md "Open sign-up". |
