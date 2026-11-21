@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.home, name='dashboard'),
     path('robots.txt', seo.robots, name='robots'),
     path('sitemap.xml', seo.sitemap, name='sitemap'),
+    path('favicon.ico', seo.favicon, name='favicon'),
     path('semesters/', views.semester_list, name='semester-list'),
     path('courses/', views.course_list, name='course-list'),
     path('assignments/', views.assignment_list, name='assignment-list'),
