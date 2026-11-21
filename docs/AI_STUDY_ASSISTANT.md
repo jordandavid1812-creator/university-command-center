@@ -541,7 +541,7 @@ what happened in plain words.
   always); saved quizzes may hold up to 20 questions.
 - 15 and 20 question quizzes ask for a longer reply (`BIG_QUIZ_OUTPUT_TOKENS`, 8192) and never switch
   to the Groq backup, whose free tier counts the reply size; Groq replies stay at 4096 tokens.
-- The **timer** is chosen on the quiz page (Off, 30 s, 1 min or 2 min per question). It runs only in
+- The **timer** is chosen on the quiz page (Off, 10, 20 or 30 minutes for the whole quiz, the same whatever the number of questions). It runs only in
   the browser and is never saved; when time runs out, unanswered questions are marked and the quiz
   ends. Without JavaScript the quiz works as before, without a timer.
 - Still one request and one count per quiz.

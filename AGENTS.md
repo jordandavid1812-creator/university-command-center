@@ -211,5 +211,5 @@ Static caching on Vercel (owner's choice, speed): config.static_cache stamps eve
 deployment (?v=...) and lets browsers and Vercel's CDN keep those files for a year. Keep the stamp on
 every static URL; never give HTML pages or private responses long cache headers.
 Quiz options (owner's choice): 5/10/15/20 questions and easy/normal/hard/exam travel as "count:level",
-bound by the consent token; quizzes over 10 questions never switch to Groq. The quiz timer stays
+bound by the consent token; quizzes over 10 questions never switch to Groq. The quiz timer (Off/10/20/30 minutes for the whole quiz) stays
 browser-only and is never saved. Without options the original quiz prompt is unchanged.
