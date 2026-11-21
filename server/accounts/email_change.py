@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from .models import SignupCode, Student
 from .email_content import branded_html
-from .signup_codes import DIGITS, MAX_ATTEMPTS, clean_code
+from .signup_codes import DIGITS, MAX_ATTEMPTS, account_codes_exhausted, clean_code
 
 LIFETIME = timedelta(minutes=10)  # time to open a different inbox
 
@@ -47,6 +47,8 @@ def request_code(student_id, new_email):
         if student is None:
             return
         now = timezone.now()
+        if account_codes_exhausted(student, now):
+            return  # per-account limit (owner's choice); same reply, nothing sent
         SignupCode.objects.using('auth').filter(student=student, consumed_at__isnull=True).update(consumed_at=now)
         if Student.objects.using('auth').filter(email=new_email).exclude(pk=student.pk).exists():
             return
