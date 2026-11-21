@@ -435,6 +435,8 @@ The **C2** row shows the R3-03 distinction. The browser copy is deleted, but **t
 
 ### 6.4 Failure classification: one deterministic algorithm
 
+**D-B1-6 is owner-approved as policy** (see the [B1c decision record](B1C_CLASSIFICATION_DECISION_RECORD.md), including open ambiguities A1–A8). This section remains the algorithm; B1c implementation needs a separate work order.
+
 `classify_database_failure(exc) -> Classification(category, origin, sqlstate, truncated)` is a pure function. It performs no I/O, reads no request data, and never calls `str()` on any exception.
 
 **Transparent wrapper allowlist** (exact classes and their subclasses). The walk passes **only** through these:
@@ -996,7 +998,7 @@ The historical `assertLogs('accounts.tokens')` test (`auth_tests/test_accounts.p
 * **D-B1-4(e) — APPROVED DESIGN:** sanitized stderr/lastResort and loss of development request lines.
 * **D-B1-4(f) — APPROVED DESIGN:** proposed empty-or-one reviewed exact-class E105 allow-list, ordinary secure E104/E105 activation and sanitized process/thread hooks with mandatory N1 containment; sanitized unraisable hook is explicitly included. Accept named raw-output limits only for synthetic development/planning; operational launch controls remain separate; external logging and retention deferred to operational readiness.
 * **D-B1-5 (increments):** Approve B1a → B1b (privacy, including the shared walker) → B1c (classification and rendering) → B1d (wording and full matrix), with the §6.11 gates. Each PR is separately authorized and reviewed. No intermediate staging and no real data.
-* **D-B1-6 (classification policy):** Approve the bounded SQLSTATE policy:
+* **D-B1-6 (classification policy) — APPROVED POLICY (13 November 2026; [decision record](B1C_CLASSIFICATION_DECISION_RECORD.md)); B1c/B1d implementation NOT authorized:** the bounded SQLSTATE policy:
   * preserved handled contracts;
   * a reachable defect gives 500 at every boundary;
   * the documented Django-only `handler400` exception (genuine deletion stays 400);
