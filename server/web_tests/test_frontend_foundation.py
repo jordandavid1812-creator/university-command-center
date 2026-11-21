@@ -40,7 +40,7 @@ class FrontendFoundationTests(WebsiteCase):
                 self.assertTrue(any(d.get('class') == 'mobile-nav' and 'open' not in d for d in shell.details))
                 self.assertContains(response, 'name="csrfmiddlewaretoken"')
                 self.assertContains(response, 'href="#main-content"')
-                self.assertContains(response, 'class="mobile-wordmark">UCC')
+                self.assertContains(response, 'class="mobile-wordmark">UniCommand')
                 self.assertContains(response, 'Welcome back, alpha.' if path == '/' else '<h1>')
 
     def test_public_login_keeps_existing_form_and_local_assets(self):
