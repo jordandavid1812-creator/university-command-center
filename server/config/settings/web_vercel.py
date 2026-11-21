@@ -17,6 +17,8 @@ import re
 
 from django.core.exceptions import ImproperlyConfigured
 
+from config.static_cache import add_cache_headers
+
 from .web_secure import *  # noqa: F403
 from .base import required
 from . import public_site
@@ -68,5 +70,7 @@ WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = False
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+    # URLs carry the deployment stamp, so the files can be cached for a year (config.static_cache).
+    'staticfiles': {'BACKEND': 'config.static_cache.VersionedStaticFilesStorage'},
 }
+WHITENOISE_ADD_HEADERS_FUNCTION = add_cache_headers

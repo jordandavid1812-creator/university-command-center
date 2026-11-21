@@ -207,3 +207,6 @@ Name edits may update only full_name/updated_at and must never rotate credential
 Never infer a verified legal name from a nickname, username, matric number or an AI response.
 Search engines (owner's choice): /robots.txt and /sitemap.xml (student_web.seo) list only the public
 pages, ask AI training crawlers to stay away, read no database and set no cookies. Never add private routes.
+Static caching on Vercel (owner's choice, speed): config.static_cache stamps every static URL with the
+deployment (?v=...) and lets browsers and Vercel's CDN keep those files for a year. Keep the stamp on
+every static URL; never give HTML pages or private responses long cache headers.
