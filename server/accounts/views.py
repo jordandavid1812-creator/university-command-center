@@ -22,7 +22,8 @@ from .throttling import rate_limit
 from . import invites, signup_codes, tokens
 
 CODE_SENT = 'If this email needs confirming, we have sent it a 6-digit code. It works for 5 minutes.'
-CODE_WRONG = 'That code is wrong or has expired. Check the newest email, or ask for a new code.'
+CODE_WRONG = ('That code is wrong or has expired. If it had expired, we have just emailed you a new one: '
+              'check your inbox and Spam. Otherwise, use the code in the newest email.')
 
 
 def _code_page(request, form, notice=None):
@@ -158,8 +159,14 @@ def verify_code(request):
     if resend:
         tokens.request_email(email, 'verify')
         return _code_sent(request, email)
+    # Checked BEFORE this try, so the guess that uses up the last try does not itself send a code.
+    stale = bool(signup_codes.clean_code(form.cleaned_data['code'])) and signup_codes.needs_new_code(email)
     if signup_codes.verify(email, form.cleaned_data['code']):
         return render(request, 'accounts/message.html', {'message': 'Email confirmed. You can now log in.'})
+    if stale:
+        # Owner's choice: an expired or locked code gets a fresh one automatically (within the
+        # resend limit), so nobody is stuck hunting for the right button.
+        signup_codes.renew_if_stale(email, lambda: rate_limit(request, 'resend') is None)
     form.add_error('code', CODE_WRONG)
     return _code_page(request, form)
 

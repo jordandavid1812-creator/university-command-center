@@ -78,3 +78,29 @@ def verify(email, text):
         record.consumed_at = now
         record.save(using='auth', update_fields=['consumed_at'])
         return True
+
+
+def _stale(student):
+    record = (SignupCode.objects.using('auth').filter(student=student, consumed_at__isnull=True, new_email__isnull=True)
+              .order_by('-created_at').first())
+    return record is None or record.expires_at <= timezone.now() or record.attempts >= MAX_ATTEMPTS
+
+
+def needs_new_code(email):
+    """Read-only, before a code is checked: True if this unverified email has no usable code left."""
+    student = _pending(email, lock=False)
+    return student is not None and _stale(student)
+
+
+def renew_if_stale(email, allowed):
+    """After a failed code: if this unverified email's newest code has expired or used up its tries
+    (or none is open), email a fresh one, so a student is never stuck (owner's choice). `allowed()`
+    is asked only then, so ordinary wrong guesses do not use up the resend limit. Returns nothing:
+    the reply is the same for every email, so it never reveals whether an account exists."""
+    with transaction.atomic(using='auth'):
+        student = _pending(email, lock=True)  # Student before code, like every other token path
+        if student is None:
+            return
+        if _stale(student) and student.has_usable_password() and allowed():
+            issue_locked(student)
+
