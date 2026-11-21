@@ -96,3 +96,20 @@ class ConsentOptionTests(AiCase):
         ai_consent.check(plain, "u1", "m1", "quiz", "")
         with self.assertRaises(ai_consent.ConsentInvalid):
             ai_consent.check(plain, "u1", "m1", "quiz", "", options="10:normal")
+
+    def test_the_choices_get_their_own_small_stylesheet_on_ai_pages_only(self):
+        from pathlib import Path
+        self.assertContains(self.client_a.get(self.url("ai-tools")), "/static/student_web/ai_choices.css")
+        self.assertNotContains(self.client_a.get(reverse_dashboard()), "ai_choices.css")
+        css = (Path(__file__).resolve().parents[1] / "student_web/static/student_web/ai_choices.css")
+        self.assertLessEqual(css.stat().st_size, 4_000)
+        text = css.read_text()
+        for forbidden in ("@import", "url("):
+            self.assertNotIn(forbidden, text)
+        self.assertIn("prefers-reduced-motion", text)
+
+
+def reverse_dashboard():
+    from django.urls import reverse
+    return reverse("student_web:dashboard")
+

@@ -3,7 +3,7 @@ marks unanswered questions when time runs out. Synthetic quiz, fake clock, no se
 import os
 import unittest
 from playwright.sync_api import sync_playwright
-from test_ai_browser import QUIZ, html_for
+from test_ai_browser import QUIZ, STATIC, html_for
 
 
 class QuizTimerBrowserTests(unittest.TestCase):
@@ -26,7 +26,9 @@ class QuizTimerBrowserTests(unittest.TestCase):
         page.on('pageerror', lambda error: errors.append(str(error)))
         self.addCleanup(lambda: self.assertEqual(errors, []))
         page.clock.install()
-        html = html_for('quiz', QUIZ)
+        html = html_for('quiz', QUIZ).replace('<link rel="stylesheet" href="/static/student_web/ai_choices.css">',
+                                              '<style>' + (STATIC / 'ai_choices.css').read_text() + '</style>')
+        self.assertNotIn('ai_choices.css', html)
         page.route('http://localhost/**', lambda route: route.fulfill(status=200, content_type='text/html', body=html))
         page.goto('http://localhost/ai-results/synthetic/')
         return page
@@ -78,6 +80,21 @@ class QuizTimerBrowserTests(unittest.TestCase):
         page.get_by_role('button', name='Try again').click()
         self.assertEqual(page.locator('.ai-clock').text_content(), 'Time left 30:00')
         self.assertIn('Score 0 / 5', page.locator('.ai-score').text_content())
+
+    def test_the_drop_down_is_styled_and_the_last_minute_turns_red(self):
+        page = self.page()
+        timer = page.get_by_label('Timer')
+        style = timer.evaluate("node => { const s = getComputedStyle(node); return [s.appearance, s.borderTopLeftRadius, s.minHeight]; }")
+        self.assertEqual(style, ['none', '999px', '44px'])
+        timer.select_option('10')
+        clock = page.locator('.ai-clock')
+        self.assertIsNone(clock.get_attribute('data-low'))
+        page.clock.run_for(540_000)  # 9 minutes: one minute left
+        self.assertEqual(clock.text_content(), 'Time left 1:00')
+        self.assertEqual(clock.get_attribute('data-low'), '')
+        timer.select_option('0')
+        self.assertIsNone(clock.get_attribute('data-low'))
+        self.assertEqual(clock.text_content(), '')
 
 
 if __name__ == '__main__':
