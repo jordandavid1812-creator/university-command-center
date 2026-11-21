@@ -58,7 +58,8 @@ STATUS_HINTS = {
 # (tool, name, mark, description, button) for the tools page cards.
 QUICK_TOOLS = [
     ("summary", "Summary", "S", "The key points of this file in up to 10 short bullets.", "Create summary"),
-    ("quiz", "Quiz", "Q", "5 to 10 multiple-choice questions with instant feedback and a score.", "Create quiz"),
+    ("quiz", "Quiz", "Q", "5 to 20 multiple-choice questions at the level you choose, with a score and an "
+     "optional timer.", "Create quiz"),
     ("flashcards", "Flashcards", "F", "5 to 20 flip cards with piles for what you know and what to review.",
      "Create flashcards"),
 ]
@@ -78,7 +79,8 @@ def _tools_context(identity, material, form):
     results = [{'saved': saved, 'tool_name': TOOL_NAMES[saved.tool]}
                for saved in services.ai.results_for(identity, material.pk)]
     return {'material': material, 'form': form, 'results': results, 'usage': services.ai.usage(identity),
-            'providers': ai_providers.available_providers(), 'quick_tools': QUICK_TOOLS}
+            'providers': ai_providers.available_providers(), 'quick_tools': QUICK_TOOLS,
+            'quiz_counts': ai_providers.QUIZ_COUNTS, 'quiz_levels': QUIZ_LEVEL_NAMES}
 
 
 @protected()
@@ -109,14 +111,17 @@ def confirm(request, identity, identifier):
     except text_extraction.ExtractionFailed as failure:
         return _remember_notes(error_page(request, 'Cannot use this file', failure.message,
                                           503 if failure.reason == 'busy' else 422), choice)
-    tool, question = form.cleaned_data['tool'], form.cleaned_data['question']
-    token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters)
+    tool, question, options = form.cleaned_data['tool'], form.cleaned_data['question'], form.cleaned_data['options']
+    token = ai_consent.issue(request.user.pk, material.pk, tool, question, extracted.characters, options=options)
     providers = ai_providers.button_providers()
-    send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token}, providers=providers,
-                                 auto_id=False)
+    quiz_count, _, quiz_level = options.partition(':')
+    send_form = forms.AiSendForm(initial={'tool': tool, 'question': question, 'token': token,
+                                          'quiz_count': quiz_count, 'quiz_level': quiz_level},
+                                 providers=providers, auto_id=False)
     notes_hidden = choice == 'hide' or (choice != 'show' and request.COOKIES.get(AI_NOTES_COOKIE) == 'hidden')
     response = render(request, 'student_web/ai_confirm.html', {
         'material': material, 'tool': tool, 'tool_name': TOOL_NAMES[tool], 'question': question,
+        'quiz_count': quiz_count, 'quiz_level': dict(QUIZ_LEVEL_NAMES).get(quiz_level, ''),
         'amount': text_extraction.describe(extracted), 'send_form': send_form,
         'providers': ai_providers.send_buttons(providers),
         'usage': services.ai.usage(identity), 'notes_hidden': notes_hidden})
@@ -144,7 +149,7 @@ def send(request, identity, identifier):
     material = services.materials.retrieve(identity, identifier)
     try:
         token_hash, characters = ai_consent.check(data['token'], request.user.pk, material.pk, data['tool'],
-                                                  data['question'])
+                                                  data['question'], options=data['options'])
     except ai_consent.ConsentInvalid:
         return error_page(request, 'Request not sent', 'This confirmation is not valid for this file, so nothing '
                           'was sent. Start again from the study tools.', 400)
@@ -193,9 +198,10 @@ def send(request, identity, identifier):
     #    this one request; the ledger notes which backup answered.
     try:
         try:
-            result = _ask_with_one_retry(data['provider'], data['tool'], extracted.text, data['question'])
+            result = _ask_with_one_retry(data['provider'], data['tool'], extracted.text, data['question'],
+                                         data['options'])
         except ai_providers.ProviderError as failure:
-            backup = ai_providers.fallback_for(data['provider'], extracted.characters)
+            backup = ai_providers.fallback_for(data['provider'], extracted.characters, data['tool'], data['options'])
             if backup is None or not ai_providers.is_busy(failure):
                 raise
             try:
@@ -203,7 +209,7 @@ def send(request, identity, identifier):
             except (AiRequestClosed, services.RecordNotFound, services.InvalidRecord, DatabaseError,
                     OwnershipRequired):
                 raise failure from None  # cannot record the switch: do not send anywhere else
-            result = ai_providers.ask(backup, data['tool'], extracted.text, data['question'])
+            result = ai_providers.ask(backup, data['tool'], extracted.text, data['question'], data['options'])
     except ai_providers.ProviderError as failure:
         _close_failed(request, identity, ledger.pk, failure.category, failure.status_class or '')
         return redirect('student_web:ai-request', ledger.pk)
@@ -221,18 +227,19 @@ def send(request, identity, identifier):
     return redirect('student_web:ai-request', ledger.pk)
 
 
+QUIZ_LEVEL_NAMES = (('easy', 'Easy'), ('normal', 'Normal'), ('hard', 'Hard'), ('exam', 'Exam'))
 RETRY_PAUSE_SECONDS = 3
 
 
-def _ask_with_one_retry(provider, tool, text, question):
+def _ask_with_one_retry(provider, tool, text, question, options=""):
     """Ask once; after a quick "busy" reply, wait a moment and ask the same service once more."""
     try:
-        return ai_providers.ask(provider, tool, text, question)
+        return ai_providers.ask(provider, tool, text, question, options)
     except ai_providers.ProviderError as failure:
         if not ai_providers.worth_retrying(failure):
             raise
     time.sleep(RETRY_PAUSE_SECONDS)
-    return ai_providers.ask(provider, tool, text, question)
+    return ai_providers.ask(provider, tool, text, question, options)
 
 
 def _close_failed(request, identity, request_id, category, status_class=''):

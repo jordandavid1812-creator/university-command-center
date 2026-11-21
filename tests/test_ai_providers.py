@@ -226,7 +226,7 @@ class AskTests(NoNetwork):
 
     def test_the_connection_seam_is_not_a_parameter(self):
         import inspect
-        self.assertEqual(list(inspect.signature(ai.ask).parameters), ["provider", "tool", "text", "question"])
+        self.assertEqual(list(inspect.signature(ai.ask).parameters), ["provider", "tool", "text", "question", "options"])
 
     def test_gemini_thought_parts_are_skipped(self):
         reply = {"candidates": [{"finishReason": "STOP", "content": {"parts": [

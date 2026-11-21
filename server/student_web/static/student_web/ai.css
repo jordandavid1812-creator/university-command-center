@@ -123,3 +123,6 @@
   .ai-answer { display:block; }
   .ai-question { break-inside:avoid; }
 }
+.ai-quiz-choices,.ai-timer{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:end}
+.ai-quiz-choices label,.ai-timer label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.ai-clock{font-weight:700;font-variant-numeric:tabular-nums}

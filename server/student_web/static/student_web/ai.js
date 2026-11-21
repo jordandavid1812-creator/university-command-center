@@ -103,15 +103,62 @@
     progress.appendChild(fill);
     bar.append(label, progress);
     root.prepend(bar);
+    // Optional timer (owner's choice): seconds per question, chosen here, never saved.
+    const timer = el('div', { class: 'ai-timer' });
+    const choice = el('select');
+    [['0', 'Off'], ['30', '30 seconds a question'], ['60', '1 minute a question'], ['120', '2 minutes a question']]
+      .forEach(([value, text]) => choice.appendChild(el('option', { value }, text)));
+    const timerLabel = el('label', {}, 'Timer');
+    timerLabel.appendChild(choice);
+    const clock = el('span', { class: 'ai-clock', role: 'timer' });
+    timer.append(timerLabel, clock);
+    bar.after(timer);
+    let deadline = 0;
+    let tick = 0;
     const final = el('div', { class: 'ai-final', hidden: '' });
     root.appendChild(final);
     let answered = 0;
     let score = 0;
 
+    const stopTimer = () => { window.clearInterval(tick); tick = 0; clock.textContent = ''; };
+    const startTimer = () => {
+      stopTimer();
+      const seconds = Number(choice.value) * questions.length;
+      if (!seconds || answered === questions.length) return;
+      deadline = Date.now() + seconds * 1000;
+      const show = () => {
+        const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        clock.textContent = `Time left ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        if (!left) timeUp();
+      };
+      show();
+      tick = window.setInterval(show, 250);
+    };
+    let timedOut = false;
+    const timeUp = () => {
+      stopTimer();
+      timedOut = true;
+      questions.forEach((question) => {
+        const buttons = Array.from(question.querySelectorAll('.ai-option'));
+        if (buttons.some((option) => option.disabled)) return;
+        const correct = Number(question.dataset.correct);
+        buttons.forEach((option) => { option.disabled = true; });
+        buttons[correct].dataset.state = 'right';
+        const feedback = question.querySelector('.ai-feedback');
+        feedback.dataset.state = 'wrong';
+        feedback.textContent = `Time's up. The answer is ${'ABCD'[correct]}.`;
+        answered += 1;
+      });
+      update();
+      finish();
+    };
+    choice.addEventListener('change', startTimer);
+
     const finish = () => {
+      stopTimer();
       final.replaceChildren();
       const number = el('strong');
-      final.append(el('p', {}, 'Quiz complete'), number,
+      final.append(el('p', {}, timedOut ? "Time's up" : 'Quiz complete'), number,
         el('p', {}, score === questions.length ? 'Perfect score. Brilliant work!' :
           score >= questions.length / 2 ? 'Good effort. Review the ones you missed.' : 'Keep practising. Read the reasons and try again.'));
       const again = el('button', { class: 'button', type: 'button' }, 'Try again');
@@ -176,7 +223,9 @@
         delete feedback.dataset.state;
       });
       final.hidden = true;
+      timedOut = false;
       update();
+      startTimer();
       questions[0].scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
       const first = questions[0].querySelector('.ai-option');
       if (first) first.focus({ preventScroll: true });
