@@ -52,7 +52,26 @@ def _issue_verification(student):
         _issue_locked(student, 'verify')
 
 
+USERNAME_TAKEN = 'That username is already taken. Please choose another.'
+
+
+class UsernameTaken(Exception):
+    """Open sign-up only (owner's choice): a taken username is reported on the form so students
+    are not left wondering. A taken EMAIL is still never revealed."""
+
+
+def _username_taken(values):
+    # Exact match, like the database's unique rule (usernames are case-sensitive). Invite-only
+    # sign-up keeps the original generic reply so an invite cannot be used to probe accounts.
+    return (not getattr(settings, 'UCC_REQUIRE_INVITE', False)
+            and Student.objects.using('auth').filter(username=values['username']).exists())
+
+
 def register(values):
+    """Create the account and send its code or link. Raises UsernameTaken (open sign-up only);
+    a duplicate email gets the same reply as success."""
+    if _username_taken(values):
+        raise UsernameTaken()
     try:
         with transaction.atomic(using='auth'):
             from .names import clean_full_name
@@ -62,7 +81,10 @@ def register(values):
             student.save(using='auth', force_insert=True)
             _issue_verification(student)
     except IntegrityError:
-        # Duplicate username OR normalized email gets the same response as success.
+        # A username taken at the same moment is still reported; a duplicate normalized email
+        # (or any duplicate in invite-only mode) gets the same response as success.
+        if _username_taken(values):
+            raise UsernameTaken() from None
         return
 
 

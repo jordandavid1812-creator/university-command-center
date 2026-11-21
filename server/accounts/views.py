@@ -47,14 +47,18 @@ def register(request):
         # The invite is used up in the same transaction as the account (and only when the rest of
         # the form is valid), so a failure leaves it unused. A duplicate username or email still
         # uses it and gets the same generic reply, so a code cannot be reused to probe accounts.
-        with transaction.atomic(using='auth'):
-            if getattr(settings, 'UCC_REQUIRE_INVITE', False) and not invites.consume(form.cleaned_data['invite_code']):
-                form.add_error('invite_code', invites.INVALID)
-            else:
-                tokens.register(form.cleaned_data)
-                if getattr(settings, 'UCC_SIGNUP_CODE', False):
-                    return _code_sent(request, form.cleaned_data['email'])
-                return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
+        try:
+            with transaction.atomic(using='auth'):
+                if getattr(settings, 'UCC_REQUIRE_INVITE', False) and not invites.consume(form.cleaned_data['invite_code']):
+                    form.add_error('invite_code', invites.INVALID)
+                else:
+                    tokens.register(form.cleaned_data)
+                    if getattr(settings, 'UCC_SIGNUP_CODE', False):
+                        return _code_sent(request, form.cleaned_data['email'])
+                    return render(request, 'accounts/message.html', {'message': tokens.GENERIC_EMAIL_MESSAGE})
+        except tokens.UsernameTaken:
+            # Owner's choice: say so, keep the other answers (passwords are never re-shown).
+            form.add_error('username', tokens.USERNAME_TAKEN)
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Register', 'submit': 'Register'})
 
 
