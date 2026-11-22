@@ -462,7 +462,30 @@ class StudyAiResult(ValidatedRecord):
                                    | (~models.Q(tool="answer") & models.Q(question="")),
                                    name="airesult_question_matches_tool"),
             models.CheckConstraint(condition=models.Q(shape_version__gte=1), name="airesult_shape_version_positive"),
+            # Lets a quiz mistake point at a result of the same student (academics.0030).
+            models.UniqueConstraint(fields=["id", "owner"], name="airesult_id_owner_unique"),
         ]
+
+
+# Mistake bank (owner's choice): the quiz questions a student got wrong, so they can revise them.
+# Only a pointer (which saved quiz, which question) is stored; the question itself stays in the
+# saved result. Never edited; deleted by the student, with its quiz, or with the account.
+MAX_QUIZ_QUESTION_INDEX = 59
+MAX_MISTAKES_PER_STUDENT = 500
+
+
+class QuizMistake(Timestamped):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="quiz_mistakes")
+    result = models.ForeignKey(StudyAiResult, on_delete=models.CASCADE, related_name="mistakes")
+    question_index = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["result", "question_index"], name="quizmistake_once"),
+            models.CheckConstraint(condition=models.Q(question_index__lte=MAX_QUIZ_QUESTION_INDEX),
+                                   name="quizmistake_index_valid"),
+        ]
+        indexes = [models.Index(fields=["owner", "created_at"], name="quizmistake_owner_created")]
 
 
 class AiSiteUsage(models.Model):

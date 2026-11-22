@@ -9,7 +9,7 @@ class LegalPageTests(WebsiteCase):
             with self.subTest(page=name):
                 page = self.client.get(reverse(name))
                 self.assertContains(page, f'<h1 id="{name.split(":")[1]}-heading">{heading}</h1>', html=False)
-                self.assertContains(page, 'Last updated 20 November 2026')
+                self.assertContains(page, 'Last updated 22 November 2026')
                 self.assertContains(page, 'mailto:unicommand.info@gmail.com')
                 self.assertNotContains(page, '<form')
 

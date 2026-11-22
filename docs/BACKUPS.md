@@ -8,7 +8,7 @@ it for 30 days as a download on the Actions page. Only your private key file can
 
 - `supabase/backup/backup_role.sql` creates **`ucc_backup`**, a login that can only *read* the student
   tables (accounts, semesters, courses, assignments, files and their text, profiles, timetable,
-  study plans, AI log, saved AI results and the site's AI counter). It can read every student's rows
+  study plans, AI log, saved AI results, Mistake bank and the site's AI counter). It can read every student's rows
   (it has `BYPASSRLS`, so the copy is complete), but every transaction is read-only, it can change
   nothing, and it cannot read sessions, sign-in tokens, security counters or the private signing key.
 - `tools/backup_database.py` runs `pg_dump --data-only` for those tables only and sends the output

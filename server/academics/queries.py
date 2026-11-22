@@ -8,7 +8,7 @@ from datetime import timedelta
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count, Q
 from .models import (Assignment, ClassSession, Course, StudyPlan, StudyTopic, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
-                     StudyMaterial)
+                     StudyMaterial, QuizMistake, MAX_MISTAKES_PER_STUDENT)
 from .ownership import database_alias, student_transaction
 from .services import (MAX_AI_RESULTS_PER_STUDENT, ai_daily_limit, InvalidRecord, RecordNotFound, ai_day_range,
                        record_id)
@@ -263,10 +263,12 @@ def export_records(identity):
         classes = list(_records(ClassSession, owner).order_by("weekday", "start_time", "id")[:MAX_CLASSES + 1])
         plans = list(_records(StudyPlan, owner).order_by("exam_date", "id")[:MAX_PLANS + 1])
         topics = list(_records(StudyTopic, owner).order_by("plan_id", "planned_date", "position", "id")[:MAX_PLANS * 60 + 1])
-    if (len(classes) > MAX_CLASSES or len(plans) > MAX_PLANS or len(topics) > MAX_PLANS * 60 or len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
+        mistakes = list(_records(QuizMistake, owner).order_by("created_at", "id")[:MAX_MISTAKES_PER_STUDENT + 1])
+    if (len(mistakes) > MAX_MISTAKES_PER_STUDENT or len(classes) > MAX_CLASSES or len(plans) > MAX_PLANS or len(topics) > MAX_PLANS * 60 or len(semesters) > MAX_SEMESTERS or len(courses) > MAX_COURSES
             or len(assignments) > MAX_EXPORT_ASSIGNMENTS or len(materials) > MAX_EXPORT_MATERIALS
             or len(ai_requests) > MAX_EXPORT_AI_REQUESTS or len(ai_results) > MAX_AI_RESULTS_PER_STUDENT):
         raise WorkspaceLimit("Your workspace is too large to export in one file. No file was created.")
     return {"semesters": semesters, "courses": courses, "assignments": assignments,
             "materials": materials, "stored": stored, "profile": profile,
-            "ai_requests": ai_requests, "ai_results": ai_results, "classes": classes, "plans": plans, "topics": topics}
+            "ai_requests": ai_requests, "ai_results": ai_results, "classes": classes, "plans": plans, "topics": topics,
+            "mistakes": mistakes}

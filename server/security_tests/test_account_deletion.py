@@ -7,7 +7,7 @@ from django.db import DatabaseError, connections, transaction
 from django.utils import timezone
 from academics import services
 from academics.ownership import OwnershipRequired
-from academics.services import (ai, class_sessions, delete_account, materials, profiles, search_texts, study_plans)
+from academics.services import (ai, class_sessions, delete_account, materials, mistakes, profiles, search_texts, study_plans)
 from accounts.models import Student
 from .base import StudentSecurityCase
 
@@ -20,6 +20,7 @@ OWNED = {
     'academics_studyairesult': 'owner_id', 'academics_classsession': 'owner_id', 'academics_studyplan': 'owner_id',
     'academics_studytopic': 'owner_id', 'accounts_accounttoken': 'student_id', 'accounts_trusteddevice': 'student_id',
     'accounts_devicegeneration': 'student_id', 'accounts_signupcode': 'student_id',
+    'academics_quizmistake': 'owner_id',
 }
 
 
@@ -43,6 +44,13 @@ class AccountDeletionTests(StudentSecurityCase):
             request, _ = ai.reserve(identity, tool='summary', provider='gemini', model='synthetic-model-1',
                                     characters_sent=20, truncated=False, consent_token_hash=hexdigest(who))
             ai.succeed(identity, request.pk, material_id=material.pk, result={'points': ['Synthetic point']})
+            # Mistake bank (academics.0029/0030): a saved quiz with one saved mistake.
+            quiz_request, _ = ai.reserve(identity, tool='quiz', provider='gemini', model='synthetic-model-1',
+                                         characters_sent=20, truncated=False, consent_token_hash=hexdigest('quiz' + who))
+            quiz = ai.succeed(identity, quiz_request.pk, material_id=material.pk, result={'questions': [
+                {'question': f'Synthetic {n}?', 'options': ['A', 'B', 'C', 'D'], 'correct': 0, 'reason': 'Synthetic.'}
+                for n in range(5)]})
+            mistakes.add(identity, quiz.pk, [0], 5)
             self.account_rows(getattr(self, f'student_{who}').pk, who)
 
     def account_rows(self, student_id, label):

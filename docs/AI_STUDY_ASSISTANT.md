@@ -553,3 +553,15 @@ what happened in plain words.
   calmer with reduced motion); the timer shows as a pill that turns red in the last minute.
 - Still one request and one count per quiz.
 
+
+
+## Mistake bank
+
+After an interactive quiz, a **Save the ones you got wrong** form appears with the wrong and
+timed-out questions already ticked (without JavaScript the student ticks them). Saving stores only
+which saved quiz and which question number (`academics.services.Mistakes`, at most 500 per student).
+`/mistakes/` lists them with the right answer and reason (re-checked like any saved result);
+**Practise my mistakes** builds an interactive quiz of up to 20 of them in a random order from the
+student's own saved quizzes. No AI request is made and nothing is counted. Mistakes are removed one
+by one, all at once (with a confirm box), with their quiz, or with the account, and are included in
+"Download my data" as `quiz_mistakes`. Styles live in `ai_choices.css`.

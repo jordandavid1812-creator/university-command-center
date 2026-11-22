@@ -66,6 +66,10 @@ class Command(BaseCommand):
                     sql.SQL(", ").join(map(sql.Identifier, columns)),
                     sql.Identifier(schema), sql.Identifier(table), sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_semester, public.academics_course, public.academics_assignment, public.academics_studymaterial, public.academics_materialfile, public.academics_materialtext, public.academics_classsession, public.academics_studyplan, public.academics_studytopic TO {}").format(sql.Identifier(role)))
+            # Mistake bank (0029/0030): saved and removed, never edited. Older schemas have no table yet.
+            cursor.execute("SELECT to_regclass('public.academics_quizmistake') IS NOT NULL")
+            if cursor.fetchone()[0]:
+                cursor.execute(sql.SQL("GRANT SELECT, INSERT, DELETE ON public.academics_quizmistake TO {}").format(sql.Identifier(role)))
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studentprofile TO {}").format(sql.Identifier(role)))
             # AI ledger: never deleted by the website; results: never edited.
             cursor.execute(sql.SQL("GRANT SELECT, INSERT ON public.academics_studyairequest TO {}").format(sql.Identifier(role)))

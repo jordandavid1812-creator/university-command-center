@@ -214,3 +214,6 @@ Quiz options (owner's choice): 5/10/15/20 questions and easy/normal/hard/exam tr
 bound by the consent token; quizzes over 10 questions never switch to Groq. Gemini gets a JSON Schema
 (responseJsonSchema, minItems = maxItems = the chosen count) so it returns exactly that many questions. The quiz timer (Off/10/20/30 minutes for the whole quiz) stays
 browser-only and is never saved. Without options the original quiz prompt is unchanged.
+Mistake bank: academics_quizmistake holds only (saved quiz, question number) pointers with forced RLS,
+a same-owner FK to academics_studyairesult and no runtime UPDATE; at most 500 per student. Practice
+quizzes are built from the student's own saved quizzes and never call an AI provider.

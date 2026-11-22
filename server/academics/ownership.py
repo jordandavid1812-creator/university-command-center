@@ -99,15 +99,18 @@ def require_runtime_role(connection):
                    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid)
                    OR EXISTS (SELECT 1 FROM pg_class WHERE relname IN
                        ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic') AND relowner=r.oid)
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic','academics_quizmistake') AND relowner=r.oid)
                    -- Grants configure_runtime never gives: TRUNCATE/REFERENCES/TRIGGER anywhere
                    -- academic, and any UPDATE on stored files (they are never edited).
                    OR EXISTS (SELECT 1 FROM unnest(ARRAY['academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic']) AS t(name)
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic','academics_quizmistake']) AS t(name)
                        WHERE has_table_privilege(current_user, to_regclass('public.' || t.name),
                                                  'TRUNCATE, REFERENCES, TRIGGER'))
                    OR COALESCE(has_any_column_privilege(current_user,
                        to_regclass('public.academics_materialfile'), 'UPDATE'), false)
+                   -- Quiz mistakes are saved or removed, never edited.
+                   OR COALESCE(has_any_column_privilege(current_user,
+                       to_regclass('public.academics_quizmistake'), 'UPDATE'), false)
                    -- Search text is saved once and never edited either.
                    OR COALESCE(has_any_column_privilege(current_user,
                        to_regclass('public.academics_materialtext'), 'UPDATE'), false)
@@ -146,14 +149,18 @@ def require_runtime_role(connection):
                    maintain=maintain_anywhere_sql(connection)))
         if cursor.fetchone() != (False,):
             raise ImproperlyConfigured("Student services require a restricted runtime database role.")
+        # Every academic table that exists must have forced RLS: the original twelve always, and the
+        # Mistake bank's table (academics.0029) once it exists (an older schema has none yet).
         cursor.execute("""
-            SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            SELECT count(*) FILTER (WHERE c.relrowsecurity AND c.relforcerowsecurity), count(*),
+                   count(*) FILTER (WHERE c.relname <> 'academics_quizmistake')
+            FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname IN
             ('academics_semester','academics_course','academics_assignment','academics_studymaterial','academics_materialfile','academics_studentprofile',
-                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic')
-            AND c.relrowsecurity AND c.relforcerowsecurity
+                       'academics_studyairequest','academics_studyairesult','academics_materialtext','academics_classsession','academics_studyplan','academics_studytopic','academics_quizmistake')
         """)
-        if cursor.fetchone()[0] != 12:
+        forced, present, original = cursor.fetchone()
+        if original != 12 or forced != present:
             raise ImproperlyConfigured("All academic tables must have forced RLS enabled.")
 
 
