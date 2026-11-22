@@ -505,3 +505,18 @@ gets only the additional column-limited UPDATE(full_name); academic runtime stil
 read/write rights. Matric input/display/export are removed; saved values are erased by academics.0027, and the empty legacy column is retained temporarily for old-code compatibility until a separate contract release drops it.
 Review the maintenance/grant/Supabase sequence before any separately authorized rollout. Older
 backups are not purged automatically; an incompatible-schema restore can fail, and a future column drop cannot recover erased values by reversal.
+
+## Welcome email (owner's choice)
+
+After a student confirms their email (the 6-digit code, or the local email link), the public
+profiles send **one** welcome email (`accounts.welcome`, setting `UCC_WELCOME_EMAIL`, on only in
+`public_site`; off locally and in tests). It lists three first steps and links to the site.
+
+- Sent with `transaction.on_commit` after the confirmation commits, so it is never sent for a
+  wrong, expired or reused code, and only once per account.
+- Same reviewed email backend. Its own designed template (`accounts/email/welcome.html`: hero,
+  "what you unlocked", three numbered steps, buttons and a pro tip), with inline styles only: no
+  images, tracking pixels or external files, and every link goes to the site's own address. A
+  plain-text version is always included. It contains no code, link secret or username.
+- A delivery failure never affects sign-up and logs one generic line only (never the address or
+  the message). The privacy notice lists it among the emails Resend delivers.

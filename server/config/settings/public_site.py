@@ -46,6 +46,8 @@ def configure(namespace, host):
     namespace['UCC_PUBLIC_SITE'] = True
     namespace['UCC_REQUIRE_INVITE'] = False
     namespace['UCC_SIGNUP_CODE'] = True
+    # Owner's choice: one welcome email with three first steps after the email is confirmed.
+    namespace['UCC_WELCOME_EMAIL'] = True
     # Launch step E (owner's choice): the shared AI key allows 10 requests per student and 200 for
     # the whole site per Lagos day. Local and test profiles keep 50 per student and no site limit.
     namespace['UCC_AI_REQUESTS_PER_DAY'] = 10
