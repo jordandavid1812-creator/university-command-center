@@ -10,7 +10,7 @@ from django.db.models import Count, Q
 from .models import (Assignment, ClassSession, Course, StudyPlan, StudyTopic, MaterialFile, Semester, StudentProfile, StudyAiRequest, StudyAiResult,
                      StudyMaterial, QuizMistake, MAX_MISTAKES_PER_STUDENT)
 from .ownership import database_alias, student_transaction
-from .services import (MAX_AI_RESULTS_PER_STUDENT, ai_daily_limit, InvalidRecord, RecordNotFound, ai_day_range,
+from .services import (AI_DAY_ZONE, MAX_AI_RESULTS_PER_STUDENT, ai_daily_limit, InvalidRecord, RecordNotFound, ai_day_range,
                        record_id)
 
 PAGE_SIZE = 25
@@ -216,28 +216,63 @@ def dashboard_reads(identity, today):
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
         name, scale = _records(StudentProfile, owner).values_list('display_name', 'grading_scale').first() or ('', 'five')
-        return (semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today),
-                _classes(owner, today.weekday()), _study_today(owner, today), scale, _started(owner))
+        panel = _ai_panel(owner)
+        started, studied = _started(owner, with_activity=True)
+        # Study streak: days with study activity, from the AI count query and the checklist query
+        # (no extra reads, nothing new stored).
+        days = studied | panel.pop('active_days')
+        return (semesters, records, totals, upcoming, name or '', panel, _due_this_week(owner, today),
+                _classes(owner, today.weekday()), _study_today(owner, today), scale, days, started)
 
 
-def _started(owner):
+STREAK_WINDOW_DAYS = 60
+
+
+def _streak_since():
+    start, _ = ai_day_range()
+    return start - timedelta(days=STREAK_WINDOW_DAYS - 1)
+
+
+def _started(owner, with_activity=False):
     """For the dashboard's "Get started" checklist: whether the student has any study file and any
-    timetable class. ONE query (a UNION of two one-row reads, same transaction; nothing else is read),
-    so the dashboard keeps its query budget."""
-    from django.db.models import CharField, Value
-    material = _records(StudyMaterial, owner).values_list(Value('materials', output_field=CharField()))[:1]
-    session = _records(ClassSession, owner).values_list(Value('classes', output_field=CharField()))[:1]
-    found = {row[0] for row in material.union(session, all=True)}
-    return {'materials': 'materials' in found, 'classes': 'classes' in found}
+    timetable class. ONE query (a UNION of small reads, same transaction; nothing else is read),
+    so the dashboard keeps its query budget. With with_activity, the same query also returns the
+    Lagos calendar days of the last 60 on which the student saved a mistake, ticked a study topic,
+    completed an assignment or uploaded a file (for the study streak), as (started, days)."""
+    from django.db.models import CharField, DateField, Value
+    from django.db.models.functions import Cast, TruncDate
+    kind = lambda text: Value(text, output_field=CharField())
+    none = Cast(Value(None), output_field=DateField())  # NULL::date, so the UNION's column types match
+    material = _records(StudyMaterial, owner).order_by().values_list(kind('materials'), none)[:1]
+    session = _records(ClassSession, owner).order_by().values_list(kind('classes'), none)[:1]
+    parts = [session]
+    if with_activity:
+        since = _streak_since()
+        for model, field, extra in ((QuizMistake, 'created_at', {}), (StudyTopic, 'updated_at', {'done': True}),
+                                    (Assignment, 'updated_at', {'completed': True}), (StudyMaterial, 'created_at', {})):
+            parts.append(_records(model, owner).filter(**{f'{field}__gte': since}, **extra).order_by()
+                         .annotate(day=TruncDate(field, tzinfo=AI_DAY_ZONE))
+                         .values_list(kind('day'), 'day').distinct()[:STREAK_WINDOW_DAYS])
+    rows = list(material.union(*parts, all=True))
+    found = {row[0] for row in rows}
+    started = {'materials': 'materials' in found, 'classes': 'classes' in found}
+    if not with_activity:
+        return started
+    return started, {row[1] for row in rows if row[0] == 'day' and row[1] is not None}
 
 
 def _ai_panel(owner):
     """Today's AI usage and the most recent saved results (two queries, same transaction)."""
+    from django.db.models.functions import TruncDate
     start, end = ai_day_range()
-    used = _records(StudyAiRequest, owner).filter(created_at__gte=start, created_at__lt=end).count()
+    # One grouped count gives today's usage and, for the study streak, the days AI tools were used.
+    per_day = {row['day']: row['n'] for row in _records(StudyAiRequest, owner)
+               .filter(created_at__gte=_streak_since(), created_at__lt=end).order_by()
+               .annotate(day=TruncDate('created_at', tzinfo=AI_DAY_ZONE)).values('day').annotate(n=Count('id'))}
+    used = per_day.get(start.date(), 0)
     recent = list(_records(StudyAiResult, owner).order_by('-created_at', 'id')
                   .values('id', 'tool', 'created_at', 'material__title')[:DASHBOARD_RECENT_AI_RESULTS])
-    return {'used_today': used, 'daily_limit': ai_daily_limit(), 'recent': recent}
+    return {'used_today': used, 'daily_limit': ai_daily_limit(), 'recent': recent, 'active_days': set(per_day)}
 
 
 def code_in_use(identity, code, exclude=None):

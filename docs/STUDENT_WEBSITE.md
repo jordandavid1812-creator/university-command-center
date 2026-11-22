@@ -646,3 +646,18 @@ flashcards), a progress bar and "N of 6 done".
   notes need a course; study tools need an uploaded file); otherwise the step says what comes first.
 - It is a `<details>` element: it works without JavaScript and can be folded away. It disappears
   once every step is done. Nothing new is stored. Styles: `getting_started.css` (dashboard only).
+
+## Study streak (dashboard)
+
+A **study streak** card shows how many days in a row the student has studied, their best run in
+the last 60 days, and dots for the last seven days. A study day (Lagos calendar date) is any day
+with an AI request, a saved quiz mistake, a study topic ticked done, an assignment completed or a
+file uploaded. The streak counts back from today, or from yesterday while today is still open.
+
+- Nothing new is stored: the days come from timestamps the site already keeps, so the privacy
+  notice is unchanged.
+- No extra database reads: the AI usage count became one grouped count (today's number plus the
+  days AI was used), and the "Get started" UNION query also returns the other activity days
+  (`academics.queries._started(with_activity=True)`). Both stay in the one verified transaction.
+- Practising in the browser (answering a quiz, the Mistake bank practice) is not recorded, so it
+  does not count on its own.
