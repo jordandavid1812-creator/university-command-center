@@ -217,7 +217,18 @@ def dashboard_reads(identity, today):
         totals, upcoming = _assignment_metrics(owner, today)
         name, scale = _records(StudentProfile, owner).values_list('display_name', 'grading_scale').first() or ('', 'five')
         return (semesters, records, totals, upcoming, name or '', _ai_panel(owner), _due_this_week(owner, today),
-                _classes(owner, today.weekday()), _study_today(owner, today), scale)
+                _classes(owner, today.weekday()), _study_today(owner, today), scale, _started(owner))
+
+
+def _started(owner):
+    """For the dashboard's "Get started" checklist: whether the student has any study file and any
+    timetable class. ONE query (a UNION of two one-row reads, same transaction; nothing else is read),
+    so the dashboard keeps its query budget."""
+    from django.db.models import CharField, Value
+    material = _records(StudyMaterial, owner).values_list(Value('materials', output_field=CharField()))[:1]
+    session = _records(ClassSession, owner).values_list(Value('classes', output_field=CharField()))[:1]
+    found = {row[0] for row in material.union(session, all=True)}
+    return {'materials': 'materials' in found, 'classes': 'classes' in found}
 
 
 def _ai_panel(owner):

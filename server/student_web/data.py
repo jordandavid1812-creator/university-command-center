@@ -12,10 +12,45 @@ def snapshot(identity, today=None):
     if today is None:
         return workspace(*academic_snapshot(identity))
     (semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study,
-     scale) = dashboard_reads(identity, today)
+     scale, started) = dashboard_reads(identity, today)
     return {**workspace(semesters, courses, scale), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
             'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
-            'today_study': study}
+            'today_study': study,
+            'getting_started': getting_started(semesters, courses, totals, started, ai_panel)}
+
+
+def getting_started(semesters, courses, totals, started, ai_panel):
+    """The dashboard's "Get started" checklist for new students: six first steps, each done or not,
+    from records the dashboard already read. It disappears once every step is done."""
+    steps = [
+        ('semester', 'Create your first semester', 'Group your courses by semester.', bool(semesters),
+         'student_web:semester-create', 'Create semester'),
+        ('course', 'Add a course with its grade', 'Your GPA and CGPA appear straight away.',
+         any(course.actual_grade for course in courses), 'student_web:course-create', 'Add course'),
+        ('assignment', 'Add an assignment', 'Never miss a deadline: it shows in "Due this week".',
+         bool(totals.get('total')), 'student_web:assignment-create', 'Add assignment'),
+        ('timetable', 'Add your timetable', "See today's classes here every day.", started['classes'],
+         'student_web:session-create', 'Add a class'),
+        ('notes', 'Upload your lecture notes', 'PDF or text, up to the size shown on the upload page.',
+         started['materials'], 'student_web:material-upload', 'Upload notes'),
+        ('ai', 'Make a quiz or flashcards', 'Open a file in Study materials, then choose Study tools.',
+         bool(ai_panel.get('recent')), 'student_web:material-list', 'Open study materials'),
+    ]
+    # A button is offered only when it can work: a course needs a semester; assignments, classes and
+    # notes need a course; study tools need an uploaded file. Otherwise the step says what comes first.
+    blocked = {'course': None if semesters else 'Create a semester first.',
+               'assignment': None if courses else 'Add a course first.',
+               'timetable': None if courses else 'Add a course first.',
+               'notes': None if courses else 'Add a course first.',
+               'ai': None if started['materials'] else 'Upload your notes first.'}
+    rows = [{'key': key, 'title': title, 'hint': blocked.get(key) or hint, 'done': done, 'url': url, 'action': action,
+             'blocked': bool(blocked.get(key)) and not done}
+            for key, title, hint, done, url, action in steps]
+    done = sum(row['done'] for row in rows)
+    # The next step is the first one that is not done and can be done now.
+    upcoming = next((row['key'] for row in rows if not row['done'] and not row['blocked']), None)
+    return {'steps': rows, 'done': done, 'total': len(rows), 'percent': round(100 * done / len(rows)),
+            'complete': done == len(rows), 'next': upcoming}
 
 
 def plan_days(plan, topics, today):
