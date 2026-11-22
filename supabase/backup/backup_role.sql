@@ -36,7 +36,7 @@ GRANT SELECT ON
     public.academics_studymaterial, public.academics_materialfile, public.academics_materialtext,
     public.academics_studentprofile, public.academics_studyairequest, public.academics_studyairesult,
     public.academics_classsession, public.academics_studyplan, public.academics_studytopic,
-    public.academics_aisiteusage
+    public.academics_aisiteusage, public.academics_quizmistake
 TO ucc_backup;
 
 COMMIT;

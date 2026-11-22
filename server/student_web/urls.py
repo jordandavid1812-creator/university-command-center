@@ -1,5 +1,5 @@
 from django.urls import path
-from . import ai_views, seo, views
+from . import ai_views, mistake_views, seo, views
 
 app_name = 'student_web'
 urlpatterns = [
@@ -47,6 +47,11 @@ urlpatterns = [
     path('ai-results/<uuid:identifier>/', ai_views.result, name='ai-result'),
     path('ai-results/<uuid:identifier>/download/', ai_views.result_download, name='ai-result-download'),
     path('ai-results/<uuid:identifier>/delete/', ai_views.result_delete, name='ai-result-delete'),
+    path('ai-results/<uuid:identifier>/mistakes/', mistake_views.save, name='mistakes-save'),
+    path('mistakes/', mistake_views.bank, name='mistakes'),
+    path('mistakes/practice/', mistake_views.practice, name='mistakes-practice'),
+    path('mistakes/clear/', mistake_views.clear, name='mistakes-clear'),
+    path('mistakes/<uuid:identifier>/remove/', mistake_views.remove, name='mistake-remove'),
 ]
 for kind, plural in (('semester', 'semesters'), ('course', 'courses'), ('assignment', 'assignments'), ('session', 'timetable')):
     urlpatterns += [

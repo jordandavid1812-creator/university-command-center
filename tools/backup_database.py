@@ -28,7 +28,7 @@ BACKUP_TABLES = (
     'academics_studymaterial', 'academics_materialfile', 'academics_materialtext',
     'academics_studentprofile', 'academics_studyairequest', 'academics_studyairesult',
     'academics_classsession', 'academics_studyplan', 'academics_studytopic',
-    'academics_aisiteusage',
+    'academics_aisiteusage', 'academics_quizmistake',
 )
 AGE_HEADER = b'age-encryption.org/v1'
 RECIPIENT = re.compile(r'age1[02-9ac-hj-np-z]{58}')

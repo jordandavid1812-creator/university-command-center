@@ -1,4 +1,4 @@
-/* Quiz choices (questions, difficulty) and the quiz timer: styled drop-downs with gentle motion.
+/* Quiz choices and timer: styled drop-downs with gentle motion.
    AI pages only. No images or external files: the arrow is drawn with gradients (the CSP allows no data URLs). */
 .ai-quiz-choices,.ai-timer{animation:ai-choice-in .45s cubic-bezier(.2,.7,.2,1) both}
 .ai-quiz-choices label,.ai-timer label{font-size:var(--type-meta);letter-spacing:.02em;color:var(--color-text-muted)}
@@ -35,3 +35,16 @@
   .ai-quiz-choices,.ai-timer,.ai-clock:not(:empty),.ai-clock:not(:empty)::before{animation:none}
   .ai-quiz-choices select,.ai-timer select{transition:none}
   .ai-quiz-choices select:hover,.ai-timer select:hover{transform:none}}
+/* Mistake bank */
+.ai-mistakes-form{display:grid;gap:var(--space-3);animation:ai-choice-in .4s ease-out both}
+.ai-mistakes-form[hidden]{display:none}
+.ai-mistake-picks{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0;padding:0;border:0}
+.ai-mistake-picks label{display:inline-flex;align-items:center;gap:.35rem;min-height:44px;padding:.35rem .8rem;border:1.5px solid var(--color-border-control);border-radius:999px;cursor:pointer}
+.ai-mistake-picks label:has(input:checked){border-color:var(--color-error-text);background:var(--color-error-bg);color:var(--color-error-text);font-weight:700}
+.mistake-list{display:grid;gap:var(--space-3);margin:0;padding:0;list-style:none}
+.mistake-card{display:grid;gap:var(--space-2)}
+.mistake-question{font-size:var(--type-body);line-height:1.4}
+.mistake-answer{color:var(--color-success-text);background:var(--color-success-bg);padding:.5rem .75rem;border-radius:var(--radius)}
+.mistake-clear{display:grid;gap:var(--space-3);margin-top:var(--space-6)}
+.mistake-confirm{display:flex;gap:.5rem;align-items:center}
+@media (prefers-reduced-motion:reduce){.ai-mistakes-form{animation:none}}

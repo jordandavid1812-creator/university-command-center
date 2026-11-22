@@ -179,6 +179,7 @@ jobs:
       - run: python tools/test_dashboard_browser.py -v
       - run: python tools/test_ai_browser.py -v
       - run: python tools/test_quiz_timer_browser.py -v
+      - run: python tools/test_mistake_bank_browser.py -v
       # The motion layer: TypeScript 6.0.3 from the lockfile (integrity-checked), no install scripts.
       # The committed app.js must be exactly what the compiler produces from frontend/src/app.ts.
       - run: npm ci --ignore-scripts --no-fund

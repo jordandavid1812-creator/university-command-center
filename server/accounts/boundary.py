@@ -122,6 +122,7 @@ def require_auth_role():
             OR has_any_column_privilege(current_user, 'academics_classsession', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_studyplan', 'SELECT')
             OR has_any_column_privilege(current_user, 'academics_studytopic', 'SELECT')
+            OR COALESCE(has_any_column_privilege(current_user, to_regclass('public.academics_quizmistake'), 'SELECT'), false)
             OR COALESCE(has_any_column_privilege(current_user, to_regclass('public.academics_aisiteusage'), 'SELECT'), false)
             OR {support}
             OR {maintain}

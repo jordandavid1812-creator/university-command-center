@@ -58,6 +58,8 @@ ROUTES = (
     'student_web:material-upload', 'student_web:material-list', 'student_web:material-delete',
     'student_web:material-download', 'student_web:display-preference',
     'student_web:profile-edit', 'student_web:data-export',
+    'student_web:mistakes-save', 'student_web:mistakes', 'student_web:mistakes-practice', 'student_web:mistakes-clear',
+    'student_web:mistake-remove',
     'student_web:planner-projection', 'student_web:standing-print', 'student_web:class-bands',
     'student_web:class-bands-reset', 'student_web:material-search', 'student_web:timetable',
     'student_web:session-create', 'student_web:session-edit', 'student_web:session-delete',

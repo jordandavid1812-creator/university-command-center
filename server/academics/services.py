@@ -16,7 +16,8 @@ import json
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from .models import (GRADING_SCALES, AI_ERROR_CATEGORIES, AI_MODEL_PATTERN, MAX_AI_RESULT_BYTES, Assignment, ClassSession, Course, MaterialFile, MaterialText,
-                     Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial, StudyPlan, StudyTopic)
+                     Semester, StudentProfile, StudyAiRequest, StudyAiResult, StudyMaterial, StudyPlan, StudyTopic,
+                     MAX_MISTAKES_PER_STUDENT, MAX_QUIZ_QUESTION_INDEX, QuizMistake)
 from .ownership import database_alias, require_identity, student_transaction
 
 
@@ -653,6 +654,64 @@ class AiRecords:
 
 
 ai = AiRecords()
+
+
+class MistakeLimit(Exception):
+    def __init__(self):
+        super().__init__(f"Your Mistake bank holds up to {MAX_MISTAKES_PER_STUDENT} questions.")
+
+
+class Mistakes:
+    """Mistake bank (owner's choice): which questions of the student's own saved quizzes they got
+    wrong. Only pointers are stored; saved, listed and removed, never edited."""
+
+    def _mistakes(self, owner):
+        return QuizMistake.objects.using(database_alias()).filter(owner_id=owner)
+
+    def add(self, identity, result_id, indices, question_count):
+        """Save questions of one of the student's quizzes. Already-saved questions are skipped.
+        Returns how many were newly saved. question_count comes from the checked saved result."""
+        indices = sorted(set(indices))
+        if not indices or any(type(i) is not int or not 0 <= i < min(question_count, MAX_QUIZ_QUESTION_INDEX + 1)
+                              for i in indices):
+            raise InvalidRecord()
+        with student_transaction(identity):
+            owner = require_identity(identity)
+            result = StudyAiResult.objects.using(database_alias()).filter(
+                owner_id=owner, pk=record_id(result_id), tool="quiz").first()
+            if result is None:
+                raise RecordNotFound()
+            # One student's saves are serialised, so the limit cannot be passed by racing requests.
+            with connections[database_alias()].cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ["ucc-mistakes:" + str(owner)])
+            mine = self._mistakes(owner)
+            saved = set(mine.filter(result_id=result.pk).values_list("question_index", flat=True))
+            new = [i for i in indices if i not in saved]
+            if mine.count() + len(new) > MAX_MISTAKES_PER_STUDENT:
+                raise MistakeLimit()
+            QuizMistake.objects.using(database_alias()).bulk_create(
+                [QuizMistake(owner_id=owner, result_id=result.pk, question_index=i) for i in new])
+            return len(new)
+
+    def list(self, identity):
+        """The student's mistakes, newest first, with their quiz and file (at most the limit)."""
+        with student_transaction(identity):
+            return list(self._mistakes(require_identity(identity)).select_related("result", "result__material")
+                        .order_by("-created_at", "result_id", "question_index")[:MAX_MISTAKES_PER_STUDENT])
+
+    def remove(self, identity, identifier):
+        with student_transaction(identity):
+            deleted, _ = self._mistakes(require_identity(identity)).filter(pk=record_id(identifier)).delete()
+            if not deleted:
+                raise RecordNotFound()
+
+    def clear(self, identity):
+        with student_transaction(identity):
+            deleted, _ = self._mistakes(require_identity(identity)).delete()
+            return deleted
+
+
+mistakes = Mistakes()
 
 
 def delete_account(identity):

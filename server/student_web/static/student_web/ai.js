@@ -119,6 +119,22 @@
     root.appendChild(final);
     let answered = 0;
     let score = 0;
+    // Mistake bank form (after the quiz): shown once finished, with the wrong ones ticked.
+    const save = document.querySelector('[data-ai-mistakes]');
+    if (save) save.hidden = true;
+    const offerSave = () => {
+      if (!save) return;
+      const boxes = save.querySelectorAll('input[name="question"]');
+      let wrong = 0;
+      questions.forEach((question, index) => {
+        const missed = question.querySelector('.ai-feedback').dataset.state === 'wrong';
+        if (boxes[index]) boxes[index].checked = missed;
+        wrong += missed ? 1 : 0;
+      });
+      save.hidden = !wrong;
+      const text = save.querySelector('[data-ai-mistakes-text]');
+      if (text) text.textContent = `You got ${wrong} wrong (ticked below). Save them to your Mistake bank to revise later.`;
+    };
 
     const stopTimer = () => { window.clearInterval(tick); tick = 0; clock.textContent = ''; clock.removeAttribute('data-low'); };
     const startTimer = () => {
@@ -166,6 +182,7 @@
       again.addEventListener('click', reset);
       final.appendChild(again);
       final.hidden = false;
+      offerSave();
       animate(final, [{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 450 });
       countUp(number, score, questions.length);
       announce(`Quiz complete. You scored ${score} out of ${questions.length}.`);
@@ -225,6 +242,7 @@
       });
       final.hidden = true;
       timedOut = false;
+      if (save) save.hidden = true;
       update();
       startTimer();
       questions[0].scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });

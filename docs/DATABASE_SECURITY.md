@@ -23,7 +23,7 @@ configure a separate restricted account/session role, never a migration connecti
 Two more student-owned tables use the same signed context, forced RLS and
 same-owner foreign keys: `academics_studymaterial` and `academics_materialfile`.
 Runtime grants for stored files exclude UPDATE entirely, and `require_runtime_role`
-now requires forced RLS on the academic tables (twelve, counting the timetable's `academics_classsession` and the study planner's `academics_studyplan` and `academics_studytopic`: six including `academics_studentprofile`,
+now requires forced RLS on the academic tables (thirteen, counting the timetable's `academics_classsession`, the study planner's `academics_studyplan` and `academics_studytopic`, and the Mistake bank's `academics_quizmistake`: six including `academics_studentprofile`,
 see STUDENT_WEBSITE.md, the AI ledger and results, see AI_STUDY_ASSISTANT.md, and the saved search
 text `academics_materialtext`, which like stored files is never updated) and refuses TRUNCATE, REFERENCES,
 TRIGGER or stored-file UPDATE grants. After `migrate`, re-run `configure_runtime`
@@ -125,7 +125,7 @@ side channel or denial-of-service attempt.
 | --- | --- |
 | Cluster DBA | Creates separate roles/database. Superusers and BYPASSRLS roles can bypass RLS; never use them for application requests. Keep credentials outside the runtime process. |
 | Migrator | Owns the dedicated DB/schema/tables/private verifier/key. No SUPERUSER, BYPASSRLS, CREATEROLE or role memberships. Normal provisioning does not require CREATEDB. FORCE RLS applies, but the owner can alter schema/policies and read keys, so it is still privileged and must never serve requests. |
-| Runtime | LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE, no memberships or owned objects. CONNECT, schema USAGE, verifier EXECUTE and SELECT/INSERT/DELETE plus column-limited UPDATE on ONLY the academic tables (semester, course, assignment, and since study materials, studymaterial and materialfile, which has no UPDATE at all; studentprofile has SELECT/INSERT and column-limited UPDATE, never DELETE; the AI ledger studyairequest has SELECT/INSERT and UPDATE of only status, error_category and updated_at, never DELETE; studyairesult has SELECT/INSERT/DELETE, never UPDATE). No account/key/migration table access, DDL, TRUNCATE or TEMP privileges. |
+| Runtime | LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE, no memberships or owned objects. CONNECT, schema USAGE, verifier EXECUTE and SELECT/INSERT/DELETE plus column-limited UPDATE on ONLY the academic tables (semester, course, assignment, and since study materials, studymaterial and materialfile, which has no UPDATE at all; studentprofile has SELECT/INSERT and column-limited UPDATE, never DELETE; the AI ledger studyairequest has SELECT/INSERT and UPDATE of only status, error_category and updated_at, never DELETE; studyairesult has SELECT/INSERT/DELETE, never UPDATE; the Mistake bank's quizmistake has SELECT/INSERT/DELETE, never UPDATE). No account/key/migration table access, DDL, TRUNCATE or TEMP privileges. |
 
 `configure_runtime` checks role flags, memberships and object ownership, revokes
 PUBLIC app-database access and schema creation, clears the role's app schema/table
@@ -271,3 +271,14 @@ DBA/migrator compromise and arbitrary trusted Python execution can bypass this
 boundary. CLI/Streamlit remain independent local single-user JSON applications;
 they do not gain multi-user isolation through these new database services.
 Historical JSON provenance concerns from Milestone 1 remain unchanged.
+
+## Mistake bank (academics.0029 / 0030)
+
+`academics_quizmistake` stores only pointers: which of the student's saved quizzes
+(`result_id`) and which question (`question_index`, 0 to 59), with timestamps. It has forced RLS
+with the usual `student_owner` policy and a composite same-owner foreign key
+`(result_id, owner_id) -> academics_studyairesult (id, owner_id)` (0029 adds the needed
+`airesult_id_owner_unique`). The runtime role gets SELECT, INSERT and DELETE, never UPDATE, and the
+startup check refuses any UPDATE grant or missing forced RLS (13 tables). The auth role has no
+access. `ucc_security.delete_my_account()` (replaced in 0030) deletes mistakes first. Each student
+holds at most 500, enforced under a per-student advisory lock.
