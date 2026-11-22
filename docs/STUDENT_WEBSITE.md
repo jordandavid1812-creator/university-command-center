@@ -631,3 +631,18 @@ contract release after old code is retired. Account full_name
 has its own persistent blank database default. Historical masked-ID descriptions are not current UI.
 No live migration has occurred. See [Editable full name](EDITABLE_FULL_NAME.md) for rollout,
 backup-schema compatibility, explicit test-change approval and the remaining erasure gate.
+
+## Get started checklist (dashboard)
+
+New students see a **Get started with UniCommand** panel at the top of the dashboard: six first
+steps (semester, a graded course, an assignment, a timetable class, lecture notes, a quiz or
+flashcards), a progress bar and "N of 6 done".
+
+- Each step is ticked from the student's **own** records in the dashboard's one verified
+  transaction (`academics.queries.dashboard_reads`). Only one small read was added
+  (`_started`: does any study file / timetable class exist, as one UNION query), so the dashboard
+  stays within its query budget; everything else was already read.
+- A button appears only when it can work (a course needs a semester; assignments, classes and
+  notes need a course; study tools need an uploaded file); otherwise the step says what comes first.
+- It is a `<details>` element: it works without JavaScript and can be folded away. It disappears
+  once every step is done. Nothing new is stored. Styles: `getting_started.css` (dashboard only).

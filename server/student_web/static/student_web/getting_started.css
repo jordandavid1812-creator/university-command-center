@@ -1,0 +1,26 @@
+/* Dashboard "Get started" checklist for new students. No images or external files. */
+.getting-started{display:grid;gap:var(--space-3);animation:start-in .45s cubic-bezier(.2,.7,.2,1) both}
+.getting-started summary{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap;cursor:pointer;list-style:none}
+.getting-started summary::-webkit-details-marker{display:none}
+.getting-started summary::after{content:"";width:.6rem;height:.6rem;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .25s}
+.getting-started:not([open]) summary::after{transform:rotate(-45deg)}
+.start-heading{display:grid;gap:2px;flex:1}
+.start-title{font-size:var(--type-section);font-weight:700}
+.start-count{font-weight:700;color:var(--color-active-text);background:var(--color-active-bg);border-radius:999px;padding:.3rem .8rem}
+.start-progress{height:.5rem;border-radius:999px;background:var(--color-border-subtle);overflow:hidden}
+.start-progress span{display:block;height:100%;border-radius:inherit;background:var(--color-primary);transition:width .6s ease}
+.start-steps{display:grid;gap:var(--space-2);margin:0;padding:0;list-style:none}
+.start-step{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:var(--space-3);padding:var(--space-3);border:1px solid var(--color-border-subtle);border-radius:var(--radius);background:var(--color-surface)}
+.start-step .button{grid-column:1/-1;justify-self:start}
+.start-text{display:grid;gap:2px}
+.start-text span{color:var(--color-text-muted);font-size:var(--type-meta)}
+.start-mark{display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;font-weight:700;border:2px solid var(--color-border-control)}
+.start-step.is-done{opacity:.75}
+.start-step.is-done .start-mark{background:var(--color-success-bg);color:var(--color-success-text);border-color:currentColor}
+.start-step.is-done strong{text-decoration:line-through}
+.start-step.is-blocked .start-text span{font-style:italic}
+.start-step.is-next{border-color:var(--color-primary);background:var(--color-active-bg);box-shadow:0 4px 14px var(--color-shadow)}
+.start-step.is-next .start-mark{background:var(--color-primary);color:var(--color-on-primary);border-color:var(--color-primary)}
+@media (min-width:640px){.start-step{grid-template-columns:auto 1fr auto}.start-step .button{grid-column:auto}}
+@keyframes start-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.getting-started{animation:none}.start-progress span,.getting-started summary::after{transition:none}}
