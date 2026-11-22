@@ -14,6 +14,7 @@ urlpatterns = [
     path('predictor/', views.predictor, name='predictor'),
     path('planner/', views.planner, name='planner'),
     path('planner/projection/', views.planner_projection, name='planner-projection'),
+    path('planner/suggest/', views.planner_suggest, name='planner-suggest'),
     path('performance/print/', views.standing_print, name='standing-print'),
     path('settings/', views.settings, name='settings'),
     path('settings/full-name/', views.full_name_edit, name='full-name'),

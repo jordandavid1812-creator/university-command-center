@@ -227,6 +227,61 @@ def projected_cgpa(courses, expected, remaining, *, policy=LEGACY_POLICY):
             "projected": projected}
 
 
+def grade_suggestions(courses, target, *, policy=LEGACY_POLICY):
+    """One letter grade per UNGRADED course (the student's own course list) that together reach the
+    target CGPA, as evenly as possible: the lowest single grade that would work for every course is
+    found, everyone starts one grade below it, and the courses with the most credit units are raised
+    first until the target is met. Read-only planning: nothing is saved, saved grades never change,
+    and future courses not yet added are not counted. Exact Decimal arithmetic throughout."""
+    policy = checked_policy(policy)
+    target = checked_target(target, policy=policy)
+    with localcontext() as context:
+        context.prec = 50
+        semesters, warnings = validate_courses(courses, policy=policy)
+        points = units = Decimal(0)
+        open_courses = []
+        for records in semesters.values():
+            for code, credit, grade in records:
+                credit = Decimal(str(credit))
+                if grade:
+                    points += policy.grade_points[grade] * credit
+                    units += credit
+                else:
+                    open_courses.append({"code": code, "units": credit})
+        remaining = sum((course["units"] for course in open_courses), Decimal(0))
+        result = {"target": target, "current_points": points, "current_units": units, "remaining": remaining,
+                  "courses": [], "warnings": warnings, "projected": None, "status": "no_courses"}
+        if not open_courses:
+            return result
+        needed = target * (units + remaining) - points  # quality points the open courses must earn
+        # Letters from the lowest points to the highest (ties keep the scale's order).
+        ladder = sorted(policy.grade_points.items(), key=lambda item: item[1])
+        if needed <= 0:
+            status, chosen = "guaranteed", {course["code"]: ladder[0] for course in open_courses}
+        elif ladder[-1][1] * remaining < needed:
+            status, chosen = "impossible", {course["code"]: ladder[-1] for course in open_courses}
+        else:
+            status = "achievable"
+            level = next(index for index, (_, value) in enumerate(ladder) if value * remaining >= needed)
+            low = ladder[max(level - 1, 0)]
+            chosen = {course["code"]: low for course in open_courses}
+            earned = low[1] * remaining
+            for course in sorted(open_courses, key=lambda c: (-c["units"], c["code"])):
+                if earned >= needed:
+                    break
+                chosen[course["code"]] = ladder[level]
+                earned += (ladder[level][1] - low[1]) * course["units"]
+        total = Decimal(0)
+        for course in open_courses:
+            grade, value = chosen[course["code"]]
+            quality = value * course["units"]
+            total += quality
+            result["courses"].append({**course, "grade": grade, "grade_points": value, "quality_points": quality})
+        result["status"] = status
+        result["projected"] = weighted_gpa(points + total, units + remaining)  # same rounding as academic_summary
+        return result
+
+
 # Class of degree: the lowest CGPA for each class, highest class first. These defaults are a
 # common Nigerian 5-point guide only. Each student can edit theirs, and their own university's
 # handbook decides their actual class; nothing here decides graduation or classification rules.

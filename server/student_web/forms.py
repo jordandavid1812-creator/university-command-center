@@ -388,6 +388,24 @@ class AimForm(StrictForm):
     aim = forms.TypedChoiceField(choices=[(str(i), name) for i, name in enumerate(CLASS_NAMES)], coerce=int)
 
 
+class SuggestionForm(StrictForm):
+    """Grade suggestions: a target CGPA only; the courses are the student's own ungraded ones."""
+    target = forms.DecimalField(label='Target CGPA', min_value=0, max_value=5, max_digits=5, decimal_places=4,
+                                initial='4.0000', help_text='0–5, with at most four decimal places.')
+
+    def __init__(self, *args, policy=LEGACY_POLICY, **kwargs):
+        kwargs.setdefault('auto_id', 'suggest_%s')  # unique IDs beside the other planner forms
+        super().__init__(*args, **kwargs)
+        self.policy = policy
+        scaled_decimal(self, 'target', policy, f'0–{policy.maximum}, with at most four decimal places.')
+
+    def clean_target(self):
+        try:
+            return checked_target(self.cleaned_data['target'], policy=self.policy)
+        except ValueError as error:
+            raise forms.ValidationError(str(error)) from error
+
+
 class ProjectionForm(StrictForm):
     """Graduation predictor: the student supplies the remaining credits and an expected average."""
     expected = forms.DecimalField(label='Expected average for your remaining credits', min_value=0, max_value=5,
