@@ -13,7 +13,7 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods
 from decimal import ROUND_CEILING, Decimal
 from grading_policy import LEGACY_POLICY
-from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, academic_summary, class_standing, course_breakdown,
+from academic_logic import (CLASS_NAMES, DEFAULT_CLASS_BANDS, GRADE_POINTS, academic_summary, grade_suggestions, class_standing, course_breakdown,
                             predicted_summary, projected_cgpa, target_plan)
 from academics import queries, services
 from academics.ownership import OwnershipRequired
@@ -559,7 +559,7 @@ def planner(request, identity):
         if not aim.is_valid() or bands is None:
             return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(policy=policy),
                           'result': None, 'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands),
-                          'aim_error': True}, status=400)
+                          'suggest_form': _suggest_form(policy, bands), 'aim_error': True}, status=400)
         initial['target'] = bands[aim.cleaned_data['aim']]
     form = forms.PlannerForm(request.POST if request.method == 'POST' else None, initial=initial, policy=policy)
     result = None
@@ -571,8 +571,32 @@ def planner(request, identity):
         else:
             status = 400
     return render(request, 'student_web/planner.html', {**workspace, 'form': form, 'result': result,
-                  'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands), 'aims_custom': custom},
+                  'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands), 'aims_custom': custom,
+                  'suggest_form': _suggest_form(policy, bands)},
                   status=status)
+
+
+def _suggest_form(policy, bands, data=None):
+    """Grade suggestions form; its target starts at the first class band when there is one."""
+    return forms.SuggestionForm(data, policy=policy, initial={'target': bands[0]} if bands else {})
+
+
+@protected(('POST',))
+def planner_suggest(request, identity):
+    """Grade suggestions for the student's ungraded courses. Read-only; nothing is saved."""
+    workspace = data.standing(identity)
+    policy = workspace['policy']
+    bands, custom = _bands_of(workspace['profile'])
+    form = _suggest_form(policy, bands, request.POST)
+    suggestion = None
+    status = 200
+    if form.is_valid():
+        suggestion = grade_suggestions(workspace['records'], form.cleaned_data['target'], policy=policy)
+    else:
+        status = 400
+    return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(policy=policy), 'result': None,
+                  'projection_form': forms.ProjectionForm(policy=policy), 'aims': _aims(bands), 'aims_custom': custom,
+                  'suggest_form': form, 'suggestion': suggestion}, status=status)
 
 
 def _aims(bands):
@@ -597,7 +621,8 @@ def planner_projection(request, identity):
         status = 400
     bands, custom = _bands_of(workspace['profile'])
     return render(request, 'student_web/planner.html', {**workspace, 'form': forms.PlannerForm(policy=policy), 'result': None,
-                  'projection_form': form, 'projection': projection, 'aims': _aims(bands), 'aims_custom': custom},
+                  'projection_form': form, 'projection': projection, 'aims': _aims(bands), 'aims_custom': custom,
+                  'suggest_form': _suggest_form(policy, bands)},
                   status=status)
 
 

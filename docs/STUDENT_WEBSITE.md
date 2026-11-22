@@ -661,3 +661,19 @@ file uploaded. The streak counts back from today, or from yesterday while today 
   (`academics.queries._started(with_activity=True)`). Both stay in the one verified transaction.
 - Practising in the browser (answering a quiz, the Mistake bank practice) is not recorded, so it
   does not count on its own.
+
+## Grade suggestions (Target CGPA Planner)
+
+The planner has a **Grade suggestions for your courses** section. The student enters a target (it
+starts at their First Class band, or 4.00 without bands) and gets one letter grade for each course
+they have added but not graded yet, from `academic_logic.grade_suggestions`:
+
+- The lowest single grade that would work for every open course is found; every course starts one
+  grade below it, and courses with the most credit units are raised first until the target is met,
+  so at most two neighbouring grades are used.
+- "Already safe" when even the lowest grades keep the target; "Out of reach" shows the CGPA with
+  an A in every open course. Exact Decimal credits; the projected CGPA uses the same rounding as
+  `academic_summary`.
+- Read-only: nothing is saved and saved grades never change. Only courses the student has added
+  count (no graduation, repeat or excluded-credit policy is inferred); the main planner above
+  still takes the remaining credits the student supplies.
