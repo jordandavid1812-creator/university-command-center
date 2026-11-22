@@ -12,11 +12,32 @@ def snapshot(identity, today=None):
     if today is None:
         return workspace(*academic_snapshot(identity))
     (semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study,
-     scale, started) = dashboard_reads(identity, today)
+     scale, studied, started) = dashboard_reads(identity, today)
     return {**workspace(semesters, courses, scale), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
             'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
             'today_study': study,
-            'getting_started': getting_started(semesters, courses, totals, started, ai_panel)}
+            'getting_started': getting_started(semesters, courses, totals, started, ai_panel),
+            'streak': study_streak(studied, today)}
+
+
+def study_streak(days, today):
+    """The study streak from the Lagos calendar days with study activity (last 60 days). The streak
+    counts back from today, or from yesterday while today is still open ("keep it going"). Also the
+    best run in the window and the last seven days for the dashboard dots."""
+    from datetime import timedelta
+    days = {day for day in days if day <= today}
+    end = today if today in days else today - timedelta(days=1)
+    current = 0
+    while end - timedelta(days=current) in days:
+        current += 1
+    best = run = 0
+    for offset in range(60, -1, -1):
+        run = run + 1 if today - timedelta(days=offset) in days else 0
+        best = max(best, run)
+    week = [{'date': today - timedelta(days=offset), 'active': today - timedelta(days=offset) in days,
+             'label': f"{today - timedelta(days=offset):%a}"[:2], 'today': offset == 0} for offset in range(6, -1, -1)]
+    return {'current': current, 'best': best, 'today_done': today in days, 'week': week,
+            'active_week': sum(day['active'] for day in week), 'any': bool(days)}
 
 
 def getting_started(semesters, courses, totals, started, ai_panel):
