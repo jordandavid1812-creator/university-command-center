@@ -89,6 +89,10 @@ def verify(email, text):
         student.save(using='auth', update_fields=['email_verified_at', 'updated_at'])
         record.consumed_at = now
         record.save(using='auth', update_fields=['consumed_at'])
+        # Welcome email (public profiles), only once the confirmation has committed.
+        from .welcome import deliver
+        address = student.email
+        transaction.on_commit(lambda: deliver(address), using='auth')
         return True
 
 

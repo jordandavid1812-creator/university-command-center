@@ -138,4 +138,7 @@ def verify_email(selector, secret):
         student.save(using='auth', update_fields=['email_verified_at', 'updated_at'])
         token.consumed_at = now
         token.save(using='auth', update_fields=['consumed_at'])
+        from .welcome import deliver
+        address = student.email
+        transaction.on_commit(lambda: deliver(address), using='auth')
         return True
