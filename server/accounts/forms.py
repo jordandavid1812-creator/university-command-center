@@ -35,6 +35,12 @@ class RegistrationForm(forms.Form):
                 widget=forms.TextInput(attrs={'autocomplete': 'off', 'autocapitalize': 'characters',
                                               'spellcheck': 'false'}))
 
+        # Owner's choice: an explicit "I agree" box on the public site (UCC_TERMS_TICK).
+        if getattr(settings, 'UCC_TERMS_TICK', False) is True:
+            self.fields['agree_terms'] = forms.BooleanField(
+                label='I agree to the Terms of use and have read the Privacy notice', label_suffix='',
+                error_messages={'required': 'Tick the box to agree to the Terms of use and Privacy notice.'})
+
     def clean_invite_code(self):
         from .invites import INVALID, normalize
         if normalize(self.cleaned_data['invite_code']) is None:

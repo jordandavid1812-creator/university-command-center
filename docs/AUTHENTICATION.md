@@ -520,3 +520,19 @@ profiles send **one** welcome email (`accounts.welcome`, setting `UCC_WELCOME_EM
   plain-text version is always included. It contains no code, link secret or username.
 - A delivery failure never affects sign-up and logs one generic line only (never the address or
   the message). The privacy notice lists it among the emails Resend delivers.
+
+## Terms box and essential-cookie notice (owner's choice)
+
+Both are on only in the public profiles (`public_site`); off locally and in tests.
+
+- **`UCC_TERMS_TICK`**: the sign-up form gets a required "I agree to the Terms of use and have read
+  the Privacy notice" box (`agree_terms`), with links to both documents. Without it the account is
+  not created. Nothing new is stored.
+- **`UCC_COOKIE_NOTICE`**: a slim bar ("We only use essential cookies ... No tracking or ads.
+  Learn more" + **OK**) on every page until OK is pressed. OK is a normal form POST
+  (`student_web:cookie-notice-ok`, CSRF-protected, works without JavaScript) that sets
+  `ucc_cookie_ok=1` (HttpOnly, SameSite=Lax, Secure on the public site, one year) and returns to
+  the same-site page it came from (anything else goes to `/`). There is no Accept/Reject: every
+  cookie is essential, so no consent is needed; the privacy notice lists them all, including this
+  one (`LEGAL_UPDATED` 23 November 2026). Styles: `notice.css`, loaded only when the bar or the box
+  is shown.

@@ -1,5 +1,5 @@
 from django.urls import path
-from . import ai_views, mistake_views, seo, views
+from . import ai_views, mistake_views, notice, seo, views
 
 app_name = 'student_web'
 urlpatterns = [
@@ -7,6 +7,7 @@ urlpatterns = [
     path('robots.txt', seo.robots, name='robots'),
     path('sitemap.xml', seo.sitemap, name='sitemap'),
     path('favicon.ico', seo.favicon, name='favicon'),
+    path('cookies/ok/', notice.cookie_notice_ok, name='cookie-notice-ok'),
     path('semesters/', views.semester_list, name='semester-list'),
     path('courses/', views.course_list, name='course-list'),
     path('assignments/', views.assignment_list, name='assignment-list'),
