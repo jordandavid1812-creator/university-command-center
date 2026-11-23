@@ -77,3 +77,4 @@
   .dashboard-main,.dashboard-semester { display:block; }
   .dashboard-quick-actions { display:none; }
 }
+.share-row{margin:.6rem 0 0;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}.share-row .button[hidden]{display:none}

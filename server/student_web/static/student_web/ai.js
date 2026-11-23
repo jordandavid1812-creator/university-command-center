@@ -183,6 +183,7 @@
       final.appendChild(again);
       final.hidden = false;
       offerSave();
+      final.dispatchEvent(new CustomEvent('ucc:quiz-finished', { bubbles: true, detail: { score, total: questions.length } }));
       animate(final, [{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 450 });
       countUp(number, score, questions.length);
       announce(`Quiz complete. You scored ${score} out of ${questions.length}.`);
