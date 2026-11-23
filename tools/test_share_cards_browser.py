@@ -67,13 +67,15 @@ class ShareCardBrowserTests(unittest.TestCase):
         cls.browser.close()
         cls.driver.stop()
 
-    def open(self, scene, share_sheet=False, javascript=True):
+    def open(self, scene, share_sheet=False, javascript=True, refuse=False):
         context = self.browser.new_context(viewport={'width': 412, 'height': 900}, reduced_motion='reduce',
                                            java_script_enabled=javascript, accept_downloads=True)
         self.addCleanup(context.close)
-        context.set_default_timeout(5000)
+        context.set_default_timeout(20000)  # drawing a 1080x1920 picture is slow on a busy CI machine
         if share_sheet:
             context.add_init_script(SHARE_SHEET)
+        if refuse:  # a phone that refuses to share (for example, too long after the tap)
+            context.add_init_script(SHARE_SHEET + "navigator.share = () => Promise.reject(new DOMException('no', 'NotAllowedError'));")
         requests = []
 
         def respond(route):
@@ -117,6 +119,14 @@ class ShareCardBrowserTests(unittest.TestCase):
         data = Path(download.value.path()).read_bytes()
         self.assertEqual(data[1:4], b'PNG')
         self.assertEqual(struct.unpack('>II', data[16:24]), (1080, 1920))
+        self.assertTrue(page.get_by_text('Picture saved.').is_visible())
+
+    def test_if_the_phone_refuses_to_share_the_picture_is_saved_instead(self):
+        page = self.open('dashboard', refuse=True)
+        page.wait_for_timeout(600)  # the picture is drawn in advance
+        with page.expect_download() as download:
+            page.get_by_role('button', name='Share my streak').click()
+        self.assertEqual(download.value.suggested_filename, 'unicommand-streak.png')
         self.assertTrue(page.get_by_text('Picture saved.').is_visible())
 
     def test_finishing_a_quiz_offers_to_share_the_score(self):

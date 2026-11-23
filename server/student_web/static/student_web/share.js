@@ -148,40 +148,60 @@ function say(button, message) {
     }
     status.textContent = message;
 }
-async function share(button) {
-    const card = cardFor(button.dataset.shareCard ?? '', button.dataset);
-    const canvas = card ? draw(card) : null;
-    if (!card || !canvas) {
-        say(button, 'Sharing is not available in this browser.');
-        return;
+const prepared = new WeakMap();
+const ready = new WeakMap();
+/** Draws the picture ahead of time, so a tap can open the share sheet straight away
+ *  (phones, iPhones especially, only allow sharing right after the tap). */
+function prepare(button) {
+    let promise = prepared.get(button);
+    if (!promise) {
+        promise = new Promise((resolve) => {
+            const card = cardFor(button.dataset.shareCard ?? '', button.dataset);
+            const canvas = card ? draw(card) : null;
+            if (!card || !canvas) {
+                resolve(null);
+                return;
+            }
+            canvas.toBlob((blob) => resolve(blob ? { card, blob, file: new File([blob], card.file, { type: 'image/png' }) } : null), 'image/png');
+        }).then((result) => { ready.set(button, result); return result; });
+        prepared.set(button, promise);
     }
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) {
-        say(button, 'Sharing is not available in this browser.');
-        return;
-    }
-    const file = new File([blob], card.file, { type: 'image/png' });
-    const text = `${card.text} https://${SITE}`;
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-            await navigator.share({ files: [file], text });
-            say(button, 'Shared!');
-        }
-        catch (error) {
-            if (!(error instanceof DOMException && error.name === 'AbortError'))
-                say(button, 'Could not share. Try again.');
-        }
-        return;
-    }
-    // No share sheet (most computers): save the picture instead.
+    return promise;
+}
+function save(button, item) {
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = card.file;
+    link.href = URL.createObjectURL(item.blob);
+    link.download = item.card.file;
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     say(button, 'Picture saved. Post it to your WhatsApp status or anywhere you like.');
+}
+async function share(button) {
+    // Use the picture drawn in advance when there is one, with no waiting before the share sheet.
+    const item = ready.has(button) ? ready.get(button) ?? null : await prepare(button);
+    if (!item) {
+        say(button, 'Sharing is not available in this browser.');
+        return;
+    }
+    const data = { files: [item.file], text: `${item.card.text} https://${SITE}` };
+    if (navigator.canShare && navigator.canShare({ files: [item.file] })) {
+        try {
+            await navigator.share(data);
+            say(button, 'Shared!');
+        }
+        catch (error) {
+            if (!(error instanceof DOMException))
+                say(button, 'Could not share. Try again.');
+            else if (error.name === 'NotAllowedError')
+                save(button, item); // the phone refused: save it instead
+            else if (error.name !== 'AbortError')
+                say(button, 'Could not share. Try again.');
+        }
+        return;
+    }
+    save(button, item); // no share sheet (most computers): save the picture instead
 }
 function activate(button) {
     if (button.dataset.shareReady)
@@ -189,6 +209,7 @@ function activate(button) {
     button.dataset.shareReady = '1';
     button.hidden = false;
     button.addEventListener('click', () => { void share(button); });
+    window.setTimeout(() => { void prepare(button); }, 300);
 }
 function start() {
     document.querySelectorAll('button[data-share-card]').forEach(activate);

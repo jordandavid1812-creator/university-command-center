@@ -150,27 +150,31 @@ function say(button: HTMLElement, message: string): void {
   status.textContent = message;
 }
 
-async function share(button: HTMLButtonElement): Promise<void> {
-  const card = cardFor(button.dataset.shareCard ?? '', button.dataset);
-  const canvas = card ? draw(card) : null;
-  if (!card || !canvas) { say(button, 'Sharing is not available in this browser.'); return; }
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) { say(button, 'Sharing is not available in this browser.'); return; }
-  const file = new File([blob], card.file, { type: 'image/png' });
-  const text = `${card.text} https://${SITE}`;
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], text });
-      say(button, 'Shared!');
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) say(button, 'Could not share. Try again.');
-    }
-    return;
+type Prepared = { card: Card; blob: Blob; file: File } | null;
+const prepared = new WeakMap<HTMLButtonElement, Promise<Prepared>>();
+const ready = new WeakMap<HTMLButtonElement, Prepared>();
+
+/** Draws the picture ahead of time, so a tap can open the share sheet straight away
+ *  (phones, iPhones especially, only allow sharing right after the tap). */
+function prepare(button: HTMLButtonElement): Promise<Prepared> {
+  let promise = prepared.get(button);
+  if (!promise) {
+    promise = new Promise<Prepared>((resolve) => {
+      const card = cardFor(button.dataset.shareCard ?? '', button.dataset);
+      const canvas = card ? draw(card) : null;
+      if (!card || !canvas) { resolve(null); return; }
+      canvas.toBlob((blob) => resolve(blob ? { card, blob, file: new File([blob], card.file, { type: 'image/png' }) } : null),
+        'image/png');
+    }).then((result) => { ready.set(button, result); return result; });
+    prepared.set(button, promise);
   }
-  // No share sheet (most computers): save the picture instead.
+  return promise;
+}
+
+function save(button: HTMLButtonElement, item: { card: Card; blob: Blob }): void {
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = card.file;
+  link.href = URL.createObjectURL(item.blob);
+  link.download = item.card.file;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -178,11 +182,31 @@ async function share(button: HTMLButtonElement): Promise<void> {
   say(button, 'Picture saved. Post it to your WhatsApp status or anywhere you like.');
 }
 
+async function share(button: HTMLButtonElement): Promise<void> {
+  // Use the picture drawn in advance when there is one, with no waiting before the share sheet.
+  const item = ready.has(button) ? ready.get(button) ?? null : await prepare(button);
+  if (!item) { say(button, 'Sharing is not available in this browser.'); return; }
+  const data = { files: [item.file], text: `${item.card.text} https://${SITE}` };
+  if (navigator.canShare && navigator.canShare({ files: [item.file] })) {
+    try {
+      await navigator.share(data);
+      say(button, 'Shared!');
+    } catch (error) {
+      if (!(error instanceof DOMException)) say(button, 'Could not share. Try again.');
+      else if (error.name === 'NotAllowedError') save(button, item);  // the phone refused: save it instead
+      else if (error.name !== 'AbortError') say(button, 'Could not share. Try again.');
+    }
+    return;
+  }
+  save(button, item);  // no share sheet (most computers): save the picture instead
+}
+
 function activate(button: HTMLButtonElement): void {
   if (button.dataset.shareReady) return;
   button.dataset.shareReady = '1';
   button.hidden = false;
   button.addEventListener('click', () => { void share(button); });
+  window.setTimeout(() => { void prepare(button); }, 300);
 }
 
 function start(): void {
