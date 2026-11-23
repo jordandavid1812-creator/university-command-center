@@ -173,7 +173,7 @@ class ServerPackageTests(unittest.TestCase):
         self.assertNotIn('invite_code', page)  # open sign-up: anyone with an email
         password = 'Synthetic-Long-Passphrase-42'
         details = {'username': 'synthetic_student', 'email': 'synthetic.student@example.invalid',
-                   'password1': password, 'password2': password}
+                   'password1': password, 'password2': password, 'agree_terms': 'on'}
         status, _, page = self.browse(jar, 'POST', '/accounts/register/', details)
         self.assertEqual(status, 200)
         self.assertIn('Enter your code', page)

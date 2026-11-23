@@ -63,7 +63,7 @@ def register(request):
     return render(request, 'accounts/form.html', {'form': form, 'title': 'Register', 'submit': 'Register'})
 
 
-LEGAL_UPDATED = '22 November 2026'
+LEGAL_UPDATED = '23 November 2026'
 LEGAL_CONTACT = 'unicommand.info@gmail.com'
 
 

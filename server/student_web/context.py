@@ -4,6 +4,8 @@ from django.urls import reverse
 
 DISPLAY_COOKIE = 'ucc_display'
 DISPLAY_CHOICES = ('system', 'light', 'dark')
+# Essential-cookie notice (owner's choice): '1' once the student presses OK. Nothing else is stored.
+COOKIE_NOTICE_COOKIE = 'ucc_cookie_ok'
 
 
 def display_theme(request):
@@ -40,4 +42,6 @@ def navigation(request):
             items.append({'url': url, 'label': label, 'active': active})
     return {'website_enabled': enabled, 'workspace_authenticated': authenticated,
             'navigation': items, 'student_username': request.user.username if authenticated else '',
-            'display_theme': display_theme(request)}
+            'display_theme': display_theme(request),
+            'cookie_notice': (enabled and getattr(settings, 'UCC_COOKIE_NOTICE', False) is True
+                              and request.COOKIES.get(COOKIE_NOTICE_COOKIE) != '1')}

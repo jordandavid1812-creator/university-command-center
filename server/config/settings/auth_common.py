@@ -71,6 +71,10 @@ def configure(namespace):
         # One welcome email after a student confirms their email (accounts.welcome). Off locally
         # and in tests; the public profiles turn it on.
         UCC_WELCOME_EMAIL=False,
+        # Owner's choice: a required "I agree" box on sign-up and a slim essential-cookie notice.
+        # Off locally and in tests; the public profiles turn both on.
+        UCC_TERMS_TICK=False,
+        UCC_COOKIE_NOTICE=False,
     )
     # B1a only: application aliases; test/offline migrator defaults stay untouched.
     from accounts.dbsafety import apply_db_safety

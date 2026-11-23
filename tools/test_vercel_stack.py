@@ -71,7 +71,8 @@ def student(name):
     client = Client(HTTP_HOST=HOST)
     email = f"{name}@example.invalid"
     page = post(client, "/accounts/register/", {"username": name, "email": email,
-                                                "password1": PASSWORD, "password2": PASSWORD}).content.decode()
+                                                "password1": PASSWORD, "password2": PASSWORD,
+                                                "agree_terms": "on"}).content.decode()
     result[name + "_code_page"] = "Enter your code" in page
     body = mail.outbox[-1].body
     code = re.search(r"code is (\d{6})", body).group(1)
