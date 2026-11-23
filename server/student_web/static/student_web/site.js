@@ -2,7 +2,13 @@
 // Without JavaScript, or if they fail to load, every page still shows everything.
 const siteScript = document.currentScript;
 if (siteScript instanceof HTMLScriptElement && siteScript.src) {
-  for (const name of ['app.js', 'reminders.js', 'share.js']) import(new URL(name, siteScript.src).href).catch(() => {});
+  // Keep site.js's version stamp (?v=...), so each new deployment also refreshes these files.
+  const stamp = new URL(siteScript.src).search;
+  for (const name of ['app.js', 'reminders.js', 'share.js']) {
+    const url = new URL(name, siteScript.src);
+    url.search = stamp;
+    import(url.href).catch(() => {});
+  }
 }
 
 // Progressive feedback only. Every form remains functional without JavaScript.

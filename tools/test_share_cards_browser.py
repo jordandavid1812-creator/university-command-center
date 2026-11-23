@@ -144,6 +144,17 @@ class ShareCardBrowserTests(unittest.TestCase):
         page.get_by_role('button', name='Try again').click()  # a new attempt clears the old button
         self.assertEqual(page.get_by_role('button', name='Share my score').count(), 0)
 
+    def test_the_scripts_keep_the_deployment_version_stamp(self):
+        stamped = self.html['dashboard'].replace('src="/static/student_web/site.js"',
+                                                 'src="/static/student_web/site.js?v=abc123def456"')
+        self.assertNotEqual(stamped, self.html['dashboard'])
+        self.html['stamped'] = stamped
+        page = self.open('stamped')
+        page.get_by_role('button', name='Share my streak').wait_for()
+        loaded = [url.split('/static/student_web/', 1)[1] for url in page.requests if '/static/student_web/' in url]
+        for name in ('site.js', 'app.js', 'reminders.js', 'share.js'):
+            self.assertIn(name + '?v=abc123def456', loaded)  # each deployment refreshes them all
+
     def test_without_javascript_the_buttons_stay_hidden(self):
         page = self.open('dashboard', javascript=False)
         self.assertEqual(page.locator('button[data-share-card]').count(), 2)
