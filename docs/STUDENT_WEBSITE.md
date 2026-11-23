@@ -677,3 +677,22 @@ they have added but not graded yet, from `academic_logic.grade_suggestions`:
 - Read-only: nothing is saved and saved grades never change. Only courses the student has added
   count (no graduation, repeat or excluded-credit policy is inferred); the main planner above
   still takes the remaining credits the student supplies.
+
+## Share cards (dashboard and quiz results)
+
+Owner's choice, to help UniCommand spread by word of mouth. A student can share a picture of:
+
+- their **study streak** (the "Share my streak" button on the streak card, when the streak is at least one day);
+- their **CGPA** (the "Share my CGPA" button under Actual CGPA, once a course is graded), out of 5.00 or 4.00 to match their scale;
+- their **quiz score** (the "Share my score" button that appears when an interactive quiz ends).
+
+How it works (`frontend/src/share.ts`, compiled to `share.js` and loaded by `site.js`):
+
+- The 1080 × 1920 picture (story size, for WhatsApp status) is drawn in the student's own browser on a canvas.
+  It shows only the number, the UniCommand name and the site address. No name, username, course or school.
+- On phones it opens the phone's own share sheet (Web Share). Where there is none, the picture is saved as a download.
+- Nothing is stored and nothing is sent to UniCommand: the script makes no network requests and uses no browser storage.
+  The buttons carry only numbers already shown on the page.
+- Without JavaScript the buttons stay hidden. `ai.js` announces a finished quiz with a `ucc:quiz-finished` event.
+
+Tests: `web_tests/test_share_cards.py` and `tools/test_share_cards_browser.py` (share sheet, download fallback, PNG size, quiz).

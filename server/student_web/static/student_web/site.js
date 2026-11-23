@@ -1,8 +1,8 @@
-// Load the motion layer and deadline pop-ups (built from frontend/src/*.ts) from the same folder.
+// Load the motion layer, deadline pop-ups and share cards (built from frontend/src/*.ts) from the same folder.
 // Without JavaScript, or if they fail to load, every page still shows everything.
 const siteScript = document.currentScript;
 if (siteScript instanceof HTMLScriptElement && siteScript.src) {
-  for (const name of ['app.js', 'reminders.js']) import(new URL(name, siteScript.src).href).catch(() => {});
+  for (const name of ['app.js', 'reminders.js', 'share.js']) import(new URL(name, siteScript.src).href).catch(() => {});
 }
 
 // Progressive feedback only. Every form remains functional without JavaScript.

@@ -188,7 +188,7 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - run: git diff --exit-code -- server/student_web/static/student_web/app.js server/student_web/static/student_web/reminders.js
+      - run: git diff --exit-code -- server/student_web/static/student_web/app.js server/student_web/static/student_web/reminders.js server/student_web/static/student_web/share.js
       - run: python tools/test_redesign_browser.py -v
       - run: python tools/test_class_bands_browser.py -v
       - run: python tools/test_reminders_browser.py -v
@@ -197,6 +197,7 @@ jobs:
       - run: python tools/test_timetable_browser.py -v
       - run: python tools/test_study_planner_browser.py -v
       - run: python tools/test_content_security_browser.py -v
+      - run: python tools/test_share_cards_browser.py -v
 
   server-package:
     runs-on: ubuntu-latest
