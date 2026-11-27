@@ -1,7 +1,47 @@
-# UniCommand (formerly University Command Center)
+# UniCommand
 
-Students see the name **UniCommand**. Internal names (the `ucc_` database roles, cookies,
-`UCC_*` settings and this repository) keep the old abbreviation on purpose.
+**Your GPA, deadlines and study plans in one place: a free study website for Nigerian university students.**
+
+🌐 Live: **[unicommand.com.ng](https://unicommand.com.ng)**
+
+<p>
+<img src="docs/screenshots/dashboard.png" alt="Dashboard with a study streak and CGPA" width="200">
+<img src="docs/screenshots/gpa-overview.png" alt="GPA and CGPA overview" width="200">
+<img src="docs/screenshots/study-planner.png" alt="Study planner for an exam" width="200">
+<img src="docs/screenshots/ai-quiz.png" alt="Finished AI quiz with a share button" width="200">
+</p>
+
+<sub>Screenshots use a made-up student and made-up courses.</sub>
+
+## What students can do
+
+- **GPA and CGPA in seconds:** credit-weighted, on the 5-point or 4-point scale, with ungraded courses never counted as F.
+- **Target CGPA Planner:** the average needed for a target class, plus one suggested grade for each ungraded course.
+- **Deadlines and timetable:** assignments, a "Due this week" view, today's classes and optional reminder pop-ups.
+- **Study planner:** spread exam topics over the days left and tick them off.
+- **AI study tools from your own notes:** summaries, quizzes (5 to 20 questions, Easy to Exam, optional timer), flip flashcards and questions about a file. Nothing is sent to the AI until the student confirms.
+- **Mistake bank and study streaks:** save the quiz questions you got wrong, practise them later, and keep a daily study streak.
+- **Share cards:** a story-sized picture of a streak, CGPA or quiz score for WhatsApp, drawn in the browser.
+- **Privacy controls:** download all your data or delete your account at any time.
+
+## How it is built
+
+- **Django 5.2 (Python 3.12)** website, hosted on **Vercel**, with a **PostgreSQL 17** database on **Supabase**.
+- **Every student sees only their own records:** forced row-level security on every student table, a restricted database login for the website, and signed per-request student context.
+- **Email** (sign-up codes and the welcome email) through Resend. AI study tools call an external AI provider only after the student confirms, with daily per-student and site-wide limits.
+- **Tested before every release:** more than 1,000 automated tests (calculations, database security on real PostgreSQL, the website, real-browser checks) run on every pull request. Nightly encrypted database backups.
+- Built by the owner with **Claude Code** (an AI coding assistant) as coding partner: the owner chose every feature and approved every change.
+
+More detail: [student website](docs/STUDENT_WEBSITE.md), [database security](docs/DATABASE_SECURITY.md),
+[authentication](docs/AUTHENTICATION.md), [AI study assistant](docs/AI_STUDY_ASSISTANT.md),
+[launch](docs/LAUNCH.md) and [backups](docs/BACKUPS.md).
+
+Internal names (the `ucc_` database roles, cookies, `UCC_*` settings and this repository's name) keep the
+old "University Command Center" abbreviation on purpose.
+
+## The original terminal and Streamlit app (Milestone 1)
+
+UniCommand started as this local app, which still works and is still tested.
 
 A Python app for managing university life, with a terminal interface and a local Streamlit web interface.
 
