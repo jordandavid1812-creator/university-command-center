@@ -37,6 +37,7 @@
       <h2 id="actual-cgpa-title">Actual CGPA</h2>
       <p class="dashboard-gpa"><strong id="actual-cgpa-value">{% if summary.gpa != None %}{{ summary.gpa|floatformat:2 }}{% else %}Not graded{% endif %}</strong>{% if summary.gpa != None %}<span> / {{ scale.max|default:'5.00' }}</span>{% endif %}</p>
       <p class="dashboard-note">Credit-weighted actual results. Ungraded courses are excluded; F counts as 0.</p>
+      {% include 'student_web/components/class_ladder.html' %}
       {% if summary.gpa != None %}<p class="share-row"><button type="button" class="button secondary" data-share-card="cgpa" data-share-value="{{ summary.gpa|floatformat:2 }}" data-share-max="{{ scale.max|default:'5.00' }}" hidden>📸 Share my CGPA</button></p>{% endif %}
       <dl class="dashboard-stats">
         <div><dt>Attempted credits</dt><dd>{{ summary.units|floatformat:'-4' }}</dd></div>
