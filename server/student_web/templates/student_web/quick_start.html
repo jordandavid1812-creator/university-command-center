@@ -1,0 +1,27 @@
+{% extends 'accounts/base.html' %}
+{% load static %}
+{% block title %}Quick start · UniCommand{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/command.css' %}">{% endblock %}
+{% block content %}
+<div class="quick-start">
+  <header class="page-heading qs-heading"><div>
+    <h1>See where you stand in a minute.</h1>
+    <p>Type last semester's courses and grades. Your CGPA and class appear as soon as you save. You can change anything later.</p>
+  </div></header>
+  <form method="post" class="panel qs-form" novalidate>{% csrf_token %}
+    {% if form.errors %}<div class="notice error" role="alert" id="error-summary" tabindex="-1"><h2>Please check these details</h2><ul>{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}{% for field in form %}{% for error in field.errors %}<li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>{% endfor %}{% endfor %}</ul></div>{% endif %}
+    <div class="form-field"><label for="{{ form.label.id_for_label }}">Semester name</label><p class="helptext">{{ form.label.help_text }}</p>{{ form.label }}</div>
+    <p class="qs-scale">Grades use your <strong>{{ scale.name }}</strong> scale ({{ scale.letters }}). <a href="{% url 'student_web:settings' %}">Change scale</a></p>
+    <div class="qs-rows" role="group" aria-label="Courses">
+      <div class="qs-row qs-head" aria-hidden="true"><span>Course code</span><span>Credit units</span><span>Grade</span></div>
+      {% for code, units, grade in form.rows %}<div class="qs-row">
+        <label class="sr-only" for="{{ code.id_for_label }}">{{ code.label }}</label><input type="text" name="{{ code.html_name }}" id="{{ code.id_for_label }}" value="{{ code.value|default_if_none:'' }}" maxlength="64" placeholder="{% if forloop.first %}CSC101{% elif forloop.counter == 2 %}MTH101{% endif %}" autocapitalize="characters"{% if code.errors %} aria-invalid="true"{% endif %}>
+        <label class="sr-only" for="{{ units.id_for_label }}">{{ units.label }}</label><input type="number" name="{{ units.html_name }}" id="{{ units.id_for_label }}" value="{{ units.value|default_if_none:'' }}" min="0.0001" step="any" inputmode="decimal" placeholder="{% if forloop.first %}3{% endif %}"{% if units.errors %} aria-invalid="true"{% endif %}>
+        <label class="sr-only" for="{{ grade.id_for_label }}">{{ grade.label }}</label>{{ grade }}
+      </div>{% endfor %}
+    </div>
+    <p class="helptext">Leave rows you do not need empty. Courses without a grade are never counted as F.</p>
+    <div class="action-row"><button class="button" type="submit">Show my CGPA</button><a class="button secondary" href="{% url 'student_web:dashboard' %}">Not now</a></div>
+  </form>
+</div>
+{% endblock %}

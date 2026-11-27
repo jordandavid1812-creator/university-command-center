@@ -4,7 +4,7 @@ const siteScript = document.currentScript;
 if (siteScript instanceof HTMLScriptElement && siteScript.src) {
   // Keep site.js's version stamp (?v=...), so each new deployment also refreshes these files.
   const stamp = new URL(siteScript.src).search;
-  for (const name of ['app.js', 'reminders.js', 'share.js']) {
+  for (const name of ['app.js', 'reminders.js', 'share.js', 'command.js']) {
     const url = new URL(name, siteScript.src);
     url.search = stamp;
     import(url.href).catch(() => {});

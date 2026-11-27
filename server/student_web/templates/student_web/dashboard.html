@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Dashboard · UniCommand{% endblock %}
 {% block body_class %}dashboard-page{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}"><link rel="stylesheet" href="{% static 'student_web/week.css' %}"><link rel="stylesheet" href="{% static 'student_web/timetable.css' %}"><link rel="stylesheet" href="{% static 'student_web/study.css' %}"><link rel="stylesheet" href="{% static 'student_web/getting_started.css' %}">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/dashboard.css' %}"><link rel="stylesheet" href="{% static 'student_web/week.css' %}"><link rel="stylesheet" href="{% static 'student_web/timetable.css' %}"><link rel="stylesheet" href="{% static 'student_web/study.css' %}"><link rel="stylesheet" href="{% static 'student_web/getting_started.css' %}"><link rel="stylesheet" href="{% static 'student_web/command.css' %}">{% endblock %}
 {% block content %}
 <div class="dashboard">
   <header class="page-heading dashboard-heading dashboard-welcome">
@@ -21,6 +21,8 @@
     {% elif not courses %}<p class="dashboard-onboarding">Your semester is ready. Add a course before creating assignments.</p>{% endif %}
   </header>
 
+  {% include 'student_web/components/command_centre.html' %}
+
   {% if totals.overdue > 0 %}
   <a class="dashboard-attention" href="{% url 'student_web:assignment-list' %}?status=overdue" aria-label="Review {{ totals.overdue }} overdue assignment{{ totals.overdue|pluralize }}">
     <span><strong>{{ totals.overdue }} overdue assignment{{ totals.overdue|pluralize }}</strong><span>Review the deadlines that need your attention.</span></span>
@@ -37,7 +39,6 @@
       <h2 id="actual-cgpa-title">Actual CGPA</h2>
       <p class="dashboard-gpa"><strong id="actual-cgpa-value">{% if summary.gpa != None %}{{ summary.gpa|floatformat:2 }}{% else %}Not graded{% endif %}</strong>{% if summary.gpa != None %}<span> / {{ scale.max|default:'5.00' }}</span>{% endif %}</p>
       <p class="dashboard-note">Credit-weighted actual results. Ungraded courses are excluded; F counts as 0.</p>
-      {% include 'student_web/components/class_ladder.html' %}
       {% if summary.gpa != None %}<p class="share-row"><button type="button" class="button secondary" data-share-card="cgpa" data-share-value="{{ summary.gpa|floatformat:2 }}" data-share-max="{{ scale.max|default:'5.00' }}" hidden>📸 Share my CGPA</button></p>{% endif %}
       <dl class="dashboard-stats">
         <div><dt>Attempted credits</dt><dd>{{ summary.units|floatformat:'-4' }}</dd></div>
