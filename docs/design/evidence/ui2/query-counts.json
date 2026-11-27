@@ -1,0 +1,32 @@
+{
+  "baseline": "ed8890982d99b7be5262d997e2e76266a4b65b0c",
+  "postgresql": "17.11",
+  "observations": [
+    {
+      "baseline": {
+        "auth": 20,
+        "default": 0,
+        "runtime": 20
+      },
+      "state": "empty",
+      "ui2": {
+        "auth": 20,
+        "default": 0,
+        "runtime": 20
+      }
+    },
+    {
+      "baseline": {
+        "auth": 20,
+        "default": 0,
+        "runtime": 20
+      },
+      "state": "populated",
+      "ui2": {
+        "auth": 20,
+        "default": 0,
+        "runtime": 20
+      }
+    }
+  ]
+}

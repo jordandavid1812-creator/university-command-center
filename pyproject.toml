@@ -1,0 +1,19 @@
+# Vercel hosting only (the CLI/Streamlit app keeps requirements.txt and requirements-lock.txt).
+# Vercel installs exactly what uv.lock lists (uv sync --frozen, with hashes). The versions must
+# match requirements-django-lock.txt; tests/test_vercel_config.py checks that.
+[project]
+name = "university-command-center-web"
+version = "0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "Django==5.2.19",
+    "psycopg[binary]==3.3.8",
+    "pypdf==6.21.4",
+    "whitenoise==6.12.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.vercel]
+entrypoint = "vercel_app:app"

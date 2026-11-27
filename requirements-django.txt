@@ -1,0 +1,7 @@
+# Separate foundation runtime; the existing CLI and Streamlit requirements stay intact.
+Django==5.2.19
+psycopg[binary]==3.3.8
+pypdf==6.21.4
+# Public launch: the WSGI server and static files (config.settings.web_production).
+gunicorn==26.2.0
+whitenoise==6.12.0

@@ -1,0 +1,11 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Your next step · UniCommand{% endblock %}
+{% block auth_content %}
+<section class="panel auth-card auth-message">
+  <span class="auth-message-mark" aria-hidden="true">→</span>
+  <p class="eyebrow">Your student account</p>
+  <h1>Check your next step</h1>
+  <p class="auth-message-copy" role="status">{{ message }}</p>
+  <a class="button secondary" href="{% url 'accounts:login' %}">Go to login</a>
+</section>
+{% endblock %}

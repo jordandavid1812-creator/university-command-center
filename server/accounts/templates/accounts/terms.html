@@ -1,0 +1,38 @@
+{% extends 'accounts/base.html' %}
+{% block title %}Terms of use · UniCommand{% endblock %}
+{% block content %}
+<article class="panel legal-page" aria-labelledby="terms-heading">
+<p class="eyebrow">Last updated {{ updated }}</p>
+<h1 id="terms-heading">Terms of use</h1>
+<p>UniCommand (formerly called University Command Center) is a free study tool run by an individual student developer. By creating an account or using the site you agree to these terms and to the <a href="{% url 'accounts:privacy' %}">Privacy notice</a>. Contact: <a href="mailto:{{ contact }}">{{ contact }}</a>.</p>
+
+<h2>Your account</h2>
+<ul>
+<li>Use your own real email address and keep your password private. One account per person; do not share accounts.</li>
+<li>You are responsible for what happens in your account. Tell us quickly if you think someone else has used it.</li>
+</ul>
+
+<h2>Your content</h2>
+<ul>
+<li>What you add (records, files, questions) stays yours. You let us store and process it only to run the site for you, as the Privacy notice describes.</li>
+<li>Only upload files you are allowed to use, and do not upload other people's personal information.</li>
+</ul>
+
+<h2>Fair use</h2>
+<p>Do not try to reach other students' data, attack or overload the site, get around its limits (such as the daily AI limits), scrape it with automated tools, or use it for anything unlawful. We may suspend accounts that do.</p>
+
+<h2>Results, grades and AI</h2>
+<ul>
+<li>GPA, CGPA, predictions and plans are estimates from what you enter. Your university's official records always win; check important numbers with your department.</li>
+<li>AI summaries, quizzes, flashcards and answers can be wrong. Check them against your notes. Follow your institution's rules on AI and academic honesty.</li>
+<li>AI features have daily limits and depend on an outside service; they may be paused or changed.</li>
+</ul>
+
+<h2>The service</h2>
+<p>The site is free and offered "as is" during a trial. It may change, be unavailable at times, or close; we will try to give notice and a chance to export your data first. Keep your own copies of anything important. As far as Nigerian law allows, the site owner is not responsible for losses from using or not being able to use the site.</p>
+
+<h2>Ending</h2>
+<p>You can stop using the site at any time and delete your account yourself in Settings. These terms are governed by the laws of the Federal Republic of Nigeria. If they change, the date at the top changes too.</p>
+<p><a href="{% url 'accounts:privacy' %}">Read the Privacy notice</a></p>
+</article>
+{% endblock %}

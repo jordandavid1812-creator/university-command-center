@@ -1,0 +1,12 @@
+{% if getting_started and not getting_started.complete %}<details class="panel getting-started" open>
+  <summary><span class="start-heading"><span class="eyebrow">New here?</span><span id="start-title" class="start-title">Get started with UniCommand</span></span><span class="start-count">{{ getting_started.done }} of {{ getting_started.total }} done</span></summary>
+  <div class="start-progress" role="progressbar" aria-label="Getting started progress" aria-valuemin="0" aria-valuemax="{{ getting_started.total }}" aria-valuenow="{{ getting_started.done }}"><span style="width:{{ getting_started.percent }}%"></span></div>
+  <ol class="start-steps">{% for step in getting_started.steps %}
+    <li class="start-step{% if step.done %} is-done{% elif step.key == getting_started.next %} is-next{% elif step.blocked %} is-blocked{% endif %}">
+      <span class="start-mark" aria-hidden="true">{% if step.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+      <span class="start-text"><strong>{{ step.title }}</strong>{% if step.done %}<span class="sr-only"> (done)</span>{% else %}<span>{{ step.hint }}</span>{% endif %}</span>
+      {% if not step.done and not step.blocked %}<a class="button{% if step.key != getting_started.next %} secondary{% endif %}" href="{% url step.url %}">{{ step.action }}</a>{% endif %}
+    </li>{% endfor %}
+  </ol>
+  <p class="dashboard-note">This list disappears once every step is done. Use the heading to fold it away for now.</p>
+</details>{% endif %}

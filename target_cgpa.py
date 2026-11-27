@@ -1,0 +1,71 @@
+from academic_logic import academic_summary, target_plan, checked_target, checked_credits
+from gpa import GRADE_POINTS
+
+
+def read_planner_number(prompt, minimum, maximum=None):
+    while True:
+        answer = input(prompt).strip()
+        if answer.upper() == "Q":
+            return None
+        try:
+            return checked_target(answer) if maximum is not None else checked_credits(answer)
+        except ValueError as error:
+            print(str(error))
+
+
+def plan_target_cgpa(courses):
+    print("\nTARGET CGPA PLANNER")
+    if not isinstance(courses, list):
+        print("Course data must be a list. No plan is available.\n")
+        return
+
+    summary = academic_summary(courses)
+    for warning in summary["warnings"]:
+        print(warning)
+    current_points = summary["points"]
+    current_units = summary["units"]
+
+    print(f"Completed attempted credits (saved grades, including F): {current_units:g}")
+    print(f"Current quality points: {current_points:g}")
+    if current_units:
+        print(f"Current CGPA: {summary['gpa']:.2f}")
+    else:
+        print("Current CGPA: N/A (no valid saved grades; starting with zero credits)")
+    print("This plan uses actual saved grades only; ungraded courses are excluded.")
+    print("Enter all remaining credits yourself, including any ungraded courses.")
+    print("Assumes current grades stay fixed and all remaining credits receive 0–5 points.")
+    print("This is a mathematical estimate, not a university graduation or repeat-course policy.")
+
+    target = read_planner_number("Desired final CGPA (0.00–5.00, Q to cancel): ", 0, 5)
+    if target is None:
+        print("CGPA planning cancelled.\n")
+        return
+    remaining = read_planner_number("Remaining credit units (greater than zero, Q to cancel): ", 0)
+    if remaining is None:
+        print("CGPA planning cancelled.\n")
+        return
+
+    try:
+        plan = target_plan(courses, target, remaining)
+    except ValueError as error:
+        print(str(error))
+        return
+    graduation_units = plan["total"]
+    required_average = plan["required"]
+    if not graduation_units.is_finite() or not required_average.is_finite():
+        print("These credit values are too large or too small to calculate safely.\n")
+        return
+
+    print(f"\nTarget CGPA: {target:.2f}")
+    print(f"Total credits at graduation (assumed): {graduation_units:g}")
+    print(f"Required average grade point: {required_average:.2f}")
+    if required_average > max(GRADE_POINTS.values()):
+        print("The target cannot be achieved under these assumptions: the required average exceeds 5.00.")
+    elif required_average <= 0:
+        print("At least the target is already guaranteed if all remaining credits are completed")
+        print("and receive grade points of at least zero. No negative grade points are needed.")
+    else:
+        print("The target is mathematically achievable within the 0–5 scale.")
+        print("Reach at least this average across remaining credits to meet or exceed the target.")
+        print("Individual course weights and available letter grades may limit exact results.")
+    print()

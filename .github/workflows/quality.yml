@@ -1,0 +1,235 @@
+name: Foundation quality
+
+on:
+  pull_request:
+  push:
+    branches: [master, feature/database-foundation, feature/database-security, feature/student-authentication, feature/student-web-app, feature/student-web-polish]
+  schedule:
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+      - run: python -m pip install --upgrade pip==26.3
+      - run: python -m pip install --require-hashes -r requirements-lock.txt
+      - run: python -m pip check
+      - run: python -c "from streamlit.testing.v1 import AppTest"
+      - run: python tools/check_repository_safety.py
+      - run: python -m unittest discover -v
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip==26.3
+      - run: python -m pip install pip-audit==2.10.1
+      - run: python -m pip_audit --strict --require-hashes --disable-pip --progress-spinner off -r requirements-lock.txt -r requirements-django-lock.txt -r requirements-browser-test-lock.txt
+
+  database-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Disposable runner-local service, no committed password or reusable secret.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ucc_ci
+          POSTGRES_DB: ucc_ci_scratch
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ucc_ci -d ucc_ci_scratch"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: ucc_ci
+      PGDATABASE: ucc_ci_scratch
+      PGTESTDATABASE: test_ucc_ci
+      UCC_MIGRATION_ROLE: ucc_migrator_ci
+      UCC_RUNTIME_ROLE: ucc_runtime_ci
+      UCC_AUTH_ROLE: ucc_auth_ci
+      UCC_SECURITY_SCRATCH_DATABASE: ucc_security_scratch
+      UCC_DISPOSABLE_TEST_CLUSTER: '1'
+      UCC_TEST_DBA_USER: ucc_ci
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Generate and mask ephemeral test secrets
+        run: |
+          python - <<'PY'
+          import os, secrets
+          values = {
+              'DJANGO_SECRET_KEY': secrets.token_urlsafe(64),
+              'UCC_MIGRATION_PASSWORD': secrets.token_urlsafe(32),
+              'UCC_RUNTIME_PASSWORD': secrets.token_urlsafe(32),
+              'UCC_AUTH_PASSWORD': secrets.token_urlsafe(32),
+              'UCC_CONTEXT_SIGNING_KEY': secrets.token_hex(32),
+          }
+          with open(os.environ['GITHUB_ENV'], 'a') as target:
+              for name, value in values.items():
+                  print(f'::add-mask::{value}')
+                  target.write(f'{name}={value}\n')
+          PY
+      - run: python -m pip install --upgrade pip==26.3
+      - run: python -m pip install --require-hashes -r requirements-django-lock.txt
+      - run: python -m pip check
+      - run: python server/manage.py check
+      - run: python server/manage.py makemigrations --check --dry-run
+      - run: python server/manage.py migrate --noinput
+      - run: python server/manage.py test accounts academics --settings=config.settings.test -v 2
+      - name: Create dedicated roles on disposable test cluster
+        run: python tools/prepare_security_test_roles.py
+      - name: Security suite using separate non-superuser migration and runtime logins
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_security
+        run: python server/manage.py test security_tests --settings=config.settings.security_test -v 2
+      - name: Authentication, session and academic integration tests with separate LOGIN roles
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_authentication
+        run: python server/manage.py test auth_tests --settings=config.settings.auth_test -v 2
+      - name: B1a contracts under the website URL root and independent mutation controls
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_b1a_web
+          PYTHONPATH: tools
+        run: python server/manage.py test auth_tests.test_b1_settings auth_tests.test_b1_database auth_tests.test_b1_sessions auth_tests.test_b1_measurements b1a_negative_controls --settings=config.settings.web_test -v 2
+      - name: B1b logging privacy under website root with production mutation controls
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_b1b_logging
+          PYTHONPATH: tools
+        run: python server/manage.py test auth_tests.test_b1b_logging auth_tests.test_b1b_profiles auth_tests.test_b1b_integration b1b_negative_controls --settings=config.settings.web_test -v 2
+      - name: B1c classification, rendering and transaction gates under website root
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_b1c_web
+          PYTHONPATH: tools
+        run: python server/manage.py test auth_tests.test_b1c_classification auth_tests.test_b1c_database auth_tests.test_b1c_transactions b1c_negative_controls --settings=config.settings.web_test -v 2
+      - name: Student website integration, calculations and accessibility structure tests
+        env:
+          PGUSER: ${{ env.UCC_MIGRATION_ROLE }}
+          PGPASSWORD: ${{ env.UCC_MIGRATION_PASSWORD }}
+          PGDATABASE: ${{ env.UCC_SECURITY_SCRATCH_DATABASE }}
+          PGTESTDATABASE: test_ucc_website
+        run: python server/manage.py test web_tests --settings=config.settings.web_test -v 2
+
+  frontend-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements-django-lock.txt
+      # Test-only browser tooling; never loaded by the application.
+      - run: 'python -m pip install --require-hashes --only-binary=:all: -r requirements-browser-test-lock.txt'
+      # Browser revisions follow the locked Playwright package. Ubuntu apt dependencies
+      # and browser downloads are not covered by Python wheel hashes; see UI1 notes.
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m playwright install --list
+      - run: python -m pip check
+      - run: python tools/test_frontend_foundation_browser.py -v
+      - run: python tools/test_premium_auth_browser.py -v
+      - run: python tools/test_dashboard_browser.py -v
+      - run: python tools/test_ai_browser.py -v
+      - run: python tools/test_quiz_timer_browser.py -v
+      - run: python tools/test_mistake_bank_browser.py -v
+      # The motion layer: TypeScript 6.0.3 from the lockfile (integrity-checked), no install scripts.
+      # The committed app.js must be exactly what the compiler produces from frontend/src/app.ts.
+      - run: npm ci --ignore-scripts --no-fund
+        working-directory: frontend
+      - run: npm audit --audit-level=low
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: git diff --exit-code -- server/student_web/static/student_web/app.js server/student_web/static/student_web/reminders.js server/student_web/static/student_web/share.js
+      - run: python tools/test_redesign_browser.py -v
+      - run: python tools/test_class_bands_browser.py -v
+      - run: python tools/test_reminders_browser.py -v
+      - run: python tools/test_results_pdf_browser.py -v
+      - run: python tools/test_search_browser.py -v
+      - run: python tools/test_timetable_browser.py -v
+      - run: python tools/test_study_planner_browser.py -v
+      - run: python tools/test_content_security_browser.py -v
+      - run: python tools/test_share_cards_browser.py -v
+
+  server-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: docker compose version
+      - run: python tools/test_server_package.py -v
+
+  supabase-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip==26.3
+      - run: python -m pip install --require-hashes -r requirements-django-lock.txt
+      - run: python tools/test_supabase_sql.py -v
+      - run: python tools/test_vercel_stack.py -v
+      # Launch step H: an encrypted backup really restores (age encrypts; pg_dump 17 runs in Docker).
+      - run: sudo apt-get update -q && sudo apt-get install -y -q age
+      - run: python tools/test_backup_restore.py -v

@@ -1,0 +1,28 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}{{ title }} · UniCommand{% endblock %}
+{% block auth_content %}
+<section class="panel auth-panel auth-card">
+  <header class="auth-card-header">
+    <p class="eyebrow">Your student account</p>
+    <h1>{{ title }}</h1>
+    {% if notice %}<p class="muted" role="status">{{ notice }}</p>{% endif %}
+    <p class="muted">Each code works for 5 minutes and allows 5 tries. A new code replaces the old one.</p>
+    <p class="muted">Not there? Check your Spam or Promotions folder for an email from UniCommand, and mark it &ldquo;Not spam&rdquo;.</p>
+  </header>
+  <form method="post" action="{% url 'accounts:verify-code' %}" class="stacked-form auth-form">
+    {% csrf_token %}
+    {% if website_enabled %}
+      {% include 'student_web/components/form_fields.html' %}
+    {% else %}
+      {{ form.non_field_errors }}
+      {% for field in form %}<div class="form-field">{{ field.as_field_group }}</div>{% endfor %}
+    {% endif %}
+    <button class="button auth-submit" type="submit" name="action" value="verify">Confirm email</button>
+    <p class="muted">Code expired? Just enter it anyway, or press the button below: we will email you a new one.</p>
+    <button class="button secondary" type="submit" name="action" value="resend">Didn&rsquo;t get it? Send me a new code</button>
+  </form>
+  <nav class="auth-secondary" aria-label="Account options">
+    <a class="button secondary" href="{% url 'accounts:login' %}">Back to login</a>
+  </nav>
+</section>
+{% endblock %}

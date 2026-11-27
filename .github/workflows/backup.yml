@@ -1,0 +1,47 @@
+# Launch step H: one encrypted copy of the student tables every day, kept for 30 days.
+# Runs only on the owner's repository, on a schedule or by hand ("Run workflow"); never on pull
+# requests, so no pull request can reach the backup password. See docs/BACKUPS.md.
+name: Database backup
+
+on:
+  schedule:
+    - cron: '17 2 * * *'  # 02:17 UTC, 03:17 in Lagos
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.repository == 'jordandavid1812-creator/university-command-center'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UCC_BACKUP_HOST: ${{ vars.UCC_BACKUP_HOST }}
+      UCC_SUPABASE_PROJECT_REF: ${{ vars.UCC_SUPABASE_PROJECT_REF }}
+      UCC_BACKUP_RECIPIENT: ${{ vars.UCC_BACKUP_AGE_RECIPIENT }}
+      PGPASSWORD: ${{ secrets.UCC_BACKUP_PASSWORD }}
+      # pg_dump 17 to match Supabase's PostgreSQL 17 (the runner's own client is older).
+      UCC_PG_DUMP: docker run --rm -i -e PGPASSWORD mirror.gcr.io/library/postgres:17.12 pg_dump
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update -q && sudo apt-get install -y -q age
+      - name: Make the encrypted backup
+        run: python tools/backup_database.py --output "ucc-backup-$(date -u +%Y-%m-%d).dump.age"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ucc-backup-${{ github.run_id }}
+          path: ucc-backup-*.dump.age
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0

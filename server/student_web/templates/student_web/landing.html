@@ -1,0 +1,99 @@
+{% extends 'accounts/base.html' %}
+{% load static %}
+{% block title %}UniCommand · Your studies, in one place{% endblock %}
+{% block body_class %}landing-page{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'student_web/landing.css' %}">{% endblock %}
+{% block public_brand_url %}{% url 'student_web:dashboard' %}{% endblock %}
+{% block public_navigation %}<nav class="public-nav landing-nav" aria-label="Account navigation"><a href="{% url 'accounts:login' %}">Log in</a><a href="{% url 'accounts:register' %}">Register</a></nav>{% endblock %}
+{% block content %}
+<section class="landing-hero" aria-labelledby="landing-title">
+  <div class="landing-hero-text">
+    <p class="landing-badge"><span aria-hidden="true">●</span> For university students in Nigeria</p>
+    <h1 id="landing-title">Your GPA, deadlines and study plans in one place.</h1>
+    <p class="landing-lead">UniCommand works out your GPA and CGPA from your own grades, keeps track of what is due, and helps you plan the grades you need. It is free to use.</p>
+    <div class="action-row"><a class="button landing-cta" href="{% url 'accounts:register' %}">Create a free account</a><a class="button secondary" href="{% url 'accounts:login' %}">Log in</a></div>
+    <ul class="landing-trust" aria-label="At a glance"><li>Free</li><li>5-point or 4-point</li><li>Works on your phone</li></ul>
+  </div>
+  <div class="landing-preview" aria-hidden="true">
+    <div class="preview-card preview-main">
+      <p class="preview-label">Example</p>
+      <p class="preview-kicker">Actual CGPA</p>
+      <p class="preview-cgpa">4.21<span> / 5.00</span></p>
+      <div class="preview-band"><span style="width:84%"></span></div>
+      <p class="preview-note">Second Class Upper · 0.29 more reaches First Class</p>
+      <div class="preview-bars"><span style="height:58%"></span><span style="height:72%"></span><span style="height:66%"></span><span style="height:84%"></span><span style="height:90%"></span></div>
+    </div>
+    <div class="preview-card preview-due">
+      <p class="preview-kicker">Due this week</p>
+      <p><strong>CSC 201</strong> Lab report · Thu</p>
+      <p><strong>MTH 202</strong> Quiz · Fri</p>
+    </div>
+    <div class="preview-card preview-quiz">
+      <p class="preview-kicker">Flashcards ready</p>
+      <p>12 cards from your notes</p>
+    </div>
+  </div>
+</section>
+
+<section class="landing-features" aria-labelledby="features-title">
+  <p class="landing-eyebrow">Everything in one place</p>
+  <h2 id="features-title">What you can do</h2>
+  <div class="landing-grid">
+    <article class="landing-card tone-1">
+      <span class="landing-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></span>
+      <h3>Know your GPA and CGPA</h3>
+      <ul>
+        <li>GPA for each semester and your overall CGPA, on the 5-point or 4-point scale.</li>
+        <li>See how every number is worked out, step by step.</li>
+        <li>Where you stand for First Class, 2:1, 2:2 and the rest.</li>
+        <li>A predictor and a target planner for the grades you need. They never change your saved grades.</li>
+      </ul>
+    </article>
+    <article class="landing-card tone-2">
+      <span class="landing-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+      <h3>Stay organised</h3>
+      <ul>
+        <li>Your courses and semesters, in your own order.</li>
+        <li>Assignments with due dates, and what is due this week.</li>
+        <li>A weekly class timetable.</li>
+        <li>Study plans that spread your topics out before each exam.</li>
+      </ul>
+    </article>
+    <article class="landing-card tone-4">
+      <span class="landing-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>
+      <h3>Study help from your notes</h3>
+      <ul>
+        <li>Upload your notes and search all of them at once.</li>
+        <li>Turn a file into a summary, a quiz or flashcards, or ask a question about it.</li>
+        <li>Nothing is sent until you check and confirm it. A small daily allowance keeps it free.</li>
+      </ul>
+    </article>
+    <article class="landing-card tone-3">
+      <span class="landing-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+      <h3>Free and private</h3>
+      <ul>
+        <li>Free to use.</li>
+        <li>Only you can see your records.</li>
+        <li>Download all your data, or delete your account, at any time.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="landing-steps" aria-labelledby="steps-title">
+  <p class="landing-eyebrow">Ready in minutes</p>
+  <h2 id="steps-title">How it works</h2>
+  <ol>
+    <li><strong>Create an account.</strong> We email you a 6-digit code to confirm your address.</li>
+    <li><strong>Add your courses and grades.</strong> Enter the letter grade and credit units for each course.</li>
+    <li><strong>See where you stand.</strong> Your GPA, CGPA and plans update straight away.</li>
+  </ol>
+</section>
+
+<section class="landing-final" aria-labelledby="final-title">
+  <h2 id="final-title">Ready to see where you stand?</h2>
+  <p>Set up takes a few minutes. Your grades stay yours.</p>
+  <div class="action-row"><a class="button landing-cta" href="{% url 'accounts:register' %}">Get started</a></div>
+</section>
+<p class="muted legal-agree landing-legal">A study tool, not an official transcript. Your university's handbook decides your actual results and class of degree. Read the <a href="{% url 'accounts:privacy' %}">privacy notice</a> and <a href="{% url 'accounts:terms' %}">terms</a>.</p>
+{% endblock %}

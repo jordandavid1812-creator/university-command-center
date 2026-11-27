@@ -1,0 +1,3 @@
+{% if form.errors %}<div class="notice error" role="alert" id="error-summary" tabindex="-1"><h2>Please check these details</h2><ul>{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}{% for field in form %}{% for error in field.errors %}<li>{% if field.is_hidden %}This form is out of date or incomplete. Reload it before trying again.{% else %}<a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a>{% endif %}</li>{% endfor %}{% endfor %}</ul></div>{% endif %}
+<p class="form-guidance">Complete each field unless it is marked optional.</p>
+{% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}<div class="form-field">{{ field.as_field_group }}</div>{% endif %}{% endfor %}

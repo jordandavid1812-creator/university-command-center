@@ -1,0 +1,52 @@
+/* Dark display mode: the designed dark tokens from docs/design/DESIGN_SYSTEM.md, same names as
+   site.css. Loaded after the page styles only for Dark, or for System when the device prefers
+   dark; screens only, so print stays light. Contrast-tested in tools/test_frontend_foundation_browser.py. */
+:root {
+  --color-canvas:#101918;
+  --chart-1:#3987e5;
+  --chart-2:#d95926;
+  --color-surface:#172321;
+  --color-surface-raised:#20312D;
+  --color-text:#F0F5F2;
+  --color-text-muted:#B4C4BC;
+  --color-primary:#87D4BD;
+  --color-on-primary:#10251D;
+  --color-primary-hover:#A2E2CE;
+  --color-active-bg:#203E32;
+  --color-active-text:#A2E2CE;
+  --color-border-subtle:#41584D;
+  --color-border-control:#76988A;
+  --color-focus:#E8B75C;
+  --color-focus-inverse:#925A00;
+  --color-shadow:rgb(0 0 0 / 35%);
+  --color-success-text:#9DE3BE;
+  --color-success-bg:#173A2B;
+  --color-warning-text:#F2D28D;
+  --color-warning-bg:#3C301B;
+  --color-error-text:#FFADB6;
+  --color-error-bg:#3F222A;
+  --color-info-text:#B4D0FF;
+  --color-info-bg:#20314C;
+  --color-inverse-surface:#F0F5F2;
+  --color-inverse-text:#101918;
+  --tint-1:#15302A; --tint-1-edge:#2F6A59; --tint-1-ink:#A2E2CE;
+  --tint-2:#172A44; --tint-2-edge:#355F96; --tint-2-ink:#B4D0FF;
+  --tint-3:#33281A; --tint-3-edge:#7A5E2C; --tint-3-ink:#F2D28D;
+  --tint-4:#261F3A; --tint-4-edge:#5B4A8C; --tint-4-ink:#D3C4FA;
+  --tint-5:#351E26; --tint-5-edge:#7E4152; --tint-5-ink:#FFADB6;
+  --deck-1:#1C4237; --deck-2:#1F3A5E; --deck-3:#4A3920; --deck-4:#352B52; --deck-5:#4C2735;
+  --lift:0 14px 34px rgb(0 0 0 / 45%);
+  --glow:rgb(255 255 255 / 7%);
+  color-scheme:dark
+}
+/* These panels define their glass colours on themselves, so override them there too. */
+.dashboard {
+  --dashboard-glass:rgb(23 35 33 / 96%);
+  --dashboard-shadow:0 8px 28px rgb(0 0 0 / 35%);
+}
+.auth-page {
+  --auth-glass:rgb(23 35 33 / 96%);
+  --auth-glow:rgb(135 212 189 / 8%);
+  --auth-shadow:0 24px 72px rgb(0 0 0 / 45%),0 2px 8px rgb(0 0 0 / 30%);
+  --auth-button-shadow:0 4px 12px rgb(0 0 0 / 35%);
+}

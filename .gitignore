@@ -1,0 +1,36 @@
+__pycache__/
+**pycache**/
+*.pyc
+courses.json
+assignments.json
+courses.json.bak*
+assignments.json.bak*
+.ucc-*
+.venv/
+venv/
+env/
+.env/
+.venv-*/
+venv-*/
+.tox/
+.nox/
+__pypackages__/
+*.bak
+*.bak.*
+*.tmp
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local verification scripts, logs and ephemeral test credentials.
+/work/
+
+# Frontend build tooling (TypeScript compiler); only compiled JS is committed.
+node_modules/
+
+# The local launcher's private passwords and AI keys (kept outside the repository by design).
+local-web-secrets.json
