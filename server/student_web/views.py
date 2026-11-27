@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from functools import wraps
 from django.contrib import messages
 from django.db import DatabaseError, transaction
@@ -86,6 +87,12 @@ def dashboard(request, identity):
     upcoming = [item for item in workspace['today_classes'] if item.end_time > now]
     workspace['next_class'] = upcoming[0].pk if upcoming else None
     workspace['now'] = now
+    # The class ladder: the same bands and rules as "Where you stand", from the profile row already read.
+    values = workspace.pop('band_values')
+    profile = SimpleNamespace(grading_scale=workspace['scale']['code'],
+                              **dict(zip(services.CLASS_BAND_FIELDS, values or (None,) * 5)))
+    bands, custom = _bands_of(profile)
+    workspace['standing'] = class_standing_view(workspace['summary']['gpa'], bands, custom, workspace['policy'])
     names = dict(forms.AI_TOOL_CHOICES)
     for item in workspace['ai_panel']['recent']:
         item['tool_name'] = names.get(item['tool'], item['tool'])
@@ -479,6 +486,11 @@ def _bands_of(profile):
     return DEFAULT_CLASS_BANDS, False
 
 
+# Short names for the dashboard's class ladder labels.
+SHORT_CLASS_NAMES = {'First Class': 'First', 'Second Class Upper': '2:1', 'Second Class Lower': '2:2',
+                     'Third Class': 'Third', 'Pass': 'Pass'}
+
+
 def class_standing_view(cgpa, bands, custom, policy=LEGACY_POLICY):
     """Where the actual CGPA sits among the bands, with bar geometry (percent of 0 to the scale's
     maximum) for display. None when a 4-point student has not entered their bands yet."""
@@ -496,10 +508,12 @@ def class_standing_view(cgpa, bands, custom, policy=LEGACY_POLICY):
     for index, row in enumerate(rows, 1):
         top = row['high'] if row['high'] is not None else Decimal(maximum)
         segments.append({'name': row['name'], 'left': float(row['low']) * unit, 'width': float(top - row['low']) * unit,
-                         'tone': index})
+                         'tone': index, 'short': SHORT_CLASS_NAMES.get(row['name'], row['name'])})
     gap = standing['gap']
     # Round the distance up, so "0.01 more" is never shown when a little more is really needed.
     gap = None if gap is None else gap.quantize(Decimal('0.01'), rounding=ROUND_CEILING)
+    for segment in segments:
+        segment['center'] = segment['left'] + segment['width'] / 2  # where the ladder label sits
     return {**standing, 'segments': [s for s in segments if s['width'] > 0], 'gap': gap, 'custom': custom,
             'marker': None if cgpa is None else float(cgpa) * unit,
             # Near either end the label lines up with the bar's edge instead of centring past it.

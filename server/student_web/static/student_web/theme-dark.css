@@ -50,3 +50,8 @@
   --auth-shadow:0 24px 72px rgb(0 0 0 / 45%),0 2px 8px rgb(0 0 0 / 30%);
   --auth-button-shadow:0 4px 12px rgb(0 0 0 / 35%);
 }
+/* Emerald & Brass in the dark: brass text and the class ladder (brand.css). */
+:root { --color-brass-text:#E9CB86; --color-forest:#0B2E26; }
+.ladder-seg.tone-1 { background:#1D332C; } .ladder-seg.tone-2 { background:#24443A; }
+.ladder-seg.tone-3 { background:#2E5A4C; } .ladder-seg.tone-4 { background:#3F7A65; }
+.ladder-pin { background:#F0F5F2; } .ladder-pin::before { background:#F0F5F2; color:#101918; }

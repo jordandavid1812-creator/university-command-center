@@ -1,0 +1,73 @@
+/* Emerald & Brass (owner's choice): the premium look. Loaded on every page right after site.css.
+   Typefaces are served from this site (SIL Open Font Licence, see fonts/OFL-*.txt); no font host.
+   Gold (brass) is kept for earned results: the class you are in, today's streak, a perfect score. */
+@font-face{font-family:"Newsreader";src:url(fonts/newsreader-latin-500-normal.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(fonts/newsreader-latin-600-normal.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(fonts/newsreader-latin-400-italic.woff2) format("woff2");font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:"Manrope";src:url(fonts/manrope-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Manrope";src:url(fonts/manrope-latin-600-normal.woff2) format("woff2");font-weight:500 600;font-display:swap}
+@font-face{font-family:"Manrope";src:url(fonts/manrope-latin-700-normal.woff2) format("woff2");font-weight:700 800;font-display:swap}
+:root{
+  --font-ui:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-display:"Newsreader",Georgia,"Times New Roman",serif;
+  --color-forest:#0E3B31;
+  --color-brass:#C99A3C;       /* fills: bars, dots, rings */
+  --color-brass-text:#8A6420;  /* text on light surfaces (5.3:1 on white) */
+  --color-brass-soft:#F6EBD2;
+  --radius:16px;
+  --radius-control:12px
+}
+body{font-family:var(--font-ui);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+/* Headings and the numbers that matter use the serif: the voice of a certificate. */
+h1,h2,.page-heading h1,.brand,#actual-cgpa-value,.metric-value,.streak-head h2,.preview-cgpa,.landing-hero h1{
+  font-family:var(--font-display);letter-spacing:-.015em}
+h1,.page-heading h1{font-weight:500;letter-spacing:-.02em}
+h2{font-weight:600}
+h3{font-weight:700}
+#actual-cgpa-value{font-weight:600;letter-spacing:-.03em}
+.eyebrow,.landing-eyebrow,.preview-label{text-transform:none!important;letter-spacing:0!important;font-weight:600}
+.landing-preview .class-ladder{margin:6px 0 0}.landing-preview .ladder-class{font-size:1.25rem}
+
+/* The brand mark: a seal with a thin brass rim, not a square tile. */
+.brand-mark{border-radius:50%;background:var(--color-forest);color:#fff;font-family:var(--font-display);font-weight:600;
+  letter-spacing:0;box-shadow:inset 0 0 0 2px var(--color-forest),inset 0 0 0 3.5px var(--color-brass)}
+.brand{font-weight:600;font-size:1.125rem}
+
+/* Navigation: the current page carries a brass edge. */
+.nav-link.active{box-shadow:inset 3px 0 0 var(--color-brass)}
+
+/* Buttons: confident, with a soft emerald lift on the main action. */
+.button{border-radius:var(--radius-control);font-weight:700;letter-spacing:.005em}
+.button:not(.secondary):not(.light):not(.danger){box-shadow:inset 0 1px 0 rgb(255 255 255 / 16%),0 6px 16px rgb(18 105 79 / 20%)}
+.panel{border-radius:var(--radius)}
+
+/* The class ladder on the dashboard: Pass to First, with you marked. */
+.class-ladder{margin:18px 0 6px}
+.ladder-class{margin:0;font:italic 400 1.5rem/1.2 var(--font-display);color:var(--color-brass-text)}
+.ladder-track{position:relative;height:12px;margin:34px 0 0;border-radius:6px;background:var(--color-surface-raised)}
+.ladder-seg{position:absolute;top:0;bottom:0;border-radius:4px;border-left:2px solid var(--color-surface)}
+.ladder-seg.tone-0{background:transparent;border-left:0}
+.ladder-seg.tone-1{background:#DDEBE4}.ladder-seg.tone-2{background:#C4DDD1}.ladder-seg.tone-3{background:#9CC6B4}
+.ladder-seg.tone-4{background:#5E9F86}.ladder-seg.tone-5{background:var(--color-brass)}
+.ladder-pin{position:absolute;top:-10px;width:4px;height:32px;margin-left:-2px;border-radius:2px;background:var(--color-forest);
+  box-shadow:0 0 0 3px var(--color-surface)}
+.ladder-pin::before{content:"You";position:absolute;bottom:38px;left:50%;transform:translateX(-50%);padding:2px 8px;border-radius:999px;
+  background:var(--color-forest);color:#fff;font:700 .6875rem/1.4 var(--font-ui);white-space:nowrap;overflow-wrap:normal}
+.ladder-pin.at-start::before{left:0;transform:none}.ladder-pin.at-end::before{left:auto;right:0;transform:none}
+.ladder-names{position:relative;height:1.25rem;margin:8px 0 0;padding:0;list-style:none;font-size:.75rem;color:var(--color-text-muted)}
+.ladder-names li{position:absolute;transform:translateX(-50%);white-space:nowrap;overflow-wrap:normal}
+.ladder-names li.is-current{color:var(--color-brass-text);font-weight:800}
+.ladder-next{margin:12px 0 0;font-size:.9375rem;color:var(--color-text-muted)}
+.ladder-next strong{color:var(--color-text)}
+@media (prefers-reduced-motion:no-preference){
+  .ucc-motion .ladder-pin{animation:ucc-ladder-in .9s cubic-bezier(.2,.8,.2,1) both .15s}
+  @keyframes ucc-ladder-in{from{left:0;opacity:0}}
+}
+
+/* Streak: today's dot in brass, the number in the serif. */
+.study-streak .streak-dot{transition:none}
+.study-streak .is-today.is-active .streak-dot{background:var(--color-brass);border-color:var(--color-brass)}
+
+@media (forced-colors:active){.ladder-pin,.ladder-seg{forced-color-adjust:none}}
+@media print{.ladder-pin::before{display:none}}

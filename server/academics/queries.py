@@ -215,14 +215,17 @@ def dashboard_reads(identity, today):
         owner = identity.student_id
         semesters, records = _academic_snapshot(owner)
         totals, upcoming = _assignment_metrics(owner, today)
-        name, scale = _records(StudentProfile, owner).values_list('display_name', 'grading_scale').first() or ('', 'five')
+        # The class bands come in the same profile read (the dashboard's class ladder): no extra query.
+        from .services import CLASS_BAND_FIELDS
+        row = _records(StudentProfile, owner).values_list('display_name', 'grading_scale', *CLASS_BAND_FIELDS).first()
+        name, scale, bands = (row[0], row[1], row[2:]) if row else ('', 'five', ())
         panel = _ai_panel(owner)
         started, studied = _started(owner, with_activity=True)
         # Study streak: days with study activity, from the AI count query and the checklist query
         # (no extra reads, nothing new stored).
         days = studied | panel.pop('active_days')
         return (semesters, records, totals, upcoming, name or '', panel, _due_this_week(owner, today),
-                _classes(owner, today.weekday()), _study_today(owner, today), scale, days, started)
+                _classes(owner, today.weekday()), _study_today(owner, today), scale, bands, days, started)
 
 
 STREAK_WINDOW_DAYS = 60

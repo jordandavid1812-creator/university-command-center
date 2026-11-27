@@ -82,9 +82,9 @@ export function draw(card) {
         return null;
     const font = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     const background = context.createLinearGradient(0, 0, WIDTH, HEIGHT);
-    background.addColorStop(0, '#0f4d40');
-    background.addColorStop(0.55, '#176b5b');
-    background.addColorStop(1, '#1f8a72');
+    background.addColorStop(0, '#0E3B31');
+    background.addColorStop(0.55, '#12694F');
+    background.addColorStop(1, '#1A7A5E');
     context.fillStyle = background;
     context.fillRect(0, 0, WIDTH, HEIGHT);
     // Soft circles for depth.
@@ -99,7 +99,7 @@ export function draw(card) {
     context.fillStyle = '#ffffff';
     roundRect(context, 90, 120, 120, 120, 28);
     context.fill();
-    context.fillStyle = '#176b5b';
+    context.fillStyle = '#0E3B31';
     context.font = `700 52px ${font}`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
@@ -126,7 +126,7 @@ export function draw(card) {
         y += 74;
     }
     // Call to action.
-    context.fillStyle = '#e8b75c';
+    context.fillStyle = '#C99A3C';
     roundRect(context, 190, 1560, 700, 130, 65);
     context.fill();
     context.fillStyle = '#1d1a0e';

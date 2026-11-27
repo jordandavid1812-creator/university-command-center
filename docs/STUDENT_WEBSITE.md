@@ -696,3 +696,20 @@ How it works (`frontend/src/share.ts`, compiled to `share.js` and loaded by `sit
 - Without JavaScript the buttons stay hidden. `ai.js` announces a finished quiz with a `ucc:quiz-finished` event.
 
 Tests: `web_tests/test_share_cards.py` and `tools/test_share_cards_browser.py` (share sheet, download fallback, PNG size, quiz).
+
+## Emerald & Brass (premium look)
+
+Owner's choice. One stylesheet, `student_web/brand.css`, loads on every page right after `site.css`:
+
+- **Typefaces:** Newsreader (serif) for headings and the numbers that matter, Manrope for everything else.
+  They are served from this site (`student_web/fonts/`, SIL Open Font Licence; no font host).
+- **Colours:** the site tokens in `site.css` now use deep emerald (`#12694F` primary, `#0E3B31` forest) on a soft
+  mist page (`#F3F5F2`). Brass (`#C99A3C`, text `#8A6420`) is kept for earned results: the class you are in,
+  today's streak dot, a perfect score. All text pairs meet WCAG AA; the browser contrast tests still run.
+- **Class ladder (dashboard and welcome page):** the Pass to First bands with a "You" marker and the gap to the
+  next class, from the same rules as "Where you stand" (5-point guide, 4-point with the student's own bands, or
+  custom bands). The bands come in the dashboard's existing profile read, so there is no extra database query.
+  A 4-point student without bands is asked to add them. The marker slides in only when motion is welcome.
+- Dark mode has its own ladder and brass values in `theme-dark.css`.
+
+Tests: `web_tests/test_brand.py`.

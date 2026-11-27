@@ -12,8 +12,8 @@ def snapshot(identity, today=None):
     if today is None:
         return workspace(*academic_snapshot(identity))
     (semesters, courses, totals, upcoming, greeting_name, ai_panel, due, classes, study,
-     scale, studied, started) = dashboard_reads(identity, today)
-    return {**workspace(semesters, courses, scale), 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
+     scale, bands, studied, started) = dashboard_reads(identity, today)
+    return {**workspace(semesters, courses, scale), 'band_values': bands, 'totals': totals, 'upcoming': upcoming, 'greeting_name': greeting_name,
             'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
             'today_study': study,
             'getting_started': getting_started(semesters, courses, totals, started, ai_panel),
