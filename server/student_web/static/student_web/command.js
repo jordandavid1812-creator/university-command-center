@@ -214,6 +214,8 @@ function celebrate(medal, title, text) {
     }
 }
 function setupCelebrations(root) {
+    if (!(Number(root.dataset.ccLevel) >= 1))
+        return; // no Command Centre data: remember nothing
     const keys = shown();
     const firstVisit = !keys.size;
     const today = root.dataset.ccToday ?? '';

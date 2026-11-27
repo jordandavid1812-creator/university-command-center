@@ -27,7 +27,6 @@
 .command-centre .ladder-names li.is-current{color:#E9CB86}
 .command-centre .ladder-next{color:var(--cc-soft)}
 .command-centre .ladder-next strong{color:#fff}
-.command-centre .ladder-next a{color:#E9CB86;font-weight:700}
 
 /* What if */
 .cc-whatif{margin-top:18px;padding-top:16px;border-top:1px solid var(--cc-line)}
@@ -66,7 +65,7 @@
 .cc-step a{flex:1;display:grid;gap:1px;padding:10px 12px;border-radius:12px;text-decoration:none;transition:background-color .15s,transform .12s}
 .cc-step a:hover{background:rgb(255 255 255 / 8%)}
 .cc-step a strong{font-size:.9375rem}
-.cc-step a span{font-size:.8125rem;color:var(--cc-soft)}
+.cc-step a span{font-size:.8125rem;color:#C9DBD3}
 .cc-tick{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid rgb(255 255 255 / 35%);position:relative}
 .cc-step.is-done .cc-tick{background:#E8B75C;border-color:#E8B75C}
 .cc-step.is-done .cc-tick::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border:solid #1D1A0E;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
@@ -116,12 +115,13 @@
 .qs-row input,.qs-row select{width:100%;min-height:48px}
 
 /* Links on the emerald panel keep their own look (the site-wide pill links are for light pages). */
-.main-content .command-centre a:not(.cc-cta){display:grid;justify-content:start;min-height:0;padding:0;border:0;border-radius:0;
+.main-content .command-centre a:not(.cc-cta){display:grid;justify-content:start;min-height:0;padding:0;border:0;border-radius:12px;
   background:none;color:inherit;font-weight:inherit;box-shadow:none;transform:none;margin:0}
-.main-content .command-centre .cc-step a:not(.cc-cta){flex:1;gap:1px;padding:10px 12px;border-radius:12px}
-.main-content .command-centre .cc-step a:not(.cc-cta):hover{background:rgb(255 255 255 / 8%);color:#fff}
-.main-content .command-centre .ladder-next a{display:inline;color:#E9CB86;font-weight:700;text-decoration:underline;text-underline-offset:3px}
-.main-content .command-centre .ladder-next a:hover{background:none;color:#fff}
+.main-content .command-centre .cc-step a:not(.cc-cta){flex:1;gap:1px;min-height:48px;padding:10px 12px;border-radius:12px;background:#14473B}
+.main-content .command-centre .cc-step a:not(.cc-cta):hover{background:#1C5A4A;color:#fff}
+.main-content .command-centre .ladder-next a{display:inline-flex;align-items:center;min-height:40px;margin:6px 0 0;padding:6px 14px;
+  border-radius:999px;border:1px solid rgb(232 183 92 / 55%);background:#2A4A36;color:#F3E2B8;font-weight:700;text-decoration:none}
+.main-content .command-centre .ladder-next a:hover{background:#E8B75C;border-color:#E8B75C;color:#1D1A0E}
 .cc-courses li{display:grid;justify-content:stretch;gap:6px}
 .cc-whatif-toggle{margin-top:16px;min-height:44px;padding:10px 16px;border-radius:12px;border:1px solid rgb(232 183 92 / 55%);
   background:rgb(232 183 92 / 12%);color:#F3E2B8;font:700 .9375rem var(--font-ui);cursor:pointer}

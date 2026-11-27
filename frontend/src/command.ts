@@ -165,6 +165,7 @@ function celebrate(medal: string, title: string, text: string): void {
 }
 
 function setupCelebrations(root: HTMLElement): void {
+  if (!(Number(root.dataset.ccLevel) >= 1)) return;  // no Command Centre data: remember nothing
   const keys = shown();
   const firstVisit = !keys.size;
   const today = root.dataset.ccToday ?? '';
