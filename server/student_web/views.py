@@ -93,6 +93,7 @@ def dashboard(request, identity):
                               **dict(zip(services.CLASS_BAND_FIELDS, values or (None,) * 5)))
     bands, custom = _bands_of(profile)
     workspace['standing'] = class_standing_view(workspace['summary']['gpa'], bands, custom, workspace['policy'])
+    workspace['command'] = data.command_centre(workspace, today)
     names = dict(forms.AI_TOOL_CHOICES)
     for item in workspace['ai_panel']['recent']:
         item['tool_name'] = names.get(item['tool'], item['tool'])
@@ -949,3 +950,31 @@ def not_found(request, exception=None):
 
 def server_error(request):
     return error_page(request, 'Please try again', 'The operation could not be completed. Please try again later.', 500)
+
+
+@protected(('GET', 'POST'))
+def quick_start(request, identity):
+    """"First Class in 60 seconds": add a semester and its graded courses on one screen, then see the
+    CGPA and class straight away on the dashboard. Uses the same services and rules as the other forms."""
+    profile = services.profiles.current(identity)
+    policy, scale = data.scale_of(profile.grading_scale if profile else 'five')
+    form = forms.QuickStartForm(request.POST if request.method == 'POST' else None, policy=policy)
+    status = 200
+    if request.method == 'POST':
+        if form.is_valid():
+            courses = form.cleaned_data['courses']
+            taken = [c['code'] for c in courses if queries.code_in_use(identity, c['code'])]
+            if taken:
+                form.add_error(None, f"You already have {', '.join(taken)}. Remove {'it' if len(taken) == 1 else 'them'} from the list.")
+            else:
+                existing = queries.options(identity, 'semester')
+                semester = services.semesters.create(identity, label=form.cleaned_data['label'],
+                                                     display_order=len(existing) + 1)
+                for course in courses:
+                    services.courses.create(identity, semester_id=semester.pk, original_code=course['code'],
+                                            name=course['code'], credit_units=course['units'],
+                                            actual_grade=course['grade'] or None)
+                messages.success(request, f"{len(courses)} course{'s' if len(courses) != 1 else ''} added. Here is where you stand.")
+                return redirect('student_web:dashboard')
+        status = 400
+    return render(request, 'student_web/quick_start.html', {'form': form, 'scale': scale}, status=status)

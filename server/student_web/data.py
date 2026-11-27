@@ -17,7 +17,8 @@ def snapshot(identity, today=None):
             'ai_panel': ai_panel, 'week': due_this_week(due, today), 'today_classes': classes, 'show_today_classes': True,
             'today_study': study,
             'getting_started': getting_started(semesters, courses, totals, started, ai_panel),
-            'streak': study_streak(studied, today)}
+            'streak': study_streak(studied, today), 'study_day_count': len(studied),
+            'has_materials': bool(started.get('materials'))}
 
 
 def study_streak(days, today):
@@ -174,3 +175,73 @@ def present(summary, labels):
         row['display_order'] = semester.display_order if semester else None
     return summary
 
+
+
+# Scholar levels for the Command Centre: XP thresholds and names (owner's choice).
+LEVELS = ((0, 'Fresher'), (100, 'Scholar'), (250, 'Rising Star'), (500, "Dean's List"), (900, 'Distinction'),
+          (1500, 'First Class Legend'))
+
+
+def scholar_level(xp):
+    """(level number from 1, name, XP at this level's start, the next level or None)."""
+    number = max(i for i, (low, _) in enumerate(LEVELS) if xp >= low)
+    low, name = LEVELS[number]
+    following = LEVELS[number + 1] if number + 1 < len(LEVELS) else None
+    return number + 1, name, low, following
+
+
+def command_centre(ws, today):
+    """The dashboard's Command Centre: Today's Mission (three small steps), XP and level, and the
+    numbers the "what if" grade picker needs. All from records the dashboard already read: nothing
+    new is stored and no query is added."""
+    from django.urls import reverse
+    streak, totals, week, ai = ws['streak'], ws['totals'], ws['week'], ws['ai_panel']
+    topics, summary, policy = ws['today_study'], ws['summary'], ws['policy']
+    due_today = week['days'][0]['items'] if week else []
+    mission = []
+    if topics:
+        first = topics[0]
+        mission.append({'key': 'study', 'done': streak['today_done'], 'title': 'Study one topic',
+                        'detail': f'{first.title} ({first.plan.course.normalized_code})',
+                        'url': reverse('student_web:study-plan', args=[first.plan_id])})
+    else:
+        mission.append({'key': 'study', 'done': streak['today_done'], 'title': 'Study for a few minutes',
+                        'detail': 'Any quiz, saved mistake, ticked topic or finished task counts',
+                        'url': reverse('student_web:material-list')})
+    if due_today or totals['overdue']:
+        task = due_today[0] if due_today else None
+        mission.append({'key': 'deadline', 'done': False,
+                        'title': f'Finish {task.title}' if task else 'Clear an overdue task',
+                        'detail': task.course.normalized_code if task else f"{totals['overdue']} overdue",
+                        'url': reverse('student_web:assignment-list') + ('?status=overdue' if not task else '')})
+    else:
+        mission.append({'key': 'deadline', 'done': True, 'title': 'No deadline today',
+                        'detail': 'A head start on your week', 'url': reverse('student_web:assignment-list')})
+    if ws.get('has_materials'):
+        mission.append({'key': 'practise', 'done': ai['used_today'] > 0, 'title': 'Practise with a quiz',
+                        'detail': '5 questions from your own notes', 'url': reverse('student_web:material-list')})
+    else:
+        mission.append({'key': 'practise', 'done': False, 'title': 'Upload one lecture note',
+                        'detail': 'Then turn it into a quiz in seconds', 'url': reverse('student_web:material-upload')})
+    done = sum(item['done'] for item in mission)
+    xp = (10 * ws.get('study_day_count', 0) + 15 * totals['completed'] + 20 * summary['graded']
+          + 5 * len(ws['courses']) + 5 * streak['best'])
+    number, name, low, following = scholar_level(xp)
+    level = {'number': number, 'name': name, 'xp': xp,
+             'next_name': following[1] if following else None,
+             'to_next': following[0] - xp if following else 0,
+             'percent': round(100 * (xp - low) / (following[0] - low)) if following else 100}
+    # The "what if" picker: graded totals and the ungraded courses (first record per code, like the summary).
+    graded = {row['code'] for row in ws['records'] if row['grade']}
+    seen, open_courses = set(), []
+    for row in ws['records']:
+        if not row['grade'] and row['code'] not in graded and row['code'] not in seen:
+            seen.add(row['code'])
+            open_courses.append({'code': row['code'], 'name': row['name'], 'units': float(row['credit_units'])})
+    standing = ws.get('standing')
+    whatif = {'points': float(summary['points']), 'units': float(summary['units']), 'max': float(policy.maximum),
+              'grades': {letter: float(value) for letter, value in policy.grade_points.items()},
+              'courses': open_courses[:12],
+              'bands': [{'name': row['name'], 'low': float(row['low'])} for row in standing['bands']] if standing else []}
+    return {'mission': mission, 'done': done, 'total': len(mission), 'left': len(mission) - done, 'level': level, 'whatif': whatif,
+            'ring': round(100 * done / len(mission))}

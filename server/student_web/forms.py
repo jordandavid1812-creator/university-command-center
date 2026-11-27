@@ -514,3 +514,61 @@ class ConfirmDeleteForm(StrictForm):
 class FullNameForm(StrictForm):
     full_name = FullNameField()
     previous_name = forms.CharField(required=False, max_length=150, widget=forms.HiddenInput())
+
+
+QUICK_START_ROWS = 8
+
+
+class QuickStartForm(StrictForm):
+    """"First Class in 60 seconds": one semester and up to eight courses with grades, on one screen.
+    Each filled row needs a code and credit units; the grade may stay empty (ungraded)."""
+    label = forms.CharField(max_length=120, initial='Last semester', label='Semester name',
+                            help_text='For example, 100 Level First Semester.')
+
+    def __init__(self, *args, policy=LEGACY_POLICY, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.policy = policy
+        grades = [('', 'Not yet')] + [(g, g) for g in (GRADE_POINTS if policy is LEGACY_POLICY else policy.grade_points)]
+        code_validators = Course._meta.get_field('original_code').validators
+        for i in range(QUICK_START_ROWS):
+            self.fields[f'code_{i}'] = forms.CharField(max_length=64, required=False, label=f'Course {i + 1} code',
+                                                       validators=code_validators)
+            self.fields[f'units_{i}'] = forms.DecimalField(max_digits=11, decimal_places=4, required=False,
+                                                           min_value=Decimal('0.0001'), max_value=Decimal('1000000'),
+                                                           label=f'Course {i + 1} credit units')
+            self.fields[f'grade_{i}'] = forms.ChoiceField(choices=grades, required=False, label=f'Course {i + 1} grade')
+
+    def rows(self):
+        """The bound fields, one tuple per row, for the template."""
+        return [(self[f'code_{i}'], self[f'units_{i}'], self[f'grade_{i}']) for i in range(QUICK_START_ROWS)]
+
+    def clean(self):
+        data = super().clean()
+        courses, seen = [], set()
+        for i in range(QUICK_START_ROWS):
+            code = (data.get(f'code_{i}') or '').strip()
+            units, grade = data.get(f'units_{i}'), data.get(f'grade_{i}') or ''
+            if not code and units is None and not grade:
+                continue
+            if not code:
+                self.add_error(f'code_{i}', 'Enter the course code, or clear this row.')
+                continue
+            if units is None:
+                self.add_error(f'units_{i}', 'Enter the credit units for this course.')
+                continue
+            key = code.upper()
+            if key in seen:
+                self.add_error(f'code_{i}', 'This course code is already in the list.')
+                continue
+            seen.add(key)
+            try:
+                units = checked_credits(units)
+                grade = checked_grade(grade, policy=self.policy)
+            except ValueError as error:
+                self.add_error(f'grade_{i}', str(error))
+                continue
+            courses.append({'code': code, 'units': units, 'grade': grade})
+        if not courses and not self.errors:
+            raise forms.ValidationError('Add at least one course with its credit units.')
+        data['courses'] = courses
+        return data

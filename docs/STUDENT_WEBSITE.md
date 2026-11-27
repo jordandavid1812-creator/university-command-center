@@ -713,3 +713,23 @@ Owner's choice. One stylesheet, `student_web/brand.css`, loads on every page rig
 - Dark mode has its own ladder and brass values in `theme-dark.css`.
 
 Tests: `web_tests/test_brand.py`.
+
+## Command Centre, quick start and phone tab bar
+
+Owner's choice, from the UX research (habit loop, goal gradient, endowed progress, fast "aha" moment,
+celebrations at the peak, self-determination theory). Nothing new is stored and no query is added.
+
+- **Command Centre** (top of the dashboard, `components/command_centre.html`, `command.css`): CGPA, class and
+  class ladder on deep emerald; **Today's mission** (three steps from the student's own day: study, deadline,
+  practise; "no deadline today" counts as done); **XP and scholar levels** (`data.LEVELS`; XP from study days,
+  finished assignments, graded courses, courses and the best streak).
+- **What if?** (`frontend/src/command.ts` → `command.js`): tap a grade for an ungraded course; the CGPA, class
+  and ladder move in the browser. Nothing is saved; "Back to my real CGPA" restores the page.
+- **Celebrations:** mission complete, a new level and streak milestones (3, 7, 14, 30, 60, 100 days) show one
+  short moment with confetti and a gentle vibration (none with reduced motion). The browser remembers only which
+  moments were shown (`ucc-celebrated`), never grades or names. The first visit only records the current level.
+- **Quick start** (`/quick-start/`): one semester and up to eight courses with grades on one screen, through the
+  same services and rules as the other forms; then the dashboard shows the CGPA straight away.
+- **Phone tab bar** (`components/tabbar.html`): Home, Grades, Study and Plan at the bottom of phones.
+
+Tests: `web_tests/test_command_centre.py`, `tools/test_command_centre_browser.py`.

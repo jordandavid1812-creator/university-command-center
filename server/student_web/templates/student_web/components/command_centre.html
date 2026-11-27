@@ -1,0 +1,32 @@
+{% load l10n %}{% with c=command %}<section class="command-centre" aria-labelledby="cc-title" data-cc data-cc-level="{{ c.level.number }}" data-cc-streak="{{ streak.current|default:0 }}" data-cc-done="{{ c.done }}" data-cc-total="{{ c.total }}" data-cc-today="{{ today|date:'Y-m-d' }}">
+  <h2 id="cc-title" class="sr-only">Your command centre</h2>
+  <div class="cc-standing">
+    {% if summary.gpa != None %}
+    <p class="cc-label">Your CGPA</p>
+    <p class="cc-cgpa"><span class="cc-number" data-cc-cgpa data-actual="{{ summary.gpa|floatformat:2 }}">{{ summary.gpa|floatformat:2 }}</span><span class="cc-of"> / {{ scale.max|default:'5.00' }}</span><span class="cc-whatif-badge" data-cc-badge hidden>What if</span></p>
+    {% include 'student_web/components/class_ladder.html' %}
+    {% if c.whatif.courses %}<button type="button" class="cc-whatif-toggle" data-cc-toggle aria-expanded="false" aria-controls="cc-whatif" hidden>What if? Try grades for this semester</button><div class="cc-whatif" id="cc-whatif" data-cc-whatif hidden>
+      <p class="cc-whatif-title"><strong>What if?</strong> Tap a grade for a course you have not been graded in yet. Nothing is saved.</p>
+      <ul class="cc-courses">{% for course in c.whatif.courses %}<li><span class="cc-course">{{ course.code }}</span><span class="cc-chips" role="group" aria-label="Grade for {{ course.code }}">{% for letter in c.whatif.grades %}<button type="button" class="cc-chip" data-code="{{ course.code }}" data-grade="{{ letter }}" aria-pressed="false">{{ letter }}</button>{% endfor %}</span></li>{% endfor %}</ul>
+      <button type="button" class="cc-reset" data-cc-reset hidden>Back to my real CGPA</button>
+    </div>{{ c.whatif|json_script:"ucc-whatif" }}{% endif %}
+    {% else %}
+    <p class="cc-label">Your CGPA</p>
+    <p class="cc-empty-title">See where you stand in a minute.</p>
+    <p class="cc-empty">Add last semester's courses and grades. Your CGPA and class appear straight away.</p>
+    <a class="cc-cta" href="{% url 'student_web:quick-start' %}">Show my CGPA in a minute</a>
+    {% endif %}
+  </div>
+  <div class="cc-side">
+    <div class="cc-mission">
+      <div class="cc-ring" style="--ring:{{ c.ring }}" role="img" aria-label="Today's mission: {{ c.done }} of {{ c.total }} done"><svg viewBox="0 0 44 44" aria-hidden="true"><circle class="cc-ring-track" cx="22" cy="22" r="19"/><circle class="cc-ring-fill" cx="22" cy="22" r="19" pathLength="100"/></svg><span>{{ c.done }}/{{ c.total }}</span></div>
+      <div><h3 class="cc-mission-title">Today's mission</h3><p class="cc-mission-note">{% if c.done == c.total %}All done. Brilliant work today.{% elif c.done == 0 %}Three small steps. Start with any one.{% else %}{{ c.left }} to go. Keep the momentum.{% endif %}</p></div>
+    </div>
+    <ol class="cc-steps">{% for item in c.mission %}<li class="cc-step{% if item.done %} is-done{% endif %}"><span class="cc-tick" aria-hidden="true"></span><a href="{{ item.url }}"><strong>{{ item.title }}</strong><span>{{ item.detail }}</span></a><span class="sr-only">{% if item.done %} (done){% else %} (to do){% endif %}</span></li>{% endfor %}</ol>
+    <div class="cc-level">
+      <p><span class="cc-level-name">Level {{ c.level.number }}: {{ c.level.name }}</span><span class="cc-xp">{{ c.level.xp }} XP</span></p>
+      <div class="cc-xp-bar" role="progressbar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ c.level.percent }}"><span style="width:{{ c.level.percent }}%"></span></div>
+      <p class="cc-next">{% if c.level.next_name %}{{ c.level.to_next }} XP to {{ c.level.next_name }}{% else %}Top level reached{% endif %}</p>
+    </div>
+  </div>
+</section>{% endwith %}

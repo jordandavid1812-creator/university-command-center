@@ -40,8 +40,13 @@ def navigation(request):
             if name == 'material-list' and request.path.startswith(ai_prefixes()):
                 active = True
             items.append({'url': url, 'label': label, 'active': active})
+    # The phone's bottom tab bar: four of the same links, with the same "current page" rule.
+    by_label = {item['label']: item for item in items}
+    tabbar = [{**by_label[label], 'tab': tab, 'icon': icon} for label, tab, icon in (
+        ('Dashboard', 'Home', 'home'), ('GPA & CGPA', 'Grades', 'grades'),
+        ('Study materials', 'Study', 'study'), ('Study planner', 'Plan', 'plan')) if label in by_label]
     return {'website_enabled': enabled, 'workspace_authenticated': authenticated,
-            'navigation': items, 'student_username': request.user.username if authenticated else '',
+            'navigation': items, 'tabbar': tabbar, 'student_username': request.user.username if authenticated else '',
             'display_theme': display_theme(request),
             'cookie_notice': (enabled and getattr(settings, 'UCC_COOKIE_NOTICE', False) is True
                               and request.COOKIES.get(COOKIE_NOTICE_COOKIE) != '1')}

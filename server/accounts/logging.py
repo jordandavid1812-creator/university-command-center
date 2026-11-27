@@ -60,7 +60,7 @@ ROUTES = (
     'student_web:profile-edit', 'student_web:data-export',
     'student_web:mistakes-save', 'student_web:mistakes', 'student_web:mistakes-practice', 'student_web:mistakes-clear',
     'student_web:mistake-remove',
-    'student_web:planner-projection', 'student_web:planner-suggest', 'student_web:standing-print', 'student_web:class-bands',
+    'student_web:planner-projection', 'student_web:planner-suggest', 'student_web:quick-start', 'student_web:standing-print', 'student_web:class-bands',
     'student_web:class-bands-reset', 'student_web:material-search', 'student_web:timetable',
     'student_web:session-create', 'student_web:session-edit', 'student_web:session-delete',
     'student_web:study-plans', 'student_web:study-plan-create', 'student_web:study-plan', 'student_web:study-plan-replan',
