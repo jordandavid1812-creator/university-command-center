@@ -146,6 +146,7 @@ a,button,summary {
 }
 .nav-caption {
   font-size:.75rem;
+  text-transform:uppercase;
   letter-spacing:.08em;
   color:var(--muted);
   padding:0 10px;
@@ -487,70 +488,19 @@ h3 {
   padding:22px 0;
   color:var(--muted)
 }
-.table-scroll {
-  overflow-x:auto;
-  max-width:100%;
-  border-radius:var(--radius-control)
-}
-table {
-  width:100%;
-  min-width:640px;
-  border-collapse:collapse;
-  text-align:left;
-  font-size:var(--type-meta)
-}
-caption {
-  text-align:left;
-  color:var(--muted);
-  font-size:0.75rem;
-  padding:0 0 16px
-}
-thead {
-  background:var(--color-surface-raised);
-  color:var(--color-text-muted);
-  font-size:.75rem;
-  letter-spacing:.4px
-}
-th,td {
-  padding:14px 13px;
-  border-bottom:1px solid var(--color-border-subtle);
-  vertical-align:middle
-}
-th[scope=row] {
-  font-weight:650;
-  min-width:150px;
-  max-width:350px;
-  overflow-wrap:anywhere
-}
-.code {
-  display:block;
-  font-weight:800;
-  font-size:0.75rem
-}
-.cell-detail {
-  display:block;
-  font-weight:400;
-  color:var(--muted);
-  margin-top:3px
-}
-.actions {
-  white-space:nowrap
-}
-.actions a {
-  margin-right:12px
-}
-.danger-link {
-  color:var(--color-error-text)
-}
-.assignment-actions {
-  display:flex;
-  align-items:center;
-  gap:14px;
-  flex-wrap:wrap
-}
-.assignment-actions form {
-  margin:0
-}
+.table-scroll {overflow-x:auto;max-width:100%;border-radius:var(--radius-control)}
+table {width:100%;min-width:640px;border-collapse:collapse;text-align:left;font-size:var(--type-meta)}
+caption {text-align:left;color:var(--muted);font-size:0.75rem;padding:0 0 16px}
+thead {background:var(--color-surface-raised);color:var(--color-text-muted);font-size:.75rem;letter-spacing:.4px}
+th,td {padding:14px 13px;border-bottom:1px solid var(--color-border-subtle);vertical-align:middle}
+th[scope=row] {font-weight:650;min-width:150px;max-width:350px;overflow-wrap:anywhere}
+.code {display:block;font-weight:800;font-size:0.75rem}
+.cell-detail {display:block;font-weight:400;color:var(--muted);margin-top:3px}
+.actions {white-space:nowrap}
+.actions a {margin-right:12px}
+.danger-link {color:var(--color-error-text)}
+.assignment-actions {display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.assignment-actions form {margin:0}
 .text-button {
   background:none;
   border:0;
@@ -828,108 +778,33 @@ legend {
     padding:21px
   }
 }
-@media(max-width:1023px) {
-  .app-shell {
-    display:block
-  }
-  .sidebar {
-    display:none
-  }
-  .topbar {
-    min-height:64px;
-    padding:14px 20px
-  }
+@media(max-width:1023px) {.app-shell {display:block}
+  .sidebar {display:none}
+  .topbar {min-height:64px;padding:14px 20px}
   .topbar-label { display:none; }
   .mobile-wordmark { display:inline; font-weight:700; color:var(--accent); font-size:1rem; }
-  .mobile-nav {
-    display:block;
-    background:var(--color-surface);
-    border-bottom:1px solid var(--line);
-    padding:0 20px
-  }
-  .mobile-nav summary {
-    min-height:45px;
-    padding:10px 0;
-    font-size:1rem;
-    font-weight:650;
-    cursor:pointer
-  }
-  .mobile-nav nav {
-    display:grid;
-    padding:5px 0 18px;
-    gap:4px
-  }
-  .mobile-nav nav>a {
-    padding:9px 10px;
-    text-decoration:none;
-    border-radius:7px
-  }
+  .mobile-nav {display:block;background:var(--color-surface);border-bottom:1px solid var(--line);padding:0 20px}
+  .mobile-nav summary {min-height:45px;padding:10px 0;font-size:1rem;font-weight:650;cursor:pointer}
+  .mobile-nav nav {display:grid;padding:5px 0 18px;gap:4px}
+  .mobile-nav nav>a {padding:9px 10px;text-decoration:none;border-radius:7px}
   .mobile-nav nav>a:hover { background:var(--color-surface-raised); }
-  .mobile-nav nav>a[aria-current=page] {
-    color:var(--color-active-text);
-    background:var(--color-active-bg);
-    font-weight:750
-  }
-  .mobile-nav button {
-    padding:9px 12px;
-    background:var(--color-surface);
-    border:1px solid var(--color-border-control);
-    border-radius:7px;
-    color:var(--ink);
-    min-height:42px
-  }
-  .main-content {
-    padding:23px 17px 30px
-  }
-  .hero {
-    padding:25px 22px;
-    margin-bottom:26px
-  }
-  .hero h1 {
-    font-size:1.75rem
-  }
-  .hero p {
-    font-size:0.875rem
-  }
-  .two-columns {
-    grid-template-columns:minmax(0,1fr);
-    gap:0
-  }
-  .page-heading {
-    align-items:flex-start;
-    flex-direction:column;
-    gap:16px
-  }
-  .page-heading>.button {
-    align-self:flex-start
-  }
-  .section-heading {
-    align-items:flex-start;
-    flex-wrap:wrap
-  }
-  .metric-grid {
-    gap:12px
-  }
-  .metric {
-    padding:17px
-  }
-  .panel {
-    padding:20px 16px
-  }
-  .page-footer {
-    padding:0 17px 23px
-  }
-  .filter-form .form-field {
-    max-width:none
-  }
-  .public-shell {
-    margin:25px auto
-  }
-  .user-chip {
-    max-width:55%;
-    font-size:0.75rem
-  }
-}
+  .mobile-nav nav>a[aria-current=page] {color:var(--color-active-text);background:var(--color-active-bg);font-weight:750}
+  .mobile-nav button {padding:9px 12px;background:var(--color-surface);border:1px solid var(--color-border-control);border-radius:7px;color:var(--ink);min-height:42px}
+  .main-content {padding:23px 17px 30px}
+  .hero {padding:25px 22px;margin-bottom:26px}
+  .hero h1 {font-size:1.75rem}
+  .hero p {font-size:0.875rem}
+  .two-columns {grid-template-columns:minmax(0,1fr);gap:0}
+  .page-heading {align-items:flex-start;flex-direction:column;gap:16px}
+  .page-heading>.button {align-self:flex-start}
+  .section-heading {align-items:flex-start;flex-wrap:wrap}
+  .metric-grid {gap:12px}
+  .metric {padding:17px}
+  .panel {padding:20px 16px}
+  .page-footer {padding:0 17px 23px}
+  .filter-form .form-field {max-width:none}
+  .public-shell {margin:25px auto}
+  .user-chip {max-width:55%;font-size:0.75rem}}
 @media(max-width:390px) {
   .action-row>.button {
     width:100%
@@ -1064,3 +939,9 @@ legend {
 .legal-page li { margin:.35em 0 }
 .legal-links { display:flex; gap:12px }
 .legal-agree { font-size:.8125rem }
+
+/* Audit fixes: prose links stay links; grouped menu; Actions column stays in reach on phones. */
+.main-content p>a:not(.button),.main-content p>a:not(.button):hover{display:inline;min-height:0;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;transform:none;color:var(--color-primary);font-weight:650;text-decoration:underline;text-underline-offset:2px}
+.main-content p>a:not(.button):hover{text-decoration-thickness:2px}
+.nav-group{margin:var(--space-4) 0 var(--space-1)}
+@media(max-width:760px){.table-scroll :is(td.actions,td:has(>.assignment-actions)),.table-scroll table:has(td.actions,.assignment-actions) thead th:last-child{position:sticky;right:0;background:var(--color-surface);box-shadow:-6px 0 6px -6px rgb(0 0 0/30%)}.table-scroll table:has(td.actions,.assignment-actions) thead th:last-child{background:var(--color-surface-raised)}}

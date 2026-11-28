@@ -26,27 +26,34 @@ def navigation(request):
     authenticated = enabled and getattr(request, 'student_identity', None) is not None
     items = []
     if authenticated:
-        for name, label in (
-            ('dashboard', 'Dashboard'), ('course-list', 'Courses'), ('semester-list', 'Semesters'),
-            ('assignment-list', 'Assignments'), ('timetable', 'Timetable'), ('study-plans', 'Study planner'),
-            ('overview', 'GPA & CGPA'),
-            ('predictor', 'GPA Predictor'),
-            ('planner', 'Target CGPA Planner'), ('material-list', 'Study materials'),
-            ('settings', 'Account settings'),
+        # (route, label, group). A group caption is shown above the first link of each group.
+        for name, label, group in (
+            ('dashboard', 'Dashboard', ''),
+            ('course-list', 'Courses', 'Records'), ('semester-list', 'Semesters', 'Records'),
+            ('assignment-list', 'Assignments', 'Records'),
+            ('timetable', 'Timetable', 'Planning'), ('study-plans', 'Study planner', 'Planning'),
+            ('material-list', 'Study materials', 'Planning'),
+            ('overview', 'GPA & CGPA', 'Results'), ('predictor', 'GPA Predictor', 'Results'),
+            ('planner', 'Target CGPA Planner', 'Results'),
+            ('settings', 'Account settings', 'Account'),
         ):
             url = reverse('student_web:' + name)
             active = request.path == url if name == 'dashboard' else request.path.startswith(url)
             # AI requests and results belong to Study materials.
             if name == 'material-list' and request.path.startswith(ai_prefixes()):
                 active = True
-            items.append({'url': url, 'label': label, 'active': active})
+            starts_group = bool(group) and (not items or items[-1]['group'] != group)
+            items.append({'url': url, 'label': label, 'active': active, 'group': group,
+                          'starts_group': starts_group})
     # The phone's bottom tab bar: four of the same links, with the same "current page" rule.
     by_label = {item['label']: item for item in items}
     tabbar = [{**by_label[label], 'tab': tab, 'icon': icon} for label, tab, icon in (
         ('Dashboard', 'Home', 'home'), ('GPA & CGPA', 'Grades', 'grades'),
         ('Study materials', 'Study', 'study'), ('Study planner', 'Plan', 'plan')) if label in by_label]
     return {'website_enabled': enabled, 'workspace_authenticated': authenticated,
-            'navigation': items, 'tabbar': tabbar, 'student_username': request.user.username if authenticated else '',
+            'navigation': items, 'tabbar': tabbar,
+            'page_section': next((item['label'] for item in items if item['active']), ''),
+            'student_username': request.user.username if authenticated else '',
             'display_theme': display_theme(request),
             'cookie_notice': (enabled and getattr(settings, 'UCC_COOKIE_NOTICE', False) is True
                               and request.COOKIES.get(COOKIE_NOTICE_COOKIE) != '1')}
